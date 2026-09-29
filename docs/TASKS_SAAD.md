@@ -62,6 +62,18 @@ broke, since `sharp` is load-bearing for the JS quality-gate fallback.
 
 ## P2 — cheap, do if there's time
 
+> **All four done, 2026-09-29 (Saad).** `.pyc` was already clean (0 tracked,
+> `__pycache__/` ignored). Clutter: the `(1).md` pair needed care and got it --
+> the saad copy was byte-identical and was deleted, the tanuj copy was the ONLY
+> copy (its original had been replaced by the rename) and was renamed back, as
+> the warning in `backend-plan-status.md` said. Generated `test_output_*.png`
+> and `diag*_out/_err.txt` were UNTRACKED and git-ignored, not deleted, and the
+> experiment sources (`training/diag*.py`) stay tracked. `DEMO_SETUP.md` gained
+> a pg_dump/restore section including the `MEDIA_ENCRYPTION_KEY` trap.
+> `DEMO_RUNBOOK.md` gained a section on the two CLI-only setup steps.
+> Not touched: `experimenting Frontend/` -- `main` already deletes it
+> (commit 55a85e1), so removing it here as well only risks a messy merge.
+
 - **Tracked `__pycache__/*.pyc`** (3 files under `ml-pipeline/preprocessing/`) show up dirty on every run — `git rm --cached` them and add `__pycache__/` to `.gitignore` if it isn't there already.
 - **Repo clutter**: `experimenting Frontend/`, duplicate `docs/*(1).md` files, `ml-pipeline/training/diag*.py` + their `*_out.txt`/`*_err.txt`, `test_output_*.png` — worth a tidy-up commit, not urgent.
 - **Encryption-at-rest / backup**: `docs/backend-plan-status.md` already documents that OS-level Device Encryption is the remaining piece (someone with admin on the machine has to switch it on) — no code change, just make sure it actually gets turned on before demo day if the machine will have real-looking data on it. Also worth a one-paragraph `pg_dump`/restore note somewhere (`docs/DEMO_SETUP.md` seems the right place) since there currently isn't one.

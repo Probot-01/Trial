@@ -27,6 +27,14 @@ const http = require('http');
 const { Readable } = require('stream');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'phc-flow-test-'));
+// Auth posture pinned, like every other env var in this file. These are
+// SYNC/GATE flow tests, not auth tests: the enforced path has its own suite
+// (test/auth-peer.test.js, which pins this to 'true' and asserts patient data
+// needs a session). Left unset, the flag came from whichever .env the
+// developer had, so the result of this suite depended on local config -- it
+// broke the day LOCAL_AUTH_ENABLED started defaulting to true, which is now
+// the shipped default precisely because anonymous reads leak patient data.
+process.env.LOCAL_AUTH_ENABLED = 'false';
 process.env.LOCAL_DB_PATH = path.join(TMP, 'local.sqlite');
 process.env.LOCAL_STORAGE_DIR = path.join(TMP, 'storage');
 process.env.SYNC_DISABLED = '1';

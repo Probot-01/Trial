@@ -92,13 +92,48 @@ failures = failures + report('the mismatch carries an explanation', ...
 [~, dNone] = classifyCameraFamily(raw, 'unknown');
 failures = failures + report("device 'unknown' raises no mismatch", ~dNone.mismatch);
 
-% ══ THE DoD: two profiles must produce DIFFERENT pixels ════════════════════
-fprintf('\n===== DoD: the profile must reach the pixels =====\n');
+% ══ WHERE THE PROFILE REACHES, AND WHERE IT DELIBERATELY DOES NOT ══════════
+% This section used to assert flatly that "two profiles must produce DIFFERENT
+% pixels", and it had been failing at 0.00 ever since the default recipe became
+% 'model1'. That is not a regression: on the model1 path preprocessForBranchA
+% computes `calibrated` and then POINTEDLY does not hand it to the model,
+% because Branch A was trained on the raw image through the training recipe and
+% feeding it calibrated pixels would reintroduce train/serve skew. The profile
+% still runs, for its metadata and the reported-vs-detected mismatch check.
+%
+% So the DoD is asserted where it applies -- the 'legacy' recipe, which the
+% Phase 4 segmentation path uses and where we own both sides -- and the model1
+% path gets the assertion that matters there: that the profile changes NOTHING
+% about the pixels. A test that cannot tell those two apart would pass while
+% the skew came back.
+fprintf('\n===== model1 (default): the profile must NOT reach the pixels =====\n');
 
-oDesk  = preprocessForBranchA(raw, [], struct('cameraFamily', 'desktop_tabletop'));
-oPort  = preprocessForBranchA(raw, [], struct('cameraFamily', 'portable_handheld'));
-oPhone = preprocessForBranchA(raw, [], struct('cameraFamily', 'smartphone_adapter'));
-oOff   = preprocessForBranchA(raw, [], struct('enableCameraCalibration', false));
+mDesk  = preprocessForBranchA(raw, [], struct('cameraFamily', 'desktop_tabletop'));
+mPhone = preprocessForBranchA(raw, [], struct('cameraFamily', 'smartphone_adapter'));
+mOff   = preprocessForBranchA(raw, [], struct('enableCameraCalibration', false));
+
+failures = failures + report('two profiles give identical pixels on model1', ...
+    isequal(mDesk, mPhone), sprintf('%.4f grey levels', meanAbsDiff(mDesk, mPhone)));
+failures = failures + report('...and calibration-off is identical too', ...
+    isequal(mDesk, mOff), sprintf('%.4f grey levels', meanAbsDiff(mDesk, mOff)));
+
+% The profile still has to REACH the metadata, or the mismatch check and the
+% stored camera family would be reporting on something that never ran.
+[~, mDeskS]  = preprocessForBranchA(raw, [], struct('cameraFamily', 'desktop_tabletop'));
+[~, mPhoneS] = preprocessForBranchA(raw, [], struct('cameraFamily', 'smartphone_adapter'));
+failures = failures + report('the family still reaches the metadata on model1', ...
+    strcmp(mDeskS.cameraFamily, 'desktop_tabletop') ...
+    && strcmp(mPhoneS.cameraFamily, 'smartphone_adapter'), ...
+    sprintf('%s / %s', mDeskS.cameraFamily, mPhoneS.cameraFamily));
+failures = failures + report('profiles carry different base clip limits', ...
+    mPhoneS.baseClipLimit > mDeskS.baseClipLimit, ...
+    sprintf('%.3f vs %.3f', mPhoneS.baseClipLimit, mDeskS.baseClipLimit));
+
+fprintf('\n===== legacy: the profile MUST reach the pixels =====\n');
+oDesk  = preprocessForBranchA(raw, [], struct('recipe', 'legacy', 'cameraFamily', 'desktop_tabletop'));
+oPort  = preprocessForBranchA(raw, [], struct('recipe', 'legacy', 'cameraFamily', 'portable_handheld'));
+oPhone = preprocessForBranchA(raw, [], struct('recipe', 'legacy', 'cameraFamily', 'smartphone_adapter'));
+oOff   = preprocessForBranchA(raw, [], struct('recipe', 'legacy', 'enableCameraCalibration', false));
 
 dDeskPort  = meanAbsDiff(oDesk, oPort);
 dDeskPhone = meanAbsDiff(oDesk, oPhone);
@@ -115,27 +150,28 @@ failures = failures + report('the stronger profile differs more', ...
 
 % The neutral profile must be a genuine no-op, so an unrecognised camera is
 % never made worse by a guessed correction.
-oUnknown = preprocessForBranchA(raw, [], struct('cameraFamily', 'unknown'));
+oUnknown = preprocessForBranchA(raw, [], struct('recipe', 'legacy', 'cameraFamily', 'unknown'));
 failures = failures + report('the neutral profile equals calibration-disabled', ...
     isequal(oUnknown, oOff), sprintf('%.4f', meanAbsDiff(oUnknown, oOff)));
 
 % ── The clip limit is carried through, not just selected ───────────────────
-fprintf('\n--- profile parameters reach adaptiveEnhance ---\n');
-[~, sDesk]  = preprocessForBranchA(raw, [], struct('cameraFamily', 'desktop_tabletop'));
-[~, sPhone] = preprocessForBranchA(raw, [], struct('cameraFamily', 'smartphone_adapter'));
+% adaptiveEnhance runs only on the legacy path, so `adaptive.clipLimit` exists
+% only there. On model1, `adaptive` is preprocessModel1's own metadata (recipe,
+% targetSize, sigma, ...), which is why reading .clipLimit off it used to raise
+% "Unrecognized field name" and abort this script partway through.
+fprintf('\n--- profile parameters reach adaptiveEnhance (legacy) ---\n');
+[~, sDesk]  = preprocessForBranchA(raw, [], struct('recipe', 'legacy', 'cameraFamily', 'desktop_tabletop'));
+[~, sPhone] = preprocessForBranchA(raw, [], struct('recipe', 'legacy', 'cameraFamily', 'smartphone_adapter'));
 fprintf('  desktop base clip %.3f -> applied %.3f\n', sDesk.baseClipLimit, sDesk.adaptive.clipLimit);
 fprintf('  phone   base clip %.3f -> applied %.3f\n', sPhone.baseClipLimit, sPhone.adaptive.clipLimit);
 
-failures = failures + report('profiles carry different base clip limits', ...
-    sPhone.baseClipLimit > sDesk.baseClipLimit, ...
-    sprintf('%.3f vs %.3f', sPhone.baseClipLimit, sDesk.baseClipLimit));
 failures = failures + report('the base clip limit reaches the applied clip limit', ...
     abs(sPhone.adaptive.clipLimit - sPhone.baseClipLimit) < 1e-9, ...
     sprintf('%.3f vs %.3f', sPhone.adaptive.clipLimit, sPhone.baseClipLimit));
 
 % Camera profile and quality score must COMPOSE, not overwrite each other.
 dim = struct('illuminationScore', 0.30);
-[~, sBoth] = preprocessForBranchA(raw, dim, struct('cameraFamily', 'smartphone_adapter'));
+[~, sBoth] = preprocessForBranchA(raw, dim, struct('recipe', 'legacy', 'cameraFamily', 'smartphone_adapter'));
 failures = failures + report('a dim image on a phone exceeds the phone baseline', ...
     sBoth.adaptive.clipLimit > sPhone.baseClipLimit, ...
     sprintf('%.3f vs %.3f', sBoth.adaptive.clipLimit, sPhone.baseClipLimit));

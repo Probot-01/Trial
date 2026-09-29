@@ -26,7 +26,7 @@ const MetricBar = ({ label, value, maxVal = 1, color = 'var(--c-crimson)', nullR
           style={{ fontWeight: 700, fontSize: 'var(--fs-small)' }}
           title={typeof value !== 'number' ? nullReason : undefined}
         >
-          {typeof value === 'number' ? `${pct}%` : (nullReason ? 'NOT COMPUTED UNDER THIS ENGINE' : 'NOT COMPUTED')}
+          {typeof value === 'number' ? `${pct}%` : 'NOT COMPUTED'}
         </span>
       </div>
       <div className="bar">
@@ -339,15 +339,32 @@ export const CaseDetailPage = () => {
               label={t('central.caseDetail.metrics.uncertainty', 'UNCERTAINTY')}
               value={c.uncertaintyScore}
               color="var(--c-warning)"
-              // Saad P1-2 / INTEGRATION_AUDIT.md P1-4: MC-dropout returns null
-              // whenever the classifier ran on the MATLAB backend (the default) --
-              // that engine's imported network's forward() is deterministic, not a
-              // missing feature. A bare "NOT COMPUTED" reads like a bug; naming the
-              // engine is the honest, cheap fix design docs already call out as
-              // acceptable ("disclose it as not measured") over the much larger
-              // engineering cost of wiring real MC-dropout through MATLAB.
-              nullReason={c.uncertaintyScore == null && c.engineProvenance?.classifier?.engine === 'matlab'
-                ? 'Uncertainty (MC-dropout) is not computed on the MATLAB classifier backend -- only under the Python backend (INFERENCE_BACKEND=python). This case was graded on MATLAB, the default.'
+              /* The scope caveat travels with the number, the way the urgency
+                 limitation does. MC-dropout here samples ONE dropout layer on
+                 the classifier head, over features the trunk fixed -- so it
+                 measures the head's uncertainty and cannot see representation
+                 uncertainty. A confidently wrong out-of-distribution image
+                 scores LOW, which is the opposite of what a reader assumes a
+                 high-uncertainty flag protects them from. */
+              title={typeof c.uncertaintyScore === 'number'
+                ? 'Normalised predictive entropy over 20 Monte-Carlo dropout passes '
+                  + '(0 = certain, 1 = uniform across all five grades). It samples the '
+                  + 'classifier HEAD over fixed image features, so it measures whether '
+                  + 'the classifier is torn between grades — it cannot see that an '
+                  + 'image is unlike anything the model was trained on. A confidently '
+                  + 'wrong out-of-distribution image scores LOW here.'
+                : undefined}
+              // Kept from Tanuj's fallback (2582cbf), with the reason corrected.
+              // His version said uncertainty "is not computed on the MATLAB
+              // classifier backend -- only under Python", which was true when he
+              // wrote it and is not any more: mcDropoutMatlab.m now computes it
+              // there too. A null on a MATLAB-graded case therefore means the
+              // case predates that wiring, or the measurement itself failed --
+              // never that the engine cannot do it.
+              nullReason={c.uncertaintyScore == null
+                ? 'Not computed for this case. Not a score of zero — zero would mean '
+                  + 'the model was maximally certain. Cases graded before MC-dropout was '
+                  + 'wired on this engine have no value stored; re-grading computes one.'
                 : undefined}
             />
             {/* NOT a MetricBar. The consistency score is an overlap fraction

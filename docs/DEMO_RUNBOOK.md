@@ -190,6 +190,27 @@ against live central) and show the case it creates; say that it is the automated
 
 ---
 
+## Setup steps that have no UI, so say them out loud
+
+Two things a fresh PHC needs are command-line only. Nothing is broken; there is
+just no screen to point at, so if the recording shows a PHC being set up,
+narrate them rather than cutting to a working state and leaving a judge to
+wonder how it got there.
+
+- **Technician accounts:** `npm run technician -- add <username> "<Full Name>" [--admin]`
+  in `phc-local-app/backend`. The password is generated and printed once.
+  `demo-reset` already creates the demo technician, so you only do this by hand
+  for an extra account. Worth a sentence, because the PHC login screen is real
+  (bcrypt, sessions) and enforced by default -- the accounts simply come from
+  the CLI.
+- **Pairing a phone:** `npm run peer -- pair "Asha's phone"` on the PC, which
+  prints a QR the phone scans. **Revoking is in the UI** -- the DEVICES screen
+  in the PHC app lists every paired device and a PHC admin can cut one off,
+  which is the half that actually matters if a phone is lost. So: pairing is
+  CLI, revocation is on screen.
+
+---
+
 ## Known behaviours to avoid surprising you on camera
 
 - PHC desktop **does not show the grade**; it shows **RESULT READY**. The grade is a clinician's screen.

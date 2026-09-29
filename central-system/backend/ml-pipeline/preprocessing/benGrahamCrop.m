@@ -1,17 +1,38 @@
-function outImg = benGrahamCrop(img, targetSize)
+function [outImg, cropBox] = benGrahamCrop(img, targetSize)
 % BENGRAHAMCROP  Retinal-disc crop + local contrast boost (Ben Graham method).
 %
-%   outImg = benGrahamCrop(img)
-%   outImg = benGrahamCrop(img, targetSize)
+%   outImg            = benGrahamCrop(img)
+%   [outImg, cropBox] = benGrahamCrop(img, targetSize)
 %
 %   Inputs:
 %     img        - HxWx3 uint8 RGB image (raw fundus capture).
 %     targetSize - optional scalar, output will be targetSize x targetSize
 %                  pixels (default 512).
 %
-%   Output:
-%     outImg - targetSize x targetSize x 3 uint8 image, cropped to the
-%              retinal disc and contrast-boosted.
+%   Outputs:
+%     outImg  - targetSize x targetSize x 3 uint8 image, cropped to the
+%               retinal disc and contrast-boosted.
+%     cropBox - [x y width height] of the retinal disc in the ORIGINAL image,
+%               1-based and inclusive, i.e. img(y:y+height-1, x:x+width-1, :)
+%               is exactly the region that was resized into outImg.
+%
+%               Optional: callers asking for one output are unaffected.
+%
+%               This is the MATLAB counterpart of preprocessing/ben_graham.py's
+%               retinal_crop_box(), which was factored out over there for the
+%               same reason -- several callers need the GEOMETRY of the crop,
+%               not the cropped pixels, to map a result computed in one space
+%               into the other. Note the convention difference and do not mix
+%               them: Python's box is 0-based from cv2.boundingRect, this one
+%               is 1-based like every other MATLAB index.
+%
+%               Without it, anything that runs a model on the RAW image -- as
+%               the vessel path does in production -- had no way to align its
+%               output with outImg, and the only alternative was to re-derive
+%               "inside the retina" somewhere else. A second definition of that
+%               drifting from this one moves coordinates silently: masks still
+%               look plausible and land in the wrong quadrants, which is the
+%               input the ICDR rule engine grades on.
 %
 %   Algorithm:
 %     Step 1 — Detect the retinal disc boundary.
@@ -53,6 +74,7 @@ if isempty(props)
     % Fallback: if nothing is detected, use the whole image
     warning('benGrahamCrop: no retinal disc detected — using full image.');
     cropped = img;
+    cropBox = [1, 1, size(img, 2), size(img, 1)];
 else
     [~, idx] = max([props.Area]);
     bb = props(idx).BoundingBox;   % [x, y, width, height]
@@ -62,6 +84,7 @@ else
     c2 = min(size(img,2), round(bb(1) + bb(3) - 1));
     r2 = min(size(img,1), round(bb(2) + bb(4) - 1));
     cropped = img(r1:r2, c1:c2, :);
+    cropBox = [c1, r1, c2 - c1 + 1, r2 - r1 + 1];
 end
 
 % ── Step 2: resize to targetSize x targetSize ─────────────────────────────────

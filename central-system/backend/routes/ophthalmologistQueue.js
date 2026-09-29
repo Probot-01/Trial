@@ -9,7 +9,9 @@
  *
  * ── The ranking rule, and why it is computed in SQL ─────────────────────────
  * api-contracts.md, checkpoint version:
- *   Tier C ranked 1-100 by uncertaintyScore DESCENDING  (most uncertain first)
+ *   Tier C ranked 1-100 by (1 - confidenceScore) DESCENDING (least confident
+ *   first). NOT by uncertaintyScore while that column is only partly
+ *   populated -- see the ORDER BY for why mixing the two misorders the tier.
  *   Tier B ranked 101-200 by confidenceScore ASCENDING  (least confident first)
  *   Tier A never appears — it auto-clears and skips this queue entirely.
  *
@@ -57,15 +59,33 @@ router.get('/queue', requireAuth, requireRole('ophthalmologist'), async (req, re
           -- queue shows none of it. Extracted in SQL so the payload does not
           -- carry what it will not use.
           g.urgency_inputs -> 'provenance' AS urgency_input_provenance,
-          -- uncertainty_score is NULL until Phase 6 ships, so (1 - confidence)
-          -- stands in for it. Same ordering, different scale -- it is a
-          -- placeholder for RANKING only and is never reported as uncertainty.
-          COALESCE(g.uncertainty_score, 1 - g.confidence_score) AS uncertainty_rank_key,
           ROW_NUMBER() OVER (
             PARTITION BY g.conformal_tier
             ORDER BY
+              -- Tier C: (1 - confidence) for EVERY case, never COALESCEd with
+              -- uncertainty_score. This used to be
+              -- COALESCE(uncertainty_score, 1 - confidence_score), on the
+              -- stated reasoning that uncertainty "is NULL until Phase 6
+              -- ships" so the substitute gives the "same ordering, different
+              -- scale".
+              --
+              -- That held while EVERY row was NULL. Phase 6 now computes
+              -- uncertainty on the MATLAB path, so the column is populated for
+              -- some cases and not others, and the COALESCE compared the two
+              -- against each other. They are not interchangeable: measured on
+              -- this database, one identical case reads 0.3678 as normalised
+              -- predictive entropy and 0.1827 as (1 - confidence) -- roughly
+              -- double. The 120 cases without a score span 0.0000-0.7118 on
+              -- the substitute, so a freshly graded case outranked most of
+              -- them for having been graded recently, which is not a clinical
+              -- fact about the patient.
+              --
+              -- One scale for the whole tier is the correct answer while the
+              -- column is partly populated. Once every case has a real
+              -- uncertainty_score this orders on it DIRECTLY -- not on a
+              -- COALESCE, which is what caused this.
               CASE WHEN g.conformal_tier = 'C'
-                   THEN COALESCE(g.uncertainty_score, 1 - g.confidence_score)
+                   THEN (1 - g.confidence_score)
               END DESC NULLS LAST,
               CASE WHEN g.conformal_tier = 'B'
                    THEN g.confidence_score

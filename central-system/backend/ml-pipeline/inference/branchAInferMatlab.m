@@ -70,15 +70,20 @@ function out = branchAInferMatlab(tensorPath, gradcamPath)
 % monotonic transforms, so the predicted grade does not depend on this choice;
 % the calibrated confidence and conformal tier do.
 %
-% ── ONE KNOWN, DELIBERATE FIDELITY GAP ──────────────────────────────────────
-%   - uncertaintyScore (MC-Dropout, Task 6.1): NOT computed. forward() on
-%     this specific imported network returns a bit-identical default output
-%     across repeated calls even though the same dropout layer, requested as
-%     an explicit intermediate 'Outputs' target, is independently confirmed
-%     stochastic -- an unexplained MATLAB/ONNX-import interaction, not a
-%     shrug. Reporting null + a reason, rather than guessing and risking the
-%     exact failure mcDropout.py's own docstring is written around: zero
-%     variance silently reads downstream as MAXIMUM certainty.
+% ── uncertaintyScore: COMPUTED HERE SINCE 2026-09-29 ────────────────────────
+% This block used to record a deliberate gap: forward() on this imported
+% network returns a bit-identical default output across repeated calls, so
+% MC-dropout could not be run through it and uncertaintyScore was reported as
+% null with a reason.
+%
+% The gap was in the approach, not the network. Dropout is a Bernoulli mask
+% and a scale; what has to come from the network is the features and the
+% head's weights, and both are readable. inference/mcDropoutMatlab.m resamples
+% the mask and the head over features the trunk produced once -- no stochastic
+% forward() required -- and reproduces the statistic mcDropout.py reports.
+% Read that file before changing it: it follows PyTorch's dropout POSITION
+% (before the head) rather than this graph's (after it), and in eval mode the
+% two are indistinguishable.
 % This does not affect drGradeCnn, confidenceScore, referable, or
 % conformalTier, which is what tiering and the DB write actually consume.
 % (gradcamWarning is still not produced here: it reports attention falling
@@ -209,8 +214,13 @@ end
 td = load(tensorPath, 'x', 'display');
 X = dlarray(single(td.x), 'SSCB');
 
-logitsD = predict(net, X, 'Outputs', 'x_head_Gemm');
+% Both outputs in ONE forward pass: the head's logits for the point estimate,
+% and the features feeding that head for MC-dropout below. Asking for them
+% separately would run the whole convolutional trunk twice per case for a
+% result that is identical the second time.
+[featsD, logitsD] = predict(net, X, 'Outputs', {'x_backbone_global__2', 'x_head_Gemm'});
 logits  = reshape(double(extractdata(logitsD)), 1, []);
+mcFeats = extractdata(featsD);
 
 EXPECTED_METHOD = 'ordinal_mode_interval_stratified_v3';
 [~, calibFileName, calibFileExt] = fileparts(calibPath);
@@ -293,6 +303,27 @@ end
 rawProbs = softmaxRow(logits);
 calProbs = softmaxRow(logits ./ temperature);
 
+% ── Task 6.1: epistemic uncertainty (inference/mcDropoutMatlab.m) ──────────
+% This used to be hardcoded null with a note that MC-dropout was not
+% implemented here, because forward() on this imported network is
+% deterministic. It does not need to be stochastic: dropout is a Bernoulli
+% mask and a scale, and the features and the head's weights are both readable,
+% so the mask and the head are resampled by hand over features the trunk
+% produced once. See that file for why it follows PyTorch's dropout POSITION
+% rather than this graph's.
+%
+% Caught, not thrown: uncertainty is a queue-ordering signal, and a case that
+% grades correctly must not fail because its uncertainty could not be
+% measured. The score stays empty and the reason travels with it.
+mc = struct('score', [], 'detail', [], 'err', []);
+try
+    mcOut = mcDropoutMatlab(net, X, struct('temperature', temperature, 'features', mcFeats));
+    mc.score  = mcOut.uncertaintyScore;
+    mc.detail = mcOut;
+catch mcErr
+    mc.err = mcErr.message;
+end
+
 [confidence, gradeIdx] = max(calProbs);
 grade = gradeIdx - 1;
 
@@ -342,12 +373,9 @@ out = struct( ...
     'imgSize',                 cfg.imgSize, ...
     'preprocessing',           cfg.preprocessing, ...
     'backend',                 'matlab', ...
-    'uncertaintyScore',        [], ...
-    'uncertaintyError', ['MC-Dropout not implemented for the MATLAB backend: forward() ' ...
-        'returns a deterministic default output on this imported network despite ' ...
-        'its dropout layer being independently confirmed stochastic when requested ' ...
-        'as an explicit intermediate output -- reporting null rather than a value ' ...
-        'that risks being silently wrong (see this function''s header).'] ...
+    'uncertaintyScore',        mc.score, ...
+    'uncertaintyDetail',       mc.detail, ...
+    'uncertaintyError',        mc.err ...
 );
 if ~isempty(calibrationWarning)
     out.calibrationWarning = calibrationWarning;

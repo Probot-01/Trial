@@ -56,7 +56,7 @@ for i = 1:numel(images)
 
     % Crop only. NOT illuminationNormalize: it flattens exactly the large-scale
     % brightness the optic disc detector depends on (see opticDiscFovea).
-    cropped = benGrahamCrop(raw, 512);
+    [cropped, cropBox] = benGrahamCrop(raw, 512);
     [H, W, ~] = size(cropped);
 
     % ── Task 4.5 ────────────────────────────────────────────────────────────
@@ -78,30 +78,32 @@ for i = 1:numel(images)
         sep > W / 8, sprintf('%.0f px apart (need > %.0f)', sep, W/8));
 
     % ── Task 4.1 ────────────────────────────────────────────────────────────
-    % ── KNOWN: THE CONNECTIVITY CHECK BELOW FAILS HERE, AND THE MASK IS NOT
-    %    THE ONE PRODUCTION PRODUCES ──────────────────────────────────────────
-    % `cropped` is benGrahamCrop's output: resized to 512 WITH antialiasing,
-    % which low-pass filters away the one-to-two-pixel structures the vessel
-    % model keys on. The mask comes back as confetti -- largest connected
-    % component 9-18% of the mask -- and the connectivity assertion below
-    % reports that honestly rather than being relaxed to hide it.
+    % THE VESSEL MODEL GETS THE RAW IMAGE, which is what production feeds it.
     %
-    % Production does not do this. segInfer.py's vessels() takes the ORIGINAL
-    % image and does its own aspect-pad; on that input the same model gives a
-    % properly connected tree (largest component ~55%, vessel fraction 0.0564,
-    % MATLAB and Python agreeing to four decimals). So this is the HARNESS
-    % feeding the vessel model the CLASSIFIER's preprocessing, not a defect in
-    % vesselSegmentationUnet.
+    % This used to pass `cropped`, and that was benGrahamCrop's output: resized
+    % to 512 WITH antialiasing, which low-pass filters away the one-to-two-pixel
+    % structures the vessel model keys on. The mask came back as confetti --
+    % largest connected component 9-18% -- and the connectivity check below
+    % failed on every image. The defect was in the HARNESS: segInfer.py's
+    % vessels() takes the ORIGINAL image and does its own aspect-pad, and on
+    % that input the same model gives a properly connected tree.
     %
-    % NOT FIXED HERE because it cannot be fixed cleanly yet: odX/odY and the
-    % overlay below are in `cropped` coordinates, so passing `raw` would return
-    % a mask in a different space and silently misalign the NV score. The real
-    % fix is for benGrahamCrop to return its crop box (as Python's
-    % retinal_crop_box already does) so a raw-space mask can be mapped back.
-    % Until then this check stays red and says why.
+    % It could not be fixed until benGrahamCrop returned its crop box, because
+    % odX/odY, the NV score and the overlay are all in `cropped` coordinates: a
+    % raw-space mask had nowhere to be mapped back to, and using it directly
+    % would have misaligned the NV score silently. benGrahamCrop now returns
+    % that box (the counterpart of Python's retinal_crop_box), so the mask is
+    % taken in raw space and brought into `cropped` space by exactly the crop
+    % and resize the image itself went through.
+    %
+    % 'nearest' on the resize because this is a logical mask: bilinear would
+    % invent partial vessels at every edge and then threshold them back into
+    % existence, which is the confetti this change exists to stop producing.
     t = tic;
-    [vessels, method] = vesselSegmentationUnet(cropped);
+    [rawVessels, method] = vesselSegmentationUnet(raw);
     tVes = toc(t);
+    bx = cropBox(1); by = cropBox(2); bw = cropBox(3); bh = cropBox(4);
+    vessels = imresize(rawVessels(by:by+bh-1, bx:bx+bw-1), [H W], 'nearest');
 
     coverage = nnz(vessels) / (H * W);
     failures = failures + report('vessel mask is logical and image-sized', ...
@@ -168,7 +170,11 @@ fprintf('\n===== %s =====\n', ...
             sprintf('%d FAILURE(S)', failures)));
 fprintf('Overlays in %s — LOOK AT THEM. For segmentation, visual inspection\n', outDir);
 fprintf('tells you more than any assertion this script can make.\n');
-fprintf('Tasks 4.2/4.3 remain blocked on IDRiD (see datasets/README.md).\n\n');
+fprintf(['Tasks 4.2/4.3 are not exercised here: the lesion models were DELIVERED\n' ...
+         '(bright_lesion_unet_v1, red_lesion_unet_v1), not trained in this repo, so\n' ...
+         'there is nothing for this harness to check without labelled masks. This\n' ...
+         'line used to say they were "blocked on IDRiD"; IDRiD is present and both\n' ...
+         'models are in models/.\n\n']);
 end
 
 function n = report(label, ok, detail)

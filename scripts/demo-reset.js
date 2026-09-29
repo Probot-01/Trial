@@ -185,25 +185,50 @@ function findIdrid(id) {
   return hit;
 }
 
-async function phcCall(base, method, url, body, form) {
+async function phcCall(base, method, url, body, form, token) {
+  const headers = form || !body ? {} : { 'content-type': 'application/json' };
+  // Sent on every call. This script used to rely on LOCAL_AUTH_ENABLED=false,
+  // which is why the PHC backend shipped with auth OFF -- and with it off,
+  // anonymous GET /patients returns real names, ages and phone numbers to
+  // anything on the same network. demo-reset logs in like a technician does
+  // instead, so the flag can default to true.
+  if (token) headers.authorization = `Bearer ${token}`;
   const r = await fetch(base + url, { method, signal: AbortSignal.timeout(180000),
-    body: form || (body ? JSON.stringify(body) : undefined), headers: form || !body ? {} : { 'content-type': 'application/json' } });
+    body: form || (body ? JSON.stringify(body) : undefined), headers });
   const text = await r.text();
   let json = null; try { json = JSON.parse(text); } catch { /* keep text */ }
   if (!r.ok) throw new Error(`${method} ${url} -> ${r.status} ${json ? JSON.stringify(json) : text.slice(0, 200)}`
-    + (r.status === 401 ? ' (the PHC backend has LOCAL_AUTH_ENABLED=true; demo-reset needs it false)' : ''));
+    + (r.status === 401 ? ' (PHC login failed or the session expired -- demo-reset signs in as the'
+                        + ' technician account it just created; it no longer needs auth switched off)' : ''));
   return json;
 }
 
-async function createDemoSet(cfg2) {
+/** The technician session demo-reset does its seeding through. */
+async function phcLogin(base, creds) {
+  const r = await fetch(`${base}/auth/login`, {
+    method: 'POST', signal: AbortSignal.timeout(30000),
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: creds.username, password: creds.password }),
+  });
+  const body = await r.json().catch(() => null);
+  if (!r.ok || !body?.token) {
+    throw new Error(`PHC login as '${creds.username}' failed -> ${r.status} `
+      + `${body ? JSON.stringify(body) : ''}. The account is created earlier in this run `
+      + `(addTechnician), so this failing means the backend cannot read it.`);
+  }
+  return body.token;
+}
+
+async function createDemoSet(cfg2, creds) {
   say('6/8 creating the demo set through PHC backend -> quality gate -> sync -> central grading');
   const set = JSON.parse(fs.readFileSync(path.join(__dirname, 'demo-set.json'), 'utf8')).cases;
   const base = `http://localhost:${cfg2.ports.phc}`;
+  const token = await phcLogin(base, creds.technician);
   const made = [];
   for (const [i, c] of set.entries()) {
     const file = findIdrid(c.idrid);
     const p = await phcCall(base, 'POST', '/patients', { name: c.name, age: c.age,
-      contactNumber: `+91000000${String(1000 + i)}`, consentGivenAt: new Date().toISOString() });
+      contactNumber: `+91000000${String(1000 + i)}`, consentGivenAt: new Date().toISOString() }, null, token);
     const fd = new FormData();
     fd.append('patientId', p.patientId); fd.append('cameraDeviceId', 'unknown');
     fd.append('image', new Blob([fs.readFileSync(file)], { type: 'image/jpeg' }), path.basename(file));
@@ -211,21 +236,21 @@ async function createDemoSet(cfg2) {
     // process start (exit 3221225794, DLL init) while other MATLABs are running. The
     // capture is saved and its 503 carries the id, so re-run the check instead of failing.
     let cap;
-    try { cap = await phcCall(base, 'POST', '/captures', null, fd); } catch (err) {
+    try { cap = await phcCall(base, 'POST', '/captures', null, fd, token); } catch (err) {
       const m = /"captureId":"([^"]+)"/.exec(err.message);
       if (!/quality_gate_failed/.test(err.message) || !m) throw err;
       for (let attempt = 1; attempt <= 3 && !cap; attempt++) {
         say(`     quality gate did not start (attempt ${attempt}); re-running the check for ${m[1]}`);
-        try { cap = await phcCall(base, 'POST', `/captures/${m[1]}/quality-check`, {}); } catch (e2) { if (attempt === 3) throw e2; }
+        try { cap = await phcCall(base, 'POST', `/captures/${m[1]}/quality-check`, {}, null, token); } catch (e2) { if (attempt === 3) throw e2; }
       }
     }
     if (!['pass', 'borderline'].includes(cap.qualityStatus)) {
       throw new Error(`IDRiD_${c.idrid}: the quality gate said '${cap.qualityStatus}${cap.qualityReason ? '/' + cap.qualityReason : ''}', so it would never sync. Pick another image in demo-set.json.`);
     }
-    await phcCall(base, 'POST', `/captures/${cap.captureId}/questionnaire`, { riskFactors: c.risk, symptoms: c.symptoms, language: 'en' });
+    await phcCall(base, 'POST', `/captures/${cap.captureId}/questionnaire`, { riskFactors: c.risk, symptoms: c.symptoms, language: 'en' }, null, token);
     await phcCall(base, 'POST', `/captures/${cap.captureId}/capture-metadata`, { cameraDeviceReported: 'unknown',
       pupilStatus: 'dilated', lightingEnvironment: 'indoor_clinic', observedIssues: ['none_noticed'],
-      workerUsabilityRating: 'clear', eyeLaterality: c.eye });
+      workerUsabilityRating: 'clear', eyeLaterality: c.eye }, null, token);
     say(`     ${c.role.padEnd(12)} IDRiD_${c.idrid}  captured (${cap.captureId}), gate ${cap.qualityStatus}`);
     made.push({ ...c, captureId: cap.captureId });
   }
@@ -322,7 +347,7 @@ function report(made, creds, cfg2, ready) {
     creds.technician = addTechnician();
     warmUp();
     if (FLAG('--skip-cases')) { report([], creds, cfg2, true); return; }
-    const made = await createDemoSet(cfg2);
+    const made = await createDemoSet(cfg2, creds);
     const ready = verify(made);
     if (!FLAG('--no-review')) await reviewSome(made, creds, cfg2);
     say('8/8 done');
