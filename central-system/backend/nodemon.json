@@ -1,0 +1,10 @@
+{
+  "ignore": [
+    "ml-pipeline/inference/matlabSession/*.heartbeat",
+    "ml-pipeline/inference/matlabSession/*.pid",
+    "ml-pipeline/inference/segSession/*.heartbeat",
+    "ml-pipeline/inference/segSession/*.pid",
+    "ml-pipeline/diagnostics/out/**",
+    "*.log"
+  ]
+}
