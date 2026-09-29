@@ -1,9 +1,13 @@
 # Tanuj — final checklist
 
-**2026-09-29, deadline tomorrow night.** Everything below is genuinely yours — either it needs your own
-credentials/decisions, or it needs a real phone in your hand. Everything else — full backend test suite, full
-desktop UI walkthrough, full central-website walkthrough — is done and pushed to `origin/integration`. Evidence
-for every claim below is in the commits on `integration` and in `docs/STALE_CLAIMS_AUDIT.md`.
+**2026-09-29, deadline tomorrow night. Both sides are done.** Saad has pushed and completed everything on
+`TASKS_SAAD.md` (P0-1 auth-on-by-default, P1-2 MC-dropout genuinely wired on the MATLAB path, P1-5 npm audit
+clean on both backends, all P2 items) — merged into this branch, re-verified (his `verifyCameraCalibration.m`
+and `verifyPhase4.m` fixes both confirmed passing here, both frontends rebuild clean, the core backend suites
+all still pass post-merge) and pushed. He also read `docs/STALE_CLAIMS_AUDIT.md` and fixed the `RED_LESION_MODEL_VERSION`
+doc discrepancies it found. Everything below is what's left that's genuinely only yours — either it needs your
+own credentials/decisions, or it needs a real phone in your hand. Evidence for every claim below is in the
+commits on `integration` and in `docs/STALE_CLAIMS_AUDIT.md`.
 
 ---
 
@@ -69,13 +73,10 @@ score difference 2.55e-3). None of these needed a fix.
 Build an installable APK first if the demo needs the app off Wi-Fi (`eas build --platform android --profile
 preview`, needs a free Expo account) — otherwise a fixed IP/hostname plus Expo Go is fine and cheaper right now.
 
-## 3. Model weights to Saad — you likely don't need to send them
+## 3. Model weights to Saad — moot now
 
-Everything actually left on `TASKS_SAAD.md` no longer touches inference at all: PHC auth default (a config
-flip), `npm audit` + retest (dependency vulnerabilities, tested via the JS quality-gate fallback, no classifier
-involved), and the P2 hygiene items. The two weight-dependent items (MC-dropout, the quality-gate `.exe`) were
-already picked up here today — see §5. Worth a one-line message to Saad either way, so he's not waiting on a
-link that no longer matters for what's on his plate.
+He finished everything on his list without needing them (PHC auth default, npm audit, MC-dropout — he found his
+own way to wire it on the MATLAB path, and the P2 items). Nothing to send.
 
 ## 4. Deployment — still explicitly parked
 
@@ -101,9 +102,10 @@ retry here.
 - **The corrected v2c numbers in `docs/STALE_CLAIMS_AUDIT.md` §3.1** — only relevant if you want to correct a
   slide or answer a judge's question with current figures instead of `system-design-v4.md`'s stale ones.
 
-## 7. When you and Saad are both done
+## 7. The last step — you're the only one left
 
-`node scripts/demo-reset.js` (must exit 0), then `docs/DEMO_RUNBOOK.md` scene by scene, twice, restarting from
+Saad's side is done. Once you've done §1 (real Twilio test) and §2 (mobile on your phone): `node
+scripts/demo-reset.js` (must exit 0), then `docs/DEMO_RUNBOOK.md` scene by scene, twice, restarting from
 `demo-reset` between runs. Log anything that breaks in `docs/BUGLOG.md`. Then open the `integration` → `main` PR.
 Then record.
 
