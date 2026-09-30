@@ -99,5 +99,5 @@
   ],
   "seed": 42,
   "checkpoint": "C:\\Users\\Tanuj\\Desktop\\Projects\\DR_SCREENING\\SIH_2026\\central-system\\backend\\ml-pipeline\\models\\red_lesion_unet_v2.pt",
-  "note": "Phase 1 artifact - training + evaluation only. NOT wired into inference/, segInfer.py, MATLAB, or the rule engine. Per the M5 plan, redFloor/grade3QuadMin recalibration is a separate, later step once this model is actually adopted for inference."
+  "note": "Wired into inference: segInfer.py's SEG_BACKEND dispatch serves the ONNX->MATLAB import (models/red_lesion_unet_v2.mat) by default (SEG_INFERENCE_BACKEND=matlab), with the original PyTorch checkpoint (red_lesion_unet_v2.pt) as the explicit fallback path. Parity checked: training/parityCheckRedLesionV2.m. redFloor/grade3QuadMin recalibration remains a separate, later step, still not adopted."
 }

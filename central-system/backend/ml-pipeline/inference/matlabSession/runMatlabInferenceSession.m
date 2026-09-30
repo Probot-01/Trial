@@ -81,9 +81,11 @@ end
 %                                   loads itself (warm-up below). The session
 %                                   no longer loads its own branchA_v1 copy --
 %                                   nothing ever served from it.
-%   SEG_INFERENCE_BACKEND=matlab -> the SEG_SERVED nets (M2, M3, M4). M5's old
-%                                   red_lesion_unet_v1 is no longer loaded: it
-%                                   is never served (M5 v2 runs in PyTorch).
+%   SEG_INFERENCE_BACKEND=matlab -> the SEG_SERVED nets (M2, M3, M4, and M5
+%                                   v2 as of its ONNX->MATLAB import + parity
+%                                   check). M5's old red_lesion_unet_v1 (the
+%                                   2-class model v2's retrain replaced) is
+%                                   not in SEG_SERVED and is never loaded.
 % This changes what is resident, never which engine runs anything: a request
 % for a model that is not loaded fails loudly (handleRequest), it is not
 % quietly served some other way. `nets` staying a local variable of this
@@ -173,11 +175,13 @@ end
 % ── Local functions ─────────────────────────────────────────────────────────
 
 function names = SEG_SERVED()
-% Segmentation nets this session will run on request. red_lesion_unet_v1 (M5)
-% is loaded but deliberately NOT served: its conversion is the old 2-class
-% model, which the 3-class retrain replaces (backend plan §S.2). It stays on
-% the Python path until the new conversion is delivered.
-names = {'vessel_unet_v1', 'localization_v1', 'bright_lesion_unet_v1'};
+% Segmentation nets this session will run on request. red_lesion_unet_v1 (M5's
+% old 2-class model, replaced by the 3-class retrain, backend plan §S.2) is
+% deliberately excluded -- not loaded, not served, stays on the Python path
+% permanently. red_lesion_unet_v2 (the deployed 3-class model) is served here
+% since its ONNX->MATLAB import and parity check against the PyTorch
+% checkpoint passed (training/parityCheckRedLesionV2.m).
+names = {'vessel_unet_v1', 'localization_v1', 'bright_lesion_unet_v1', 'red_lesion_unet_v2'};
 end
 
 function handleRequest(reqPath, reqId, responseDir, logFile, nets)

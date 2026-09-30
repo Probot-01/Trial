@@ -193,11 +193,17 @@ def _forward(model, x):
         return model(torch.from_numpy(x))[0].numpy()
 
 
-# SEG_INFERENCE_BACKEND=matlab|python. With matlab, the forward pass of the
-# three MATLAB-converted models runs in the persistent MATLAB session; every
+# SEG_INFERENCE_BACKEND=matlab|python. With matlab, the forward pass of all
+# four MATLAB-converted models runs in the persistent MATLAB session; every
 # pre- and post-processing step below is unchanged, so both backends share one
-# copy of it. M5 (red_lesion) is NOT converted for serving -- its conversion is
-# the old 2-class model the 3-class retrain replaces -- so it always runs here.
+# copy of it. red_lesion_unet_v1 (M5's old 2-class model, the one the 3-class
+# retrain replaced) is NOT in this dict and never will be -- it is not served
+# under any configuration. red_lesion_unet_v2 (the deployed 3-class model) was
+# added here once its ONNX->MATLAB import and parity check
+# (training/parityCheckRedLesionV2.m: per-image max|diff| and per-class
+# connected-component count, both against the same 10 real IDRiD images
+# parityCheck.m uses) confirmed the imported dlnetwork agrees with the
+# PyTorch checkpoint it was converted from.
 #
 # A session failure FAILS segmentation (exit code 4, MatlabEngineFailed) --
 # standing rule: no silent engine fallback. The case then fails visibly or is
@@ -214,6 +220,7 @@ _MATLAB_NETS = {
     "vessel": "vessel_unet_v1",
     "localization": "localization_v1",
     "hard_exudate": "bright_lesion_unet_v1",
+    "red_lesion_v2": "red_lesion_unet_v2",
 }
 # Which engine produced each role's forward pass, for the CURRENT run_one call
 # only -- reset at its start, because the segmentation worker calls run_one
@@ -397,19 +404,16 @@ def _lesion_prob_v2(role, rgb512):
     instead of sigmoid over one logit. Returns (3, H, W) probabilities.
     """
     x = ((rgb512.astype(np.float32) / 255.0) - 0.5) / 0.5
-    # NO extra [0] here: _forward() already strips the batch dim (see
+    # NO extra [0] here: _run()/_forward() already strip the batch dim (see
     # localize()'s identical multi-channel pattern), leaving (3, H, W). The
     # single-channel _lesion_prob() above needs its own trailing [0] to drop
     # a channel dim of size 1 -- that pattern does NOT generalise to 3
     # classes, and copying it here silently kept only channel 0 (background),
     # which is exactly the bug this comment is now guarding against.
-    # PyTorch directly, not _run(): the 3-class model has no MATLAB
-    # conversion, so the dispatch would only add a lookup that always misses.
-    # Its provenance is still recorded, here, for the same reason _run records
-    # every other model's.
-    BACKEND_USED[role] = {"engine": "python", "fallback": False,
-                          "detail": "PyTorch; not converted for MATLAB serving"}
-    logits = _forward(load(role)[0], x.transpose(2, 0, 1)[None, ...])  # (3, H, W)
+    # Through _run(), same as every other segmentation role: MATLAB when
+    # SEG_INFERENCE_BACKEND=matlab (red_lesion_v2 is now in _MATLAB_NETS),
+    # PyTorch otherwise. _run() records BACKEND_USED[role] itself.
+    logits = _run(role, x.transpose(2, 0, 1)[None, ...])  # (3, H, W)
     e = np.exp(logits - logits.max(axis=0, keepdims=True))
     return e / e.sum(axis=0, keepdims=True)
 
