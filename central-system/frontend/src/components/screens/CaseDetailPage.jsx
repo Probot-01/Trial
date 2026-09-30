@@ -99,6 +99,7 @@ export const CaseDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [showGradCam, setShowGradCam] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showTechnical, setShowTechnical] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewOutcome, setReviewOutcome] = useState(null);
   const [claimedBy, setClaimedBy] = useState(null);   // name of ANOTHER reviewer holding it
@@ -110,6 +111,19 @@ export const CaseDetailPage = () => {
   const [sideErrors, setSideErrors] = useState([]);
   const [reloadKey, setReloadKey] = useState(0);
   const startTimeRef = useRef(Date.now());
+
+  // A non-primary engine answering for any output is a real caveat on the
+  // result above, not an implementation detail -- force the technical panel
+  // open so it is never hidden behind an extra click.
+  useEffect(() => {
+    if (!caseData) return;
+    const p = caseData.engineProvenance || {};
+    const seg = p.segmentation || {};
+    const anyFallback = [p.classifier, p.ruleEngine, p.qualityGate,
+      seg.vessel, seg.localization, seg.hardExudate, seg.redLesion]
+      .some((e) => e && e.fallback === true);
+    if (anyFallback) setShowTechnical(true);
+  }, [caseData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -294,7 +308,7 @@ export const CaseDetailPage = () => {
       <InfoBanner title={t('central.caseDetail.banner.title', 'CLINICAL REVIEW GUIDANCE')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div><strong style={{ color: 'var(--c-crimson)' }}>CONFIDENCE:</strong> The confidence score shows the model's certainty. Lower scores should be scrutinized closely.</div>
-          <div><strong style={{ color: 'var(--c-crimson)' }}>UNCERTAINTY:</strong> Measures the model's epistemic uncertainty regarding the grade.</div>
+          <div><strong style={{ color: 'var(--c-crimson)' }}>UNCERTAINTY:</strong> How torn the model was between grades — separate from confidence, and a lower number is better here.</div>
           <div><strong style={{ color: 'var(--c-crimson)' }}>CONSISTENCY:</strong> Lesion-attention consistency ensures the model is looking at valid physiological features (like microaneurysms) rather than artifacts.</div>
           <div><strong style={{ color: 'var(--c-crimson)' }}>BRANCH MISMATCH:</strong> If the CNN and Rule Engine disagree, you must resolve this manually by providing a clinical reason.</div>
           <div><strong style={{ color: 'var(--c-crimson)' }}>GRAD-CAM:</strong> Use the Grad-CAM toggle to verify where the model is placing its attention on the fundus image.</div>
@@ -475,11 +489,24 @@ export const CaseDetailPage = () => {
           </div>
 
           {/* WHICH ENGINE produced each output, the classifier build behind the
-              grade, and what the image file says about itself. The quality-gate
-              engine used to sit as a lone tile in the context grid above; it is
-              one of seven engine entries the backend records, so it now lives
-              with the other six instead of standing in for them. */}
-          <ProvenancePanel caseData={c} />
+              grade, and what the image file says about itself -- genuinely
+              useful for engineering troubleshooting and a demo Q&A, but it is
+              raw system internals (engine enum values, env-var flag names,
+              DICOM tags) that an ophthalmologist does not need in front of
+              them to make a clinical call. Collapsed by default; forced open
+              automatically when a non-primary engine actually answered for
+              this case, since that is a real caveat on the result above, not
+              an implementation detail. */}
+          <div style={{ marginTop: 'var(--sp-4)' }}>
+            <button
+              className="btn btn--outline u-w-full"
+              onClick={() => setShowTechnical(!showTechnical)}
+              style={{ justifyContent: 'center' }}
+            >
+              <span>{showTechnical ? '▼ HIDE TECHNICAL / ENGINE DETAILS' : '▶ SHOW TECHNICAL / ENGINE DETAILS'}</span>
+            </button>
+            {showTechnical && <ProvenancePanel caseData={c} />}
+          </div>
         </div>
       </div>
 

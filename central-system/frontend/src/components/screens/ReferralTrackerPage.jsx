@@ -2,6 +2,17 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { centralApi } from '../../api/centralApiClient';
 import { LoadError } from '../shared/LoadError';
+import { InfoModalButton } from '../shared/InfoModalButton';
+
+const REFERRAL_INFO_ROWS = [
+  { term: 'REFERRED', text: 'The patient was graded as needing specialist follow-up and a referral SMS was sent successfully.' },
+  { term: 'MANUAL FOLLOW-UP', text: 'A referral was created, but the SMS could not be delivered (bad number, carrier issue, no SMS provider configured). Someone needs to phone this patient directly — the system has no other way to reach them.' },
+  { term: 'CONTACTED', text: 'Someone (a district worker or the assigned ASHA worker) has reached the patient about the referral.' },
+  { term: 'ATTENDED', text: 'The patient attended their specialist follow-up. The final, good outcome.' },
+  { term: 'LOST TO FOLLOW-UP', text: 'The patient could not be reached or did not attend, and no further contact succeeded. These need the most urgent attention — sorted to the top of the list by default.' },
+  { term: 'ASSIGNED WORKER', text: 'The ASHA or community health worker responsible for following up with this patient. Type a name and press Enter to assign or reassign.' },
+  { term: 'ADVANCING STATUS', text: 'Use the arrow button to move a referral to its next stage, or LOST if the patient could not be reached. Status only moves forward or to Lost — it does not automatically go backward.' },
+];
 
 const getStatusConfig = (t) => ({
   referred: { label: t('central.referral.pipeline.referred', 'REFERRED'), badge: 'badge--warning', next: 'contacted' },
@@ -339,7 +350,10 @@ export const ReferralTrackerPage = () => {
       <div className="u-flex u-items-center u-justify-between u-mb-6">
         <div>
           <p className="section__subtitle">{t('central.referral.subtitle', 'DISTRICT WORKER')}</p>
-          <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.referral.title', 'REFERRAL TRACKER')}</h1>
+          <div className="u-flex u-items-center u-gap-3">
+            <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.referral.title', 'REFERRAL TRACKER')}</h1>
+            <InfoModalButton title="REFERRAL TRACKER" rows={REFERRAL_INFO_ROWS} />
+          </div>
         </div>
         <div className="u-flex u-items-center u-gap-3">
           <button

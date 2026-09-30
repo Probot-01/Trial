@@ -51,7 +51,7 @@
       "subtitle": "OPHTHALMOLOGIST INTERFACE",
       "title": "CASES",
       "stats": {
-        "total": "TOTAL",
+        "total": "AWAITING REVIEW",
         "confirmed": "CONFIRMED",
         "overridden": "OVERRIDDEN"
       },

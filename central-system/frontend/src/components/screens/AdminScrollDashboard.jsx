@@ -2,8 +2,17 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { centralApi } from '../../api/centralApiClient';
 import { USE_MOCK_DATA } from '../../config';
 import { LoadError } from '../shared/LoadError';
+import { InfoModalButton } from '../shared/InfoModalButton';
 import { EyeHeroSVG } from './EyeHeroSVG';
 import './AdminScrollDashboard.css';
+
+const OVERVIEW_INFO_ROWS = [
+  { term: 'CASES TODAY / THIS WEEK', text: 'Cases received from all PHCs so far today, and over the last 7 days.' },
+  { term: 'AVG REVIEW TIME', text: 'How long an ophthalmologist typically spends reviewing a case before confirming or overriding it.' },
+  { term: 'MODEL ACCURACY / AGREEMENT RATE / AVG CONFIDENCE', text: 'How often the AI’s grade matches what an ophthalmologist confirms, how often the two grading branches agree with each other, and how certain the model reports being on average.' },
+  { term: 'PHC NETWORK', text: 'How many cases each Primary Health Centre has sent today — a quick read on which clinics are active and how busy each one is.' },
+  { term: 'REFERRAL FUNNEL', text: 'The patient journey from being screened, to referred, to confirmed by a specialist, to actually treated. See the Referral Tracker page for the live, case-by-case list behind this.' },
+];
 
 const CHAPTERS = [
   { id: 'hero', label: 'Overview' },
@@ -438,7 +447,10 @@ export const AdminScrollDashboard = () => {
 
         {/* ── Chapter 01: OVERVIEW ── */}
         <Card side="left" cardRef={setCard(0)}>
-          <div className="admin-scroll__eyebrow">District Report</div>
+          <div className="admin-scroll__eyebrow u-flex u-items-center u-gap-2">
+            <span>District Report</span>
+            <InfoModalButton title="DISTRICT OVERVIEW" rows={OVERVIEW_INFO_ROWS} />
+          </div>
           <SplitTitle
             as="h1"
             className="admin-scroll__title admin-scroll__hero-title"

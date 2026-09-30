@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { centralApi } from '../../api/centralApiClient';
 import { drGradeLabels } from '../../api/mockData';
 import { USE_MOCK_DATA } from '../../config';
-import { InfoBanner } from '../shared/InfoBanner';
+import { InfoModalButton } from '../shared/InfoModalButton';
 import { LoadError } from '../shared/LoadError';
 
 const SortHeader = ({ label, sortKey, currentSort, onRequestSort, width }) => {
@@ -52,47 +52,19 @@ const SeverityBadge = ({ grade }) => {
   return <span className={cls}>{label}</span>;
 };
 
-const InfoModal = ({ onClose, t }) => (
-  <>
-    {/* Backdrop — click outside to dismiss */}
-    <div
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.4)' }}
-    />
-    {/* Centered panel */}
-    <div style={{
-      position: 'fixed',
-      top: '50%', left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: '480px', maxWidth: '92vw',
-      zIndex: 9999,
-      backgroundColor: '#FFF8F0',
-      border: '2px solid var(--c-crimson)',
-      boxShadow: '12px 12px 0px rgba(0,0,0,0.18)',
-      padding: 'var(--sp-5)',
-      maxHeight: '80vh', overflowY: 'auto',
-    }}>
-      <div className="u-flex u-justify-between u-items-center u-mb-4" style={{ borderBottom: '2px solid var(--c-crimson)', paddingBottom: 'var(--sp-3)' }}>
-        <h3 className="t-h3" style={{ margin: 0, color: 'var(--c-crimson)', letterSpacing: '1px' }}>
-          {t('central.queue.modal.title', 'CLINICAL GUIDANCE')}
-        </h3>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '20px', color: 'var(--c-crimson)', lineHeight: 1 }}>✕</button>
-      </div>
-      <div className="t-mono" style={{ fontSize: '11.5px', display: 'flex', flexDirection: 'column', gap: '13px', lineHeight: '1.6' }}>
-        <div><strong style={{ color: 'var(--c-crimson)' }}># PRIORITY:</strong> AI-assigned urgency rank. Cases with higher grades and lower confidence are ranked first.</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>CAPTURED:</strong> Time elapsed since the fundus image was taken at the PHC. Hover for exact timestamp.</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>PATIENT REF:</strong> Anonymised patient identifier with age. Used to look up the patient's history.</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>PHC:</strong> Primary Health Centre — the facility that conducted the screening.</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>TIER:</strong> Conformal prediction confidence band — <em>A</em> (high certainty, auto-clearable), <em>B</em> (moderate, routine review), <em>C</em> (low certainty, priority manual review).</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>SEVERITY:</strong> Clinical urgency — LOW (Grade 0: No DR), MID (Grades 1–2: Mild/Moderate NPDR), HIGH (Grades 3–4: Severe NPDR or PDR).</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>CNN GRADE:</strong> DR grade (0–4) predicted by the holistic deep-learning branch (CNN model trained end-to-end).</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>RULE ENGINE:</strong> DR grade predicted by counting discrete lesion features (microaneurysms, haemorrhages, exudates) against clinical thresholds.</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>AGREEMENT:</strong> Whether both AI branches agree. A <em>DISAGREE</em> flag means grades differ — mandatory manual review required before confirming.</div>
-        <div><strong style={{ color: 'var(--c-crimson)' }}>CONFIDENCE:</strong> Model certainty score (0–100%). Below 70% warrants extra clinical scrutiny before sign-off.</div>
-      </div>
-    </div>
-  </>
-);
+const QUEUE_INFO_ROWS = [
+  { term: '# PRIORITY', text: 'AI-assigned urgency rank. Cases with higher grades and lower confidence are ranked first.' },
+  { term: 'CAPTURED', text: 'Time elapsed since the fundus image was taken at the PHC. Hover for exact timestamp.' },
+  { term: 'PATIENT REF', text: 'Anonymised patient identifier with age. Used to look up the patient’s history.' },
+  { term: 'PHC', text: 'Primary Health Centre — the facility that conducted the screening.' },
+  { term: 'TIER', text: 'Conformal prediction confidence band — A (high certainty, auto-clearable), B (moderate, routine review), C (low certainty, priority manual review).' },
+  { term: 'SEVERITY', text: 'Clinical urgency — LOW (Grade 0: No DR), MID (Grades 1–2: Mild/Moderate NPDR), HIGH (Grades 3–4: Severe NPDR or PDR).' },
+  { term: 'CNN GRADE', text: 'DR grade (0–4) predicted by the holistic deep-learning branch (CNN model trained end-to-end).' },
+  { term: 'RULE ENGINE', text: 'DR grade predicted by counting discrete lesion features (microaneurysms, haemorrhages, exudates) against clinical thresholds.' },
+  { term: 'AGREEMENT', text: 'Whether both AI branches agree. A DISAGREE flag means grades differ — mandatory manual review required before confirming.' },
+  { term: 'CONFIDENCE', text: 'Model certainty score (0–100%). Below 70% warrants extra clinical scrutiny before sign-off.' },
+  { term: 'PENDING / CONFIRMED / OVERRIDDEN', text: 'A case is PENDING until an ophthalmologist reviews it. CONFIRMED means a reviewer agreed with the AI grade; OVERRIDDEN means a reviewer assigned a different final grade, with a reason recorded. This queue only ever lists PENDING cases — once you confirm or override one it leaves this list immediately, by design, so it does not reappear here. To see what happened to a case afterward, check the Referral Tracker.' },
+];
 
 const ConfidenceBar = ({ value }) => {
   const pct = Math.round(value * 100);
@@ -199,7 +171,6 @@ export const ReviewQueuePage = () => {
   const [loadError, setLoadError] = useState(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [filter, setFilter] = useState('all');
-  const [showInfoModal, setShowInfoModal] = useState(false);
   // Respect user settings for initial default sort & compact table view
   const [sortConfig, setSortConfig] = useState(() => {
     try {
@@ -402,34 +373,7 @@ export const ReviewQueuePage = () => {
           <p className="section__subtitle">{t('central.queue.subtitle', 'OPHTHALMOLOGIST INTERFACE')}</p>
           <div className="u-flex u-items-center u-gap-3">
             <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.queue.title', 'CASES')}</h1>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <button
-                onClick={() => setShowInfoModal(!showInfoModal)}
-                title="Clinical Guidance Info"
-                style={{
-                  background: 'transparent',
-                  border: '2px solid var(--c-crimson)',
-                  color: 'var(--c-crimson)',
-                  borderRadius: '50%',
-                  width: '28px',
-                  height: '28px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  fontFamily: 'serif',
-                  cursor: 'pointer',
-                  marginLeft: '4px',
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(204, 0, 0, 0.1)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              >
-                i
-              </button>
-              {showInfoModal && <InfoModal onClose={() => setShowInfoModal(false)} t={t} />}
-            </div>
+            <InfoModalButton title="CLINICAL GUIDANCE" rows={QUEUE_INFO_ROWS} />
           </div>
         </div>
         <div className="u-flex u-items-center u-gap-3">
@@ -646,7 +590,20 @@ export const ReviewQueuePage = () => {
                 </td>
                 <td>
                   {item.branchAgreement === null ? (
-                    <span className="t-mono" style={{ opacity: 0.3 }}>{t('central.queue.table.na', 'N/A')}</span>
+                    item.drGradeRuleEngine === null ? (
+                      <span className="t-mono" style={{ opacity: 0.3 }}>{t('central.queue.table.na', 'N/A')}</span>
+                    ) : (
+                      // Rule engine ran and hit its capped ceiling (RULE_MAX_GRADE=3),
+                      // so its grade is a lower bound, not a value to compare against
+                      // the CNN's -- "N/A" here would say branch B never ran, which is
+                      // false, and would hide a real result from the reviewer.
+                      <span
+                        className="badge badge--warning"
+                        title={`The rule engine's grade (${item.drGradeRuleEngine}) is a lower bound -- it caps at ${item.drGradeRuleEngine}, so it is not directly comparable to the CNN grade. Not an agreement or a disagreement.`}
+                      >
+                        {t('central.queue.table.notComparable', '≥ CEILING')}
+                      </span>
+                    )
                   ) : item.branchAgreement ? (
                     <span className="badge badge--pass">{t('central.queue.table.agree', '✓ AGREE')}</span>
                   ) : (

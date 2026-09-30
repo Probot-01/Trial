@@ -175,7 +175,7 @@ export const DecisionControls = ({ caseData, onSubmit, submitted, claimedBy, pri
         {disagree && (
           <div role="note" style={{ marginBottom: 'var(--sp-4)', padding: '12px', border: '2px solid var(--c-crimson-dark, #7a0a18)', fontSize: 'var(--fs-small)' }}>
             <strong>⚠ BRANCHES DISAGREE</strong> — CNN says Grade {cnn ?? '—'}, the rule engine says Grade {rule ?? '—'}.
-            "Confirm" is not available: you must explicitly choose the final grade below (design doc §10.9).
+            "Confirm" is not available: you must explicitly choose the final grade below.
           </div>
         )}
 

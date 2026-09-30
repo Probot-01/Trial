@@ -2,6 +2,17 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { centralApi } from '../../api/centralApiClient';
 import { LoadError } from '../shared/LoadError';
+import { InfoModalButton } from '../shared/InfoModalButton';
+
+const PHC_HEALTH_INFO_ROWS = [
+  { term: 'ACTIVE / SILENT', text: 'A PHC is ACTIVE if it has sent at least one case within the configured window (shown on the SILENT PHCs card below). SILENT means no contact within that window — worth a phone call or a physical check, since it could mean a real outage at the clinic, not just a quiet day.' },
+  { term: 'LAST SYNC', text: 'When this PHC last successfully delivered a case to this server. Highlighted in orange once it passes 1 hour.' },
+  { term: 'CASES (24H)', text: 'How many cases this PHC has sent in the last 24 hours — a rough measure of how busy that clinic has been.' },
+  { term: 'PENDING / FAILED', text: 'Captures at that PHC that are queued to sync or failed to reach this server. A high number over time usually means a connectivity problem at that site.' },
+  { term: 'CASES STUCK PROCESSING', text: 'Cases whose grading did not finish in the expected time. The system retries these automatically; a persistently high number is worth reporting.' },
+  { term: 'GRADING SYSTEM STATUS', text: 'Whether the AI grading engine is currently available. RECOVERING means it restarted itself after a problem and is coming back online — grading may be briefly slower or paused during that window.' },
+  { term: 'SLA AGING', text: 'Cases that have been graded and are waiting for an ophthalmologist to review them, past the 48-hour service target. A rising number here means reviewers are falling behind real patient volume.' },
+];
 
 // 3-State Sort Header Component (Matching Reference Image 2)
 const SortHeader = React.memo(({ label, field, sortKey, sortDir, onSort, alignRight = false }) => {
@@ -28,6 +39,19 @@ const SortHeader = React.memo(({ label, field, sortKey, sortDir, onSort, alignRi
 SortHeader.displayName = 'SortHeader';
 
 const HOUR_MS = 3_600_000;
+
+// A district health administrator does not read Python tracebacks or restart
+// counts -- they need to know, in one sentence, whether screening is affected
+// and whether it is already being handled. The full engineering detail
+// (`alert.message`: log file paths, ms timings, env var names) still exists
+// underneath, one click away, for whoever actually fixes it.
+const ALERT_PLAIN_SUMMARY = {
+  matlab_session_down: 'The grading engine restarted unexpectedly. New screenings may take a little longer while it recovers.',
+  seg_worker_down: 'The lesion-detection service is temporarily unavailable. Grading continues without it, slightly slower, until it is restarted.',
+  simulink_model_diverged: 'A routine internal check on the staffing-recommendation model found a mismatch. Recommendations on the Resource Allocation page may be affected.',
+};
+const alertPlainSummary = (kind) => ALERT_PLAIN_SUMMARY[kind]
+  || 'A background system check needs attention. See the technical detail below.';
 
 // One row of GET /admin/phcs. Only what the API says: nothing here is derived
 // into a score or a "total screened" the server did not send.
@@ -69,6 +93,43 @@ const PhcRow = React.memo(({ phc }) => {
   );
 });
 PhcRow.displayName = 'PhcRow';
+
+const AlertCard = React.memo(({ alert }) => {
+  const [showDetail, setShowDetail] = useState(false);
+  return (
+    <div
+      style={{
+        background: 'rgba(255,255,255,0.7)',
+        border: '1px solid var(--c-crimson)',
+        padding: '10px 12px',
+        fontSize: '12px',
+      }}
+    >
+      <div style={{ fontWeight: 700, color: 'var(--c-crimson)', marginBottom: '4px' }}>
+        ⚠ {String(alert.kind || 'alert').replace(/_/g, ' ').toUpperCase()}{alert.subject ? ` — ${alert.subject}` : ''}
+        {alert.occurrences > 1 ? ` (×${alert.occurrences})` : ''}
+      </div>
+      <div style={{ color: 'var(--c-text)' }}>{alertPlainSummary(alert.kind)}</div>
+      <button
+        type="button"
+        onClick={() => setShowDetail(!showDetail)}
+        style={{
+          background: 'none', border: 'none', padding: 0, marginTop: '6px',
+          fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-text-muted)',
+          textDecoration: 'underline', cursor: 'pointer',
+        }}
+      >
+        {showDetail ? 'HIDE TECHNICAL DETAIL' : 'SHOW TECHNICAL DETAIL'}
+      </button>
+      {showDetail && (
+        <div style={{ marginTop: '6px', fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-text-muted)' }}>
+          {alert.message}
+        </div>
+      )}
+    </div>
+  );
+});
+AlertCard.displayName = 'AlertCard';
 
 export const PhcHealthPage = () => {
   const { t } = useTranslation();
@@ -184,37 +245,17 @@ export const PhcHealthPage = () => {
           <div className="u-flex u-items-center u-justify-between u-mb-2">
             <div className="u-flex u-items-center" style={{ gap: '8px' }}>
               <span className="badge badge--fail" style={{ fontSize: '11px', padding: '3px 8px' }}>
-                CRITICAL SYSTEM HEALTH EXCEPTION
+                SYSTEM NEEDS ATTENTION
               </span>
               <span className="t-mono" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--c-crimson)' }}>
-                {trippedChecks} OF 4 CHECKS TRIPPED · {systemHealth.alerts?.length ?? 0} OPEN ALERT{(systemHealth.alerts?.length ?? 0) === 1 ? '' : 'S'}
+                {systemHealth.alerts?.length ?? 0} OPEN ITEM{(systemHealth.alerts?.length ?? 0) === 1 ? '' : 'S'}
               </span>
             </div>
-            <span className="t-mono" style={{ fontSize: '10px', color: 'var(--c-text-muted)' }}>
-              Consolidated Watchdog Monitor (§10.7)
-            </span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
             {systemHealth.alerts?.map((alert, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: 'rgba(255,255,255,0.7)',
-                  border: '1px solid var(--c-crimson)',
-                  padding: '10px 12px',
-                  fontFamily: 'var(--f-mono)',
-                  fontSize: '11px',
-                }}
-              >
-                <div style={{ fontWeight: 700, color: 'var(--c-crimson)', marginBottom: '4px' }}>
-                  ⚠ {String(alert.kind || 'alert').replace(/_/g, ' ').toUpperCase()}{alert.subject ? ` — ${alert.subject}` : ''}
-                  {alert.occurrences > 1 ? ` (×${alert.occurrences})` : ''}
-                </div>
-                <div style={{ color: 'var(--c-text)', opacity: 0.9 }}>
-                  {alert.message}
-                </div>
-              </div>
+              <AlertCard key={idx} alert={alert} />
             ))}
           </div>
         </div>
@@ -237,25 +278,29 @@ export const PhcHealthPage = () => {
 
           <div className="bento--span-3">
             <div className="stat hash-fill">
-              <div className="stat__label">STUCK PIPELINE JOBS</div>
+              <div className="stat__label">CASES STUCK PROCESSING</div>
               <div className="stat__value" style={{ color: systemHealth.stuckJobs.length > 0 ? '#F97316' : 'var(--c-success)' }}>
                 {systemHealth.stuckJobs.length}
               </div>
               <div className="stat__delta" style={{ color: 'var(--c-text-muted)' }}>
-                {systemHealth.stuckJobs.length > 0 ? 'Auto-recovery in progress' : 'Pipeline clear (&lt;15m)'}
+                {systemHealth.stuckJobs.length > 0 ? 'Recovering automatically' : 'All cases processing normally'}
               </div>
             </div>
           </div>
 
           <div className="bento--span-3">
-            <div className="stat hash-fill">
-              <div className="stat__label">MATLAB SESSION STATUS</div>
+            <div
+              className="stat hash-fill"
+              title={systemHealth.matlabSession?.pid != null ? `Grading process ID ${systemHealth.matlabSession.pid}` : undefined}
+            >
+              <div className="stat__label">GRADING SYSTEM STATUS</div>
               <div className="stat__value" style={{ color: systemHealth.matlabSessionStatus === 'healthy' ? '#14B8A6' : '#A82222' }}>
-                {systemHealth.matlabSessionStatus.toUpperCase()}
+                {systemHealth.matlabSessionStatus === 'healthy' ? 'ONLINE' : 'RECOVERING'}
               </div>
-              <div className="stat__delta" style={{ color: 'var(--c-success)' }}>
-                {systemHealth.matlabSession?.pid != null ? `PID: ${systemHealth.matlabSession.pid} • ` : ''}
-                {systemHealth.matlabSession?.restartsInWindow ?? '—'} restarts in window
+              <div className="stat__delta" style={{ color: 'var(--c-text-muted)' }}>
+                {(systemHealth.matlabSession?.restartsInWindow ?? 0) > 0
+                  ? `Recovered automatically ${systemHealth.matlabSession.restartsInWindow} time${systemHealth.matlabSession.restartsInWindow === 1 ? '' : 's'} recently`
+                  : 'Running without interruption'}
               </div>
             </div>
           </div>
@@ -280,7 +325,10 @@ export const PhcHealthPage = () => {
       <div className="u-flex u-items-center u-justify-between u-mb-6">
         <div>
           <p className="section__subtitle">{t('central.phcHealth.subtitle', 'DISTRICT WORKER')}</p>
-          <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.phcHealth.title', 'PHC HEALTH')}</h1>
+          <div className="u-flex u-items-center u-gap-3">
+            <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.phcHealth.title', 'PHC HEALTH')}</h1>
+            <InfoModalButton title="PHC HEALTH" rows={PHC_HEALTH_INFO_ROWS} />
+          </div>
         </div>
         {/* Interactive filter badges */}
         {!phcError && <div className="u-flex u-gap-3 u-items-center">
