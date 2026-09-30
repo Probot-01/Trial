@@ -117,7 +117,11 @@ The model actually running in production for microaneurysm/haemorrhage detection
 minimum-lesion-size filter) — confirmed live: `segInfer.py:116` defaults
 `RED_LESION_MODEL_VERSION` to `"v2"`, no environment override exists, and real production
 database rows carry non-null, non-zero microaneurysm/haemorrhage counts under
-`redLesionModelVersion: "v2"`. **However, v2 has no independently measured Dice/sensitivity score
+`redLesionModelVersion: "v2"`. As of 2026-09-30 it also runs through the **MATLAB session** by
+default, like every other segmentation model (the ONNX-imported `red_lesion_unet_v2.mat`,
+parity-checked against its PyTorch source in `training/parityCheckRedLesionV2.m`), with the
+original PyTorch checkpoint kept only as an explicit fallback path. **However, v2 has no
+independently measured Dice/sensitivity score of its own
 of its own anywhere in this codebase** — the 0.6105 Dice figure in the table above is v1's, a
 different (single-class) architecture it replaced. v2's improvement over v1 is architectural and
 qualitative (it can report a microaneurysm count and a haemorrhage count separately, which v1

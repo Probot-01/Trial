@@ -18,6 +18,14 @@ diff since commit `b099381`), and the rule-engine thresholds (`RED_FLOOR=3`, `GR
 `RULE_MAX_GRADE=3`) are untouched. The weight files are git-ignored (only the ONNX exports and parity data are
 tracked), so this list is how you know you have the same ones.
 
+**2026-09-30:** red-lesion (MA+HE) segmentation now runs through the MATLAB session by default, serving the
+already-converted `red_lesion_unet_v2.mat` (ONNX-imported from the same `red_lesion_unet_v2.pt` checkpoint,
+parity-checked in `training/parityCheckRedLesionV2.m`) instead of always running PyTorch — no weight file
+changed, only which engine's forward pass is dispatched to (`segInfer.py`'s `_MATLAB_NETS` dict and the
+persistent session's `SEG_SERVED()` list). PyTorch remains the fallback path (`SEG_ALLOW_PYTHON_FALLBACK=1`).
+This makes every served model MATLAB-served except the mobile/PHC quality gate's own on-device paths, listed
+below.
+
 **Served in the demo** (defaults: `BRANCH_A_MODEL_VERSION=branchA_v2c`):
 
 | Role | File (under `central-system/backend/ml-pipeline/`) | Engine |
@@ -26,7 +34,7 @@ tracked), so this list is how you know you have the same ones.
 | Vessel segmentation | `models/vessel_unet_v1.mat` | MATLAB session |
 | Localisation | `models/localization_v1.mat` | MATLAB session |
 | Hard exudates | `models/bright_lesion_unet_v1.mat` | MATLAB session |
-| Red lesions (MA + HE) | `models/red_lesion_unet_v2.pt` | Python (PyTorch) |
+| Red lesions (MA + HE) | `models/red_lesion_unet_v2.mat` (ONNX-imported from `red_lesion_unet_v2.pt`) | MATLAB session |
 | Conformal / temperature | `models/conformal_v1.mat`, `models/temperature_v1.mat` | MATLAB session |
 | PHC quality gate | `phc-local-app/backend/quality-gate-matlab/*.m` (source, run by `matlab -batch`) | MATLAB |
 | Mobile quality gate | `phc-local-app/mobile/netrasetu/lib/quality/qualityGate.ts` | on-device (`js-device`) |

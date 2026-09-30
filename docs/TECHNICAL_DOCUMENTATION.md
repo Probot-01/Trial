@@ -230,7 +230,10 @@ are only a few pixels across and a filter tuned for haemorrhage-scale noise woul
 them. v1 (a single combined-class predecessor) is the only version with its own measured Dice
 score (0.61); v2's own segmentation accuracy has not yet been independently re-measured, though it
 is confirmed live in production (real per-case, non-zero microaneurysm/haemorrhage counts in the
-database) — see `docs/ML_BENCHMARKS.md` §3 for the full, honest breakdown of this gap.
+database). As of 2026-09-30, v2 also runs through the MATLAB session by default like every other
+segmentation model (ONNX-imported to `red_lesion_unet_v2.mat`, parity-checked against its PyTorch
+source), rather than always running PyTorch — see `docs/ML_BENCHMARKS.md` §3 for the full, honest
+breakdown of this gap.
 **Cotton-wool spots (soft exudates) are an explicit, disclosed scope exclusion** — training data
 for this specific lesion type was judged too sparse to support a real detector; the field is
 always reported as unmeasured, never as a false zero.
