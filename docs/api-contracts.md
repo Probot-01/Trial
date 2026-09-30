@@ -19,6 +19,11 @@
 Kept because this file is the tie-breaker: when it changes, the code and both
 plans have to be re-checked against it, and a silent edit makes that impossible.
 
+**2026-09-30 — `POST /captures` (and `POST /captures/:captureId/quality-check`) gain `qualityScore` and `metrics`.** Additive, PHC-local only. The technician screen showed pass/retake/borderline with no number, because the six sub-scores `qualityGateMain.m` computes were logged only.
+- **`qualityScore`** is not a new metric invented for display: it is `qualityGateMain.m`'s own decision value, `mean([focusScore, illuminationScore, fovScore])`, checked against 0.7 in the gate's own last branch to decide `borderline` vs `pass`. Recomputed server-side (`captureHandler.js`, `qualityGateClient.js`) from the sub-scores already stored in `quality_scores`, so it always agrees with the verdict already given.
+- **`metrics`** exposes three of the seven internal sub-scores under contract names (`focusScore`, `illuminationScore`, `retinalCoverageScore` ← MATLAB's `coveragePercent`). `glareScore`, `motionScore`, `occlusionScore` remain internal.
+- Both `null` on a capture gated before this was added, or by an engine that returns no sub-scores. The frontend (`QualityResultPanel.jsx`) already had display code for both fields from an earlier pass; it was fed `null` unconditionally until now.
+
 **2026-09-28 — `GET /api/v1/cases/:caseId` gains `lesionAttentionChanceLevel`, `lesionAttentionEnrichment`, `lesionAttentionFlagged`.** Additive (migration 0022). The Grad-CAM/lesion consistency score was being served alone, and **alone it is not interpretable**.
 - `lesionAttentionConsistencyScore` is the fraction of Grad-CAM energy falling inside the segmented lesions. If lesions cover 70% of the retina, a heatmap of pure noise also scores 0.70. `lesionAttentionConsistency.m`'s own header says a UI showing that fraction beside a green tick "would be actively misleading" — and Case Detail was rendering it on a 0–1 bar coloured red below an invented 0.6 threshold.
 - **`lesionAttentionChanceLevel`** is the lesion area fraction: what a random heatmap would score *on this eye*. **`lesionAttentionEnrichment`** is score / chance, where 1.0 is chance and above 1 is real attention. **`lesionAttentionFlagged`** is `enrichment > 1.0` evaluated in MATLAB, next to the maths, so no surface re-derives the comparison.
@@ -217,10 +222,14 @@ Response `201`:
   "qualityReason": null,
   "retakeCount": 0,
   "capturedAt": "2026-09-06T09:05:00.000Z",
-  "qualityGateEngine": { "engine": "matlab", "fallback": false, "detail": "qualityGateMain.m via matlab -batch" }
+  "qualityGateEngine": { "engine": "matlab", "fallback": false, "detail": "qualityGateMain.m via matlab -batch" },
+  "qualityScore": 0.86,
+  "metrics": { "focusScore": 0.80, "illuminationScore": 0.95, "retinalCoverageScore": 0.86 }
 }
 ```
 `qualityStatus` is exactly one of `"pass" | "retake" | "borderline"`.
+
+*(2026-09-30)* **`qualityScore`** and **`metrics`** were added so the technician screen can show a real number instead of pass/fail alone. `qualityScore` is **exactly** `qualityGateMain.m`'s own borderline threshold value — `mean([focusScore, illuminationScore, fovScore])`, the same expression the gate checks against 0.7 to decide `pass` vs `borderline` — recomputed server-side from the stored sub-scores, never a separately-invented composite. `metrics` carries three of the seven internal sub-scores under contract-facing names (`focusScore`, `illuminationScore`, `retinalCoverageScore` ← MATLAB's `coveragePercent`); the other four (`glareScore`, `motionScore`, `occlusionScore`, and the internal `fovScore` distinct from coverage) are still logged only, not exposed, because no UI needed them yet. Both are `null` on a capture gated before this was added, or gated by an engine that never returned the three sub-scores. **Do not compute a different composite from these fields on the frontend** — `qualityScore` already is the gate's actual decision value.
 
 *(2026-09-26)* **`qualityGateEngine`** says which engine produced this verdict: `{ "engine": "matlab" | "js-fallback", "fallback": boolean, "detail": string }`. It is never guessed: it is `null` only for a capture gated before the engine was recorded. The screen must show it. `"matlab"` covers both the compiled executable and `matlab -batch` (`detail` says which). `"js-fallback"` can only appear with `QUALITY_GATE_ALLOW_FALLBACK=1`, and the JS tier is currently switched off in code, so it does not answer today (see the 503 below).
 `qualityReason` is `null` when `qualityStatus` is `"pass"`; otherwise exactly one of: `"blur" | "low_illumination" | "insufficient_fov" | "glare" | "motion_artifact" | "eyelash_occlusion"`. These six strings are fixed — the frontend's `QualityResultPanel.jsx` maps each one to its own human-readable message, so the quality gate must return one of these exact values, never free text.
@@ -455,9 +464,12 @@ Response `200`:
   "lesionAttentionConsistencyScore": 0.71,
   "questionnaireData": { "riskFactors": { "...": "..." }, "symptoms": { "...": "..." }, "language": "hi" },
   "captureMetadata": { "cameraDeviceReported": "forus_3nethra_v2", "pupilStatus": "dilated", "lightingEnvironment": "indoor_clinic", "observedIssues": ["none_noticed"], "workerUsabilityRating": "clear" },
-  "priorAssessments": [ { "caseId": "prev-case-id", "gradedAt": "2026-06-01T10:00:00.000Z", "drGradeCnn": 1 } ]
+  "priorAssessments": [ { "caseId": "prev-case-id", "gradedAt": "2026-06-01T10:00:00.000Z", "drGradeCnn": 1,
+    "lesions": { "microaneurysms": 12, "hemorrhages": 3, "hardExudates": 5, "softExudates": null },
+    "status": "CONFIRMED", "referralStatus": "attended" } ]
 }
 ```
+*(2026-09-30)* **`priorAssessments` entries gain `lesions`, `status`, `referralStatus`.** `CaseHistoryTimeline.jsx`'s diff view and referral tracker were built against these fields, but the endpoint never sent them — every prior visit rendered "NO LESION DATA" and no referral progress regardless of what actually happened. `lesions` is the same four flat clinical keys as the case's own `lesionCounts` (no `detail` sub-object — this view diffs numbers, not per-quadrant arrays), `null` when segmentation did not run for that prior case. `status` is `"CONFIRMED"` \| `"OVERRIDDEN"` \| `null` (that case's latest review decision, `null` if never reviewed). `referralStatus` is one of the real referral states — `"referred" | "contacted" | "attended" | "lost" | "manual_follow_up"` — or `null` if no referral was raised. (The frontend previously hardcoded `"SCHEDULED"`/`"SEEN"`, which are not real states; fixed to match `ReferralTrackerPage.jsx`'s actual vocabulary.)
 > [!NOTE]
 > **`lesionCounts` returns these keys.** `hardExudates` is a real number — the bright-lesion count under its correct name. **`microaneurysms` and `hemorrhages` are real numbers too, since the M5 3-class model became the default** (`RED_LESION_MODEL_VERSION` defaults to `v2` in `segInfer.py`, with no `.env` override anywhere). *Corrected 2026-09-29: this paragraph said, "as of 2026-09-20", that both were `null` because M5 detected red lesions as a single class and that they would "become real numbers when Tanuj's 3-class retrain lands". It landed and is the default. Verified rather than assumed: every `segmentation_outputs.lesion_counts` row in the live database carries `redLesionModelVersion: "v2"` with non-zero `maTotal`/`heTotal`, and `GET /cases/:caseId` on the newest graded case returns `microaneurysms: 69, hemorrhages: 12`.* They are `null` only under an explicit `RED_LESION_MODEL_VERSION=v1` rollback, where the split genuinely does not exist and dividing a total by any ratio would be inventing a measurement. **`softExudates` is permanently `null`** — nothing in the pipeline detects cotton-wool spots, so it is a disclosed exclusion and must never become `0`.
 >
