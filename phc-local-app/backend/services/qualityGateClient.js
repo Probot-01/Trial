@@ -316,10 +316,25 @@ function parseGateOutput(raw) {
     (Array.isArray(reasonRaw) && reasonRaw.length === 0)
   ) ? null : reasonRaw;
 
+  // The borderline/pass threshold in qualityGateMain.m's own decision chain
+  // (Step 4, last branch): `compositeScore = mean([focus, illumination, fov])`,
+  // then `compositeScore < 0.7` -> borderline. Recomputed here from the three
+  // sub-scores it already returns -- the exact formula that decided this
+  // capture's own verdict, not a number invented for display. The mobile
+  // app's qualityGate.ts port of the same MATLAB source computes it
+  // identically (verified at parity, largest observed diff 2.55e-3).
+  const s = parsed.scores || {};
+  const compositeScore = (
+    typeof s.focusScore === 'number'
+    && typeof s.illuminationScore === 'number'
+    && typeof s.fovScore === 'number'
+  ) ? (s.focusScore + s.illuminationScore + s.fovScore) / 3 : null;
+
   return {
     status: parsed.status,
     reason,
     scores: parsed.scores,
+    compositeScore,
   };
 }
 

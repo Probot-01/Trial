@@ -278,7 +278,10 @@ async function gateCapture(captureId) {
     });
     commit();
 
-    // Sub-scores are for logging only -- api-contracts.md does not expose them.
+    // All seven raw sub-scores are for logging only. Three of them (focus,
+    // illumination, fov) also feed the derived qualityScore/metrics that
+    // toResponse() exposes (2026-09-30) -- glare/motion/occlusion still never
+    // leave this log line.
     console.log(`[captureHandler] ${captureId}: ${gate.status}`
       + `${gate.reason ? ` (${gate.reason})` : ''}`
       + ` engine=${gate.engine ? gate.engine.engine : 'unrecorded'}`
@@ -343,6 +346,27 @@ function markBestEffort(captureId) {
 function toResponse(row) {
   let engine = null;
   try { engine = row.quality_engine ? JSON.parse(row.quality_engine) : null; } catch { engine = null; }
+
+  // qualityScore/metrics (2026-09-30, api-contracts.md changelog): the MATLAB
+  // gate's own borderline threshold is `mean([focusScore, illuminationScore,
+  // fovScore]) < 0.7` (qualityGateMain.m) -- recomputed here from the stored
+  // sub-scores, not invented. null when the sub-scores were never recorded
+  // (capture predates this, or a fallback engine that doesn't produce them).
+  let scores = null;
+  try { scores = row.quality_scores ? JSON.parse(row.quality_scores) : null; } catch { scores = null; }
+  const hasTriad = scores
+    && typeof scores.focusScore === 'number'
+    && typeof scores.illuminationScore === 'number'
+    && typeof scores.fovScore === 'number';
+  const qualityScore = hasTriad
+    ? (scores.focusScore + scores.illuminationScore + scores.fovScore) / 3
+    : null;
+  const metrics = scores ? {
+    focusScore: scores.focusScore,
+    illuminationScore: scores.illuminationScore,
+    retinalCoverageScore: scores.coveragePercent,
+  } : null;
+
   return {
     captureId:     row.capture_id,
     patientId:     row.patient_id,
@@ -356,6 +380,8 @@ function toResponse(row) {
     // §10.2: a technician-forced proceed on an image that failed the gate.
     // false for every ordinary capture, including a real pass/borderline.
     bestEffort: !!row.best_effort,
+    qualityScore,
+    metrics,
   };
 }
 
