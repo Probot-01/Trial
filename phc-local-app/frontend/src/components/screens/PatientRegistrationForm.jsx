@@ -13,6 +13,23 @@ import { BLOOD_PRESSURE } from '../../api/captureOptions';
 // technician must record consent for the real person in front of them.
 const demo = (value, empty = '') => (USE_MOCK_DATA ? value : empty);
 
+// `dob` stays DD/MM/YYYY everywhere in this component (parsed at line ~172,
+// submitted at line ~276) -- <input type="date"> is the only change needed to
+// get a native calendar picker, but it speaks ISO (YYYY-MM-DD) to the DOM.
+// These convert at that one boundary so nothing downstream has to change.
+const ddmmyyyyToIso = (dob) => {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dob || '');
+  if (!m) return '';
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+};
+const isoToDdmmyyyy = (iso) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!m) return '';
+  const [, y, mo, d] = m;
+  return `${d}/${mo}/${y}`;
+};
+
 /* ── questionnaire options: exactly the API's values (api-contracts.md) ── */
 // (The form used to offer "Low (Hypotension)", which the API does not accept.)
 // Ids only here -- the module scope has no i18n hook. Labels are looked up by
@@ -373,8 +390,9 @@ export const PatientRegistrationForm = () => {
           </Field>
 
           <Field label={t('registration.dob', 'Date of Birth')} required>
-            <input className="input" placeholder={t('registration.dobPlaceholder', 'DD/MM/YYYY')} value={dob}
-              onChange={e => setDob(e.target.value)} />
+            <input className="input" type="date" max={new Date().toISOString().slice(0, 10)}
+              value={ddmmyyyyToIso(dob)}
+              onChange={e => setDob(isoToDdmmyyyy(e.target.value))} />
           </Field>
 
           <Field label={t('registration.ageField', 'Age')} required>

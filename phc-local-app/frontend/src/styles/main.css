@@ -3664,17 +3664,23 @@ body {
   flex-shrink: 0;
 }
 
-/* Step 2: Quality Panel wrapper — fills 100% height */
+/* Step 2: Quality Panel wrapper — fills 100% height, scrolls internally when
+   its content (verdict + metrics + retake history) is taller than the panel
+   rather than clipping it with no way to reach the rest. */
 .cs-quality-panel {
   flex: 1;
   min-height: 0;
   padding: 10px;
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
-/* Step 3: Metadata wrapper — fills 100% height */
+/* Step 3: Metadata wrapper — fills 100% height, scrolls internally. The form
+   (pupil status / lighting / issues / usability + submit) can exceed the
+   panel's height at normal desktop widths; overflow:hidden here clipped it
+   with no scroll path anywhere in the ancestor chain (.cs-body is also
+   overflow:hidden above 1024px). */
 .cs-meta-panel {
   flex: 1;
   min-height: 0;
@@ -3682,7 +3688,7 @@ body {
   flex-direction: column;
   padding: 10px;
   gap: 8px;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* ══════════════════════════════════════════════════════════════

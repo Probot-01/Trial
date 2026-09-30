@@ -102,10 +102,12 @@ export const CaptureScreen = () => {
       retakeCount: capture.retakeCount,
       qualityStatus: capture.qualityStatus,
       issues: capture.qualityReason ? [capture.qualityReason] : [],
-      // The API returns a status and a reason -- not a score or per-metric
-      // numbers -- so none are shown.
-      qualityScore: null,
-      metrics: null,
+      // 2026-09-30: the API now also returns a derived qualityScore (0-1) and
+      // three of the seven sub-scores as metrics (api-contracts.md) -- both
+      // null on a capture gated before this was added, or gated by an engine
+      // that doesn't record sub-scores.
+      qualityScore: capture.qualityScore ?? null,
+      metrics: capture.metrics ?? null,
       qualityGateEngine: capture.qualityGateEngine ?? null,
     });
     setStepError(null);
@@ -465,7 +467,8 @@ export const CaptureScreen = () => {
                 </h2>
                 <div className="cs-instr-divider" />
                 <ul className="cs-instr-list">
-                  {t('capture.instructions', { returnObjects: true }).map((instruction, idx) => (
+                  {t(cameraDeviceId === 'mobile_lens' ? 'capture.instructionsLens' : 'capture.instructions',
+                    { returnObjects: true }).map((instruction, idx) => (
                     <li key={idx} className="cs-instr-item">
                       <span className="cs-instr-num">0{idx + 1}</span>
                       <span>{instruction}</span>

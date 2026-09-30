@@ -6,6 +6,18 @@ import { mockAiPredictions } from '../../api/mockData';
 import { USE_MOCK_DATA } from '../../config';
 import { LoadError } from '../shared/LoadError';
 import { DiagnosticResultModal } from './DiagnosticResultModal';
+import { InfoModalButton } from '../shared/InfoModalButton';
+
+const QUEUE_INFO_ROWS = [
+  { term: 'THE 5 STAGES', text: 'Every capture moves through: 1 Captured, 2 Quality check passed, 3 Sent to central, 4 Central is grading it, 5 Result ready. The five dots on each row show which stage that capture has reached.' },
+  { term: 'RETAKE REQUIRED', text: 'The image failed the on-the-spot quality check and was not uploaded. Retake it from the capture screen.' },
+  { term: 'QUALITY CHECK NOT RUN', text: 'The photo saved, but the quality check itself could not run just now. Re-check it from the capture screen — nothing is lost.' },
+  { term: 'QUESTIONNAIRE MISSING', text: 'The image passed quality, but it will not upload until both patient questionnaires are filled in.' },
+  { term: 'UPLOAD FAILED / INTERRUPTED', text: 'Either central refused the upload (rare — shown with the reason), or the connection dropped mid-transfer. The app keeps retrying on its own; no action needed unless it stays stuck a long time.' },
+  { term: 'SYNCED, AWAITING AI', text: 'Central has the case and is grading it now. This normally takes under a minute.' },
+  { term: 'SYNCED — GRADING FAILED AT CENTRAL', text: 'Central received the image but could not produce a result. This needs attention at central, not another retake here.' },
+  { term: 'RESULT READY / RESULT AT CENTRAL', text: 'Grading finished. This station may or may not show the grade itself, depending on setup — either way, the ophthalmologist’s queue at central always has it.' },
+];
 
 // The five stages of design doc §4.1, in order. A capture is at exactly one.
 //   1 Captured  2 Quality-passed  3 Synced  4 Result-pending  5 Result-delivered
@@ -38,7 +50,7 @@ function describe(item) {
     }
     if (item.qualityStatus === null) {
       return { ...base, label: 'QUALITY CHECK NOT RUN', badgeClass: 'stage-badge--blocked', isError: true,
-        detail: 'The image is saved, but the quality gate could not run (MATLAB unavailable?). Re-check it from the capture screen once it is.',
+        detail: 'The image is saved, but the quality check could not run just now. Re-check it from the capture screen.',
         actionText: 'WAITING (QA)' };
     }
     return { ...base, label: 'CAPTURED', badgeClass: 'stage-badge--captured', actionText: 'WAITING (QA)' };
@@ -193,7 +205,10 @@ export const LocalQueueTable = () => {
   return (
     <div className="section queue-section">
       <div className="u-flex u-justify-between u-items-center u-mb-3">
-        <h1 className="t-h1 queue-title">{t('queue.title')}</h1>
+        <div className="u-flex u-items-center">
+          <h1 className="t-h1 queue-title">{t('queue.title')}</h1>
+          <InfoModalButton title="CAPTURE QUEUE" rows={QUEUE_INFO_ROWS} />
+        </div>
         <div className="t-mono" style={{ opacity: 0.6, fontSize: '0.85rem' }}>
           {queue.length} {t('queue.items')}
         </div>

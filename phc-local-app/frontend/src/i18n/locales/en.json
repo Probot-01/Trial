@@ -219,6 +219,13 @@
       "Ensure room lighting is sufficiently dim.",
       "Instruct patient to focus on internal green target.",
       "Initiate capture when focus indicator is solid."
+    ],
+    "instructionsLens": [
+      "Dim the room; a dilated or naturally dark-adapted pupil helps most.",
+      "Rest the lens attachment gently against the patient's brow for a steady base.",
+      "Ask the patient to fix their gaze straight ahead, not at the lens.",
+      "Watch the phone screen, not the patient's eye, to judge focus and framing.",
+      "Capture on the phone or lens app, then import that image here from the gallery."
     ]
   },
   "metadata": {

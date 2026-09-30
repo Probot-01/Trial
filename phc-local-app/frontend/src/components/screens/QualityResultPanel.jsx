@@ -2,7 +2,16 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { qualityReasonMessages } from '../../api/mockData';
 import { USE_MOCK_DATA } from '../../config';
-import { engineLabel } from '../../api/captureOptions';
+import { InfoModalButton } from '../shared/InfoModalButton';
+
+const QUALITY_INFO_ROWS = [
+  { term: 'QUALITY PASS / BORDERLINE / FAIL', text: 'PASS means the image is good enough to grade as-is. BORDERLINE means no single problem is bad enough to reject it, but overall quality is on the low side — it will still be graded, with extra image enhancement applied centrally. FAIL means retake: the image is not usable.' },
+  { term: 'QUALITY SCORE', text: 'One combined number (0–100%) summarising focus, lighting and framing together. Below 70% is why an otherwise-passing image gets marked borderline.' },
+  { term: 'FOCUS', text: 'How sharp the image is. A low score usually means camera shake or the lens not focused on the retina.' },
+  { term: 'ILLUMINATION', text: 'How well-lit the retina is. Too dark or too bright both hurt grading.' },
+  { term: 'COVERAGE', text: 'How much of the frame the retina itself fills. Too little means the camera was too far away or poorly aligned.' },
+  { term: 'RETAKE LIMIT / BEST EFFORT', text: 'After several failed retakes for the same patient today, you can mark the image "best effort" and proceed anyway rather than retaking indefinitely — the case is still sent, flagged so the ophthalmologist knows it was a difficult capture.' },
+];
 
 // Design doc §10.2: after this many failed attempts today, offer "proceed as
 // ungradable" instead of an infinite retry loop. Matches the mobile app's own
@@ -69,42 +78,43 @@ export const QualityResultPanel = ({ result, onRetake, onAccept, onBestEffort })
           <span className="qrp-hero__icon">{statusCfg.icon}</span>
         </div>
         <div className="qrp-hero__text">
-          <div className="qrp-hero__title">{statusCfg.title}</div>
+          <div className="qrp-hero__title u-flex u-items-center">
+            {statusCfg.title}
+            <InfoModalButton title="QUALITY CHECK" rows={QUALITY_INFO_ROWS} />
+          </div>
           <div className="qrp-hero__sub">{statusCfg.sub}</div>
         </div>
       </div>
 
-      {/* ── Which engine produced this verdict (standing rule: no silent engine) ── */}
+      {/* Which engine produced this verdict is still recorded on every capture
+          (standing rule: no silent engine fallback) and is fully visible to
+          reviewers on the central admin side (ProvenancePanel). A PHC
+          technician is not an engineer and doesn't need "MATLAB" or a script
+          filename during a normal capture -- but a FALLBACK engine (a backup
+          system standing in for the reference gate) is exactly the kind of
+          thing they should be told about in plain language, since it changes
+          how much to trust the verdict in front of them. So: silent when
+          normal, loud in plain words when it isn't. */}
       {(() => {
         const engine = result.qualityGateEngine;
         const isFallback = !!engine && engine.fallback;
+        if (USE_MOCK_DATA || !isFallback) return null;
         return (
           <div
             className="qrp-card"
             data-testid="quality-gate-engine"
             style={{
               display: 'flex', flexDirection: 'column', gap: 4,
-              border: isFallback ? '2px solid var(--c-warning, #D4860A)' : undefined,
+              border: '2px solid var(--c-warning, #D4860A)',
             }}
           >
-            <div className="qrp-card__header-row">
-              <span className="qrp-label">QUALITY GATE ENGINE</span>
-              <span className="qrp-metric-num" style={{ fontFamily: 'var(--font-mono, monospace)' }}>
-                {USE_MOCK_DATA ? 'SIMULATED' : (engineLabel(engine) || 'NOT RECORDED')}
-              </span>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-warning, #D4860A)' }}>
+              ⚠ THIS CHECK RAN ON A BACKUP SYSTEM
             </div>
-            <div style={{ fontSize: 11, opacity: 0.75, fontFamily: 'var(--font-mono, monospace)' }}>
-              {USE_MOCK_DATA
-                ? 'DEMO DATA — no quality gate ran.'
-                : engine
-                  ? (engine.detail || '')
-                  : 'This capture carries no record of which engine checked it.'}
+            <div style={{ fontSize: 11, opacity: 0.85 }}>
+              The usual quality check was unavailable, so a backup one checked this image instead.
+              Treat this result with a little more care than usual.
             </div>
-            {isFallback && (
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-warning, #D4860A)' }}>
-                ⚠ FALLBACK ENGINE — not the reference MATLAB gate. Treat this verdict with care.
-              </div>
-            )}
           </div>
         );
       })()}
@@ -182,7 +192,7 @@ export const QualityResultPanel = ({ result, onRetake, onAccept, onBestEffort })
             <div style={{ marginTop: '6px', fontSize: '12px', lineHeight: 1.4, color: 'var(--text-h)' }}>
               {result.issues && result.issues.length > 0 
                 ? result.issues.map(iss => qualityReasonMessages[iss] || iss).join('. ')
-                : 'Image is blurry and falls below diagnostic threshold. Stabilize camera on chin-rest and retake.'}
+                : 'Image is blurry and falls below diagnostic threshold. Hold the camera or lens steady on the patient’s eye and retake.'}
             </div>
           </div>
 
