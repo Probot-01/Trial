@@ -1082,8 +1082,19 @@ body {
 }
 
 /* ── Page Section ──────────────────────────────────────────── */
+/* `backwards`, not `both`: the real fix for the fixed-position-modal bug (see
+   @keyframes section-entrance) is here, not in the keyframe body -- `both`
+   keeps ANY animated property (transform included, not just filter) at its
+   end-keyframe's computed value forever, and an identity `transform:
+   translateY(0)` computes as `matrix(1,0,0,1,0,0)`, never the literal `none`,
+   which alone (independent of filter) still creates the containing block.
+   `backwards` gives the identical visible entrance (there is no
+   animation-delay here, so "backwards" and "both" render identically while
+   the animation is running) but reverts to the element's own un-animated
+   styles once it ends, which is what actually makes `transform`/`filter`
+   compute back to `none`. */
 .section {
-  animation: section-entrance 0.7s var(--ease-out) both;
+  animation: section-entrance 0.7s var(--ease-out) backwards;
 }
 
 .section__title {
@@ -1443,17 +1454,29 @@ body {
   }
 }
 
-/* Section entrance — big content blocks */
+/* Section entrance — big content blocks.
+   No `filter` step, on purpose: with `animation ... both` (see `.section`),
+   the end-keyframe's computed style persists forever after the animation
+   finishes -- and Chrome computes an animated endpoint authored as
+   `filter: none` as `blur(0px)`, not the keyword `none` (verified directly:
+   an element animated by this keyframe reports `getComputedStyle().filter
+   === "blur(0px)"` at rest, never "none", regardless of what the keyframe's
+   `to` block says). `blur(0px)` LOOKS like no blur but is still a non-none
+   `filter`, and any non-none filter creates a new containing block for every
+   `position: fixed` descendant (CSS spec, not a bug in the descendant) --
+   every fixed-position modal under a `.section` (every info-button modal in
+   the app) rendered thousands of pixels off-screen because of this, offset
+   by wherever .section itself happened to sit in the page's layout flow.
+   Dropping the blur step (keeping opacity + transform) is the only fix that
+   actually leaves `filter` computed as `none` at rest. */
 @keyframes section-entrance {
   from {
     opacity: 0;
     transform: translateY(30px);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 
@@ -1951,20 +1974,29 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 
+/* The Grad-CAM PNG from branchAInfer.py (gradcam.py's save_overlay) is already
+   a complete, flattened image -- the model's own cropped fundus with the
+   heatmap pre-blended in (cv2.addWeighted), not a transparent heatmap layer.
+   It is a DIFFERENT crop/scale than the original capture shown underneath
+   (display_base vs the uploaded original), so compositing it as a
+   semi-transparent screen-blend on top of that original put the heatmap over
+   the wrong anatomy. Crossfading to full opacity instead swaps to the
+   complete, correctly-aligned image the model actually produced. */
 .gradcam-viewer__overlay {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: contain;
   opacity: 0;
-  transition: opacity 0.6s var(--ease-out);
-  mix-blend-mode: screen;
+  transition: opacity 0.4s var(--ease-out);
 }
 
 .gradcam-viewer__overlay--visible {
-  opacity: 0.75;
+  opacity: 1;
 }
 
 .gradcam-viewer__brackets {
@@ -3001,19 +3033,22 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: value-entrance 0.8s var(--ease-out) both;
+  /* `backwards`, not `both` -- see the comment on .section's animation. */
+  animation: value-entrance 0.8s var(--ease-out) backwards;
 }
 
+/* No `filter` step -- see the long comment on @keyframes section-entrance;
+   the same `both`-fill-mode + animated-filter-computes-to-blur(0px) bug
+   applied here too (any stat card using this animation was ALSO a broken
+   containing-block ancestor for fixed-position descendants). */
 @keyframes value-entrance {
   from {
     opacity: 0;
     transform: translateY(12px) scale(0.9);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-    filter: blur(0);
   }
 }
 
@@ -3579,20 +3614,23 @@ body {
 }
 
 /* ── Enhanced Section Entrance ────────────────────────────── */
+/* `backwards`, not `both` -- this rule wins for `.section` (later in the
+   cascade than the first `.section` rule above); see its comment. */
 .section {
-  animation: section-entrance-premium 0.8s var(--ease-out) both;
+  animation: section-entrance-premium 0.8s var(--ease-out) backwards;
 }
 
+/* No `filter` step -- see the long comment on @keyframes section-entrance.
+   This is the rule that actually wins for `.section` (it comes after the
+   first `.section` rule in the cascade), so this was the live bug. */
 @keyframes section-entrance-premium {
   from {
     opacity: 0;
     transform: translateY(40px);
-    filter: blur(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 
@@ -3862,20 +3900,20 @@ body {
 }
 
 /* ── Page Transition ──────────────────────────────────────── */
+/* `backwards`, not `both` -- see the comment on .section's animation. */
 .page-enter {
-  animation: page-in 0.5s var(--ease-out) both;
+  animation: page-in 0.5s var(--ease-out) backwards;
 }
 
+/* No `filter` step -- see the long comment on @keyframes section-entrance. */
 @keyframes page-in {
   from {
     opacity: 0;
     transform: translateY(16px);
-    filter: blur(3px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 

@@ -81,6 +81,13 @@ class LocalApiClient {
       clearTimeout(timer);
     }
     const body = await res.json().catch(() => null);
+    if (res.status === 401 && path !== '/auth/login') {
+      // The stored technician session is no longer valid (expired, or the backend's accounts were
+      // reset). Keeping it would leave every screen failing with a misleading "unreachable":
+      // drop it and go back to the login screen.
+      try { localStorage.removeItem('netra_phc_auth'); } catch { /* storage unavailable */ }
+      if (typeof window !== 'undefined' && window.location.pathname !== '/') window.location.assign('/');
+    }
     if (!res.ok) {
       throw new ApiError(body?.error || `http_${res.status}`,
         body?.message || `${res.status} ${res.statusText} from ${path}`, res.status, body);
@@ -95,6 +102,17 @@ class LocalApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
+  }
+
+  /**
+   * GET /auth/me -> { user }. Used at app startup to confirm a token saved in
+   * localStorage from a previous visit is still live before trusting it, so a
+   * stale/expired session doesn't render the authenticated layout for a beat
+   * and then bounce (App.jsx). Throws (401) exactly like any other call when
+   * the session is gone; _request's own 401 handling already clears it.
+   */
+  async getMe() {
+    return this._request('/auth/me');
   }
 
   async getPatients() {
@@ -236,6 +254,22 @@ class LocalApiClient {
     const data = await this._request(`/captures/${encodeURIComponent(captureId)}/quality-check`, { method: 'POST' }, CAPTURE_TIMEOUT_MS);
     if (!data || typeof data.captureId !== 'string' || typeof data.qualityStatus !== 'string') {
       throw new ApiError('bad_response', 'The quality-check response did not have the expected shape.');
+    }
+    return data;
+  }
+
+  /**
+   * markBestEffort(captureId) -> POST /captures/:captureId/best-effort.
+   * Design doc §10.2: after repeated failed retakes, queue the capture anyway
+   * with an explicit "technician override, ungradable" flag, rather than an
+   * infinite retry loop or the case silently never being recorded. Only valid
+   * on a capture the gate marked 'retake'; live only.
+   */
+  async markBestEffort(captureId) {
+    if (this.useMock) return null;
+    const data = await this._request(`/captures/${encodeURIComponent(captureId)}/best-effort`, { method: 'POST' }, CAPTURE_TIMEOUT_MS);
+    if (!data || typeof data.captureId !== 'string' || data.bestEffort !== true) {
+      throw new ApiError('bad_response', 'The best-effort response did not have the expected shape.');
     }
     return data;
   }

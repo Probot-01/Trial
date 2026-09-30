@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { centralApi } from '../../api/centralApiClient';
 import { LoadError } from '../shared/LoadError';
+import { InfoModalButton } from '../shared/InfoModalButton';
+
+const RESOURCE_INFO_ROWS = [
+  { term: 'ROUTINE STAFFING REQ.', text: 'The minimum number of ophthalmologists needed to keep the 95th-percentile review wait under target, at today’s normal day-to-day volume.' },
+  { term: 'CAMP / BATCH SURGE REQ.', text: 'The minimum ophthalmologists needed if the same annual patient volume arrived in a short, intensive camp period instead of spread over the year — always higher, since the same people have to be reviewed much faster.' },
+  { term: 'CURRENT REVIEW WAIT (P95)', text: '95% of cases wait less than this long for an ophthalmologist to review them, at the current staffing and volume. “P95” rather than an average, because an average hides how bad the worst wait actually gets.' },
+  { term: 'REVIEW POOL UTILIZATION', text: 'How much of the reviewers’ available time is currently being used. Consistently above ~70% usually means waits will start climbing.' },
+  { term: 'BOTTLENECK', text: 'Which stage of the pipeline — image upload from PHCs, or ophthalmologist review — is currently the limiting factor on how fast cases move through the system.' },
+  { term: 'MODEL VALIDATION', text: 'This recommendation comes from a computer model of patient flow, cross-checked weekly against a second, independently-built model to catch either one drifting from reality. That check’s own detail is available but collapsed by default — it is a software self-test, not something you need to review unless the two disagree.' },
+  { term: 'A NOTE ON THE NUMBERS', text: 'These are modelled projections based on assumptions (bandwidth, review speed, arrival patterns), not measurements from your actual district yet. Treat them as planning guidance, not a guarantee.' },
+];
 
 // One decimal for display; the model returns full floats. null stays null.
 const round1 = (v) => (typeof v === "number" ? Math.round(v * 10) / 10 : v);
@@ -14,6 +25,7 @@ export const ResourceRecommendationsPanel = () => {
   const [simulating, setSimulating] = useState(false);
   const [validating, setValidating] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showValidation, setShowValidation] = useState(false);
   // Independent sources, independent failures. 404 before a model's first run
   // is an expected state (api-contracts.md), not a broken server.
   const [recError, setRecError] = useState(null);
@@ -32,6 +44,15 @@ export const ResourceRecommendationsPanel = () => {
     });
     return () => { active = false; };
   }, []);
+
+  // A health administrator does not need the model's internal validation
+  // status by default -- auto-open the engineering co-validation card only
+  // when the two models actually disagree, which is a real finding worth
+  // their attention; routine agreement is a software-testing detail, not
+  // theirs to review.
+  useEffect(() => {
+    if (validation?.status === 'diverged') setShowValidation(true);
+  }, [validation]);
 
   const handleRunSimulation = async () => {
     setSimulating(true);
@@ -71,7 +92,10 @@ export const ResourceRecommendationsPanel = () => {
         <div className="u-flex u-items-center u-justify-between u-mb-6">
           <div>
             <p className="section__subtitle">{t('central.resources.subtitle', 'DISTRICT RESOURCE PLANNING & MODELLING')}</p>
-            <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.resources.title', 'RESOURCE ALLOCATION')}</h1>
+            <div className="u-flex u-items-center u-gap-3">
+              <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.resources.title', 'RESOURCE ALLOCATION')}</h1>
+              <InfoModalButton title="RESOURCE ALLOCATION" rows={RESOURCE_INFO_ROWS} />
+            </div>
           </div>
           <button className="btn btn--primary" onClick={handleRunSimulation} disabled={simulating}>
             {simulating ? 'RUNNING THE MODEL…' : '⚡ RUN THE RESOURCE MODEL NOW'}
@@ -132,13 +156,16 @@ export const ResourceRecommendationsPanel = () => {
       <div className="u-flex u-items-center u-justify-between u-mb-6">
         <div>
           <p className="section__subtitle">{t('central.resources.subtitle', 'DISTRICT RESOURCE PLANNING & MODELLING')}</p>
-          <h1 className="section__title" style={{ marginBottom: 0 }}>
-            {t('central.resources.title', 'RESOURCE ALLOCATION')}
-          </h1>
+          <div className="u-flex u-items-center u-gap-3">
+            <h1 className="section__title" style={{ marginBottom: 0 }}>
+              {t('central.resources.title', 'RESOURCE ALLOCATION')}
+            </h1>
+            <InfoModalButton title="RESOURCE ALLOCATION" rows={RESOURCE_INFO_ROWS} />
+          </div>
         </div>
         <div className="u-flex u-items-center" style={{ gap: '12px' }}>
-          <span className="t-mono" style={{ fontSize: '11px', opacity: 0.7 }}>
-            Model: {recommendations.model}
+          <span className="t-mono" style={{ fontSize: '11px', opacity: 0.7 }} title={`Computed by ${recommendations.model}`}>
+            Computed recommendation, updated daily
           </span>
           <button
             className="btn btn--primary"
@@ -259,13 +286,18 @@ export const ResourceRecommendationsPanel = () => {
           <div style={{ borderLeft: '3px solid #14B8A6', paddingLeft: '12px' }}>
             <div className="t-mono" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--c-text)' }}>REVIEW SERVICE TIME</div>
             <div className="t-mono" style={{ fontSize: '11px', color: 'var(--c-text-muted)', marginTop: '4px' }}>
-              {inputsSource.reviewServiceTime}
+              {/* The backend has never computed a per-source label for this one
+                  specifically -- resourceRecommendations.js's gatherInputs()
+                  only ever sets a single combined `source.other` disclaimer
+                  covering review time, bandwidth tiers and image size together.
+                  Fall back to that rather than render this cell blank. */}
+              {inputsSource.reviewServiceTime || inputsSource.other}
             </div>
           </div>
           <div style={{ borderLeft: '3px solid #F97316', paddingLeft: '12px' }}>
             <div className="t-mono" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--c-text)' }}>ARRIVAL PATTERNS</div>
             <div className="t-mono" style={{ fontSize: '11px', color: 'var(--c-text-muted)', marginTop: '4px' }}>
-              {inputsSource.arrivalPattern}
+              {inputsSource.arrivalPattern || inputsSource.other}
             </div>
           </div>
         </div>
@@ -275,83 +307,94 @@ export const ResourceRecommendationsPanel = () => {
         ? <p className="t-mono u-mb-4">Simulation results not yet generated. The Simulink co-validation runs weekly, or on demand with the button below.</p>
         : <LoadError error={valError} what="the Simulink validation" />)}
 
-      {/* Simulink Model Validation Card (PS-Requirement 5 Co-Validation) */}
+      {/* Whether the two internal models that produce this recommendation
+          still agree with each other is a software-testing question, not a
+          resource-planning one -- a district health administrator does not
+          need "SimEvents vs reference model, tolerance ±X" to decide staffing.
+          Collapsed by default; the effect above forces it open automatically
+          when they actually diverge, since that is the one time it becomes a
+          real finding rather than routine self-testing. */}
       {validation && (
-        <div style={{ border: 'var(--border)', padding: 'var(--sp-6)' }}>
-          <div className="u-flex u-items-center u-justify-between u-mb-4">
-            <div>
-              <div className="u-flex u-items-center" style={{ gap: '10px' }}>
-                <h3 className="t-h3" style={{ fontSize: '14px', margin: 0 }}>
-                  SIMULINK SIMEVENTS (.SLX) CO-VALIDATION
-                </h3>
-                <span
-                  className={`badge ${
-                    validation.status === 'agree' ? 'badge--pass' : validation.status === 'diverged' ? 'badge--fail' : 'badge--neutral'
-                  }`}
-                  style={{ padding: '3px 8px', fontSize: '10px' }}
-                >
-                  STATUS: {validation.status.toUpperCase()}
-                </span>
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--c-text-muted)', margin: '4px 0 0 0' }}>
-                PS Requirement 5 deliverable validation. Verified referenceQueueingModel.m against SimEvents discrete-event simulation.
+        <div style={{ border: 'var(--border)' }}>
+          <button
+            className="btn btn--outline u-w-full"
+            onClick={() => setShowValidation(!showValidation)}
+            style={{ justifyContent: 'space-between', padding: '10px 16px' }}
+          >
+            <span>{showValidation ? '▼ HIDE MODEL VALIDATION DETAILS' : '▶ SHOW MODEL VALIDATION DETAILS'}</span>
+            <span
+              className={`badge ${
+                validation.status === 'agree' ? 'badge--pass' : validation.status === 'diverged' ? 'badge--fail' : 'badge--neutral'
+              }`}
+              style={{ padding: '3px 8px', fontSize: '10px' }}
+            >
+              {validation.status === 'agree' ? 'MODELS AGREE' : validation.status === 'diverged' ? 'MODELS DISAGREE' : validation.status.toUpperCase()}
+            </span>
+          </button>
+
+          {showValidation && (
+          <div style={{ padding: 'var(--sp-6)', borderTop: 'var(--border)' }}>
+            <div className="u-flex u-items-center u-justify-between u-mb-4">
+              <p style={{ fontSize: '11px', color: 'var(--c-text-muted)', margin: 0 }}>
+                This resource model is checked weekly against an independent second model, to catch either one drifting. Below is that check's own detail.
               </p>
+              <button
+                className="btn btn--secondary"
+                onClick={handleRunValidation}
+                disabled={validating}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '10px',
+                  fontFamily: 'var(--f-mono)',
+                }}
+              >
+                {validating ? 'RUNNING .SLX (49s)...' : 'RE-RUN SIMULINK VALIDATION'}
+              </button>
             </div>
-            <button
-              className="btn btn--secondary"
-              onClick={handleRunValidation}
-              disabled={validating}
+
+            <div className="table-wrapper u-mb-4">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>METRIC</th>
+                    <th className="u-text-right">SIMEVENTS (.SLX)</th>
+                    <th className="u-text-right">REFERENCE MODEL</th>
+                    <th className="u-text-right">TOLERANCE</th>
+                    <th>VERDICT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {validation.checks.map((chk, idx) => (
+                    <tr key={idx}>
+                      <td className="t-mono" style={{ fontWeight: 700 }}>{chk.metric}</td>
+                      <td className="t-mono u-text-right">{round1(chk.simEvents)}{chk.unit}</td>
+                      <td className="t-mono u-text-right">{round1(chk.reference)}{chk.unit}</td>
+                      <td className="t-mono u-text-right">±{round1(chk.tolerance)}{chk.unit}</td>
+                      <td>
+                        <span className={`badge ${chk.agree ? 'badge--pass' : 'badge--fail'}`}>
+                          {chk.agree ? 'AGREE' : 'DIVERGED'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div
               style={{
-                padding: '6px 14px',
-                fontSize: '10px',
+                padding: '10px 14px',
+                background: 'rgba(0,0,0,0.04)',
+                borderLeft: '3px solid var(--c-crimson)',
                 fontFamily: 'var(--f-mono)',
+                fontSize: '11px',
+                color: 'var(--c-text)',
               }}
             >
-              {validating ? 'RUNNING .SLX (49s)...' : 'RE-RUN SIMULINK VALIDATION'}
-            </button>
+              {validation.note} Upload figures are not compared between models by construction due to differing queue models.
+            </div>
           </div>
-
-          <div className="table-wrapper u-mb-4">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>METRIC</th>
-                  <th className="u-text-right">SIMEVENTS (.SLX)</th>
-                  <th className="u-text-right">REFERENCE MODEL</th>
-                  <th className="u-text-right">TOLERANCE</th>
-                  <th>VERDICT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {validation.checks.map((chk, idx) => (
-                  <tr key={idx}>
-                    <td className="t-mono" style={{ fontWeight: 700 }}>{chk.metric}</td>
-                    <td className="t-mono u-text-right">{chk.simEvents}{chk.unit}</td>
-                    <td className="t-mono u-text-right">{chk.reference}{chk.unit}</td>
-                    <td className="t-mono u-text-right">±{chk.tolerance}{chk.unit}</td>
-                    <td>
-                      <span className={`badge ${chk.agree ? 'badge--pass' : 'badge--fail'}`}>
-                        {chk.agree ? 'AGREE' : 'DIVERGED'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div
-            style={{
-              padding: '10px 14px',
-              background: 'rgba(0,0,0,0.04)',
-              borderLeft: '3px solid var(--c-crimson)',
-              fontFamily: 'var(--f-mono)',
-              fontSize: '11px',
-              color: 'var(--c-text)',
-            }}
-          >
-            <strong>Note (Design Doc §16 / API Contract):</strong> {validation.note} Upload figures are not compared between models by construction due to differing queue models.
-          </div>
+          )}
         </div>
       )}
     </div>

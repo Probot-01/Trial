@@ -85,14 +85,20 @@ function createSessionClient({ dir, heartbeatFile, staleMs = 30_000, label = 'wo
       const startedAt = Date.now();
       const poll = setInterval(() => {
         if (fs.existsSync(respPath)) {
-          clearInterval(poll);
           let body;
           try {
             body = JSON.parse(fs.readFileSync(respPath, 'utf8'));
           } catch (err) {
+            // On Windows the file shows up before the worker's move has released
+            // it (EACCES/EPERM/EBUSY), or half-written (SyntaxError). Look again on
+            // the next tick; only give up on the deadline.
+            const transient = err instanceof SyntaxError || ['EACCES', 'EPERM', 'EBUSY'].includes(err.code);
+            if (transient && Date.now() - startedAt <= timeoutMs) return;
+            clearInterval(poll);
             removeQuietly(respPath);
             return reject(new Error(`${label} response JSON parse failed: ${err.message}`));
           }
+          clearInterval(poll);
           removeQuietly(respPath);
           if (body && body.error) {
             // The worker's own classification, when it gives one (e.g. the seg

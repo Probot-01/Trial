@@ -217,7 +217,7 @@ One website, role-based routing (`ophthalmologist`, `district_admin`). Access re
 | Ingestion API | Receives image + patient questionnaire + capture-metadata questionnaire from either front-end, deduplicating on `capture_id` (§10.6) so a retried upload never creates a duplicate case or grading run. |
 | Grading Pipeline Orchestrator | Runs, in sequence: preprocessing → camera-fingerprint calibration → segmentation (optic disc/fovea, vessels, four lesion categories, NV suspicion) → dual-branch grading → the confidence-routing decision (§6.8) → the clinical-rationale report. |
 | Referral & Notification Service | Routes referable/uncertain/disagreement cases to the ophthalmologist queue; triggers SMS via Twilio once a decision is finalized; on delivery failure, flips the referral to the manual-follow-up state (§10.5). |
-| Continual Learning Service | Consumes override reasons and corrected grades (already persisted as part of the review transaction — §5.5), runs scheduled retraining against original data plus weighted corrections, enforces the validation gate before any promotion. |
+| Continual Learning Service | Consumes override reasons and corrected grades (already persisted as part of the review transaction — §5.5), runs scheduled retraining against original data plus weighted corrections, enforces the validation gate before any promotion. **This round: capture + export only (§6.11) — retraining is a manual, future-round step, not a running service.** |
 | Admin Analytics Aggregator | Computes dashboard metrics, aggregate-only with no per-case push; tracks per-PHC last-contact time for the System Health view. |
 | Simulink Integration | Runs the resource-allocation simulation on a schedule and writes the current recommendation for the admin dashboard to read (§7). |
 | Grading Job Watchdog | Continuously — not only at server restart — scans for cases stuck mid-pipeline past a timeout and re-enqueues or escalates them to System Health (§10.7). |
@@ -382,6 +382,8 @@ Rule-based weighted scoring, using clinically-referenced weights for the risk fa
 
 ### 6.11 Continual Learning — runs centrally, periodic
 Ophthalmologist overrides and their structured reasons are captured as part of the same transaction as the review decision (§5.5) and feed a scheduled fine-tuning job against original training data plus weighted/oversampled corrections. A newly retrained model is evaluated against a held-out validation set and only promoted if it holds up on sensitivity, specificity, and kappa.
+
+**Status (2026-09-29):** the capture half of this is real and done — every override reason and corrected grade is written inside the review transaction (`dataset_labels`, migration 0013) and `scripts/exportTrainingSet.js` exports it with consent enforcement, dedupe, and newest-label-per-case. The scheduled fine-tuning job, validation gate, and promotion step described above are **not implemented this round** — corrections are captured and exportable; retraining is a manual, future-round step, run by hand from the exported set if and when there's time for another round. Not dormant, not unclear: this is the deliberate scope line for this submission.
 
 ---
 
@@ -552,7 +554,7 @@ This is a prototype-stage floor, not a production compliance claim.
 | ICDR/ETDRS Rule Engine | Central backend / ML | Base MATLAB | Branch B grading |
 | Central Database | Central backend | PostgreSQL, real migration tooling | §5.5 schema |
 | Referral & Notification Service | Central backend | Twilio | Routing, SMS, manual-follow-up escalation |
-| Continual Learning Service | Central backend / ML | Custom retraining pipeline | §6.11 |
+| Continual Learning Service | Central backend / ML | Custom retraining pipeline | §6.11 — capture + export done, retraining pipeline itself deferred to a future round |
 | Admin Analytics Aggregator | Central backend | Custom | Dashboard metrics |
 | Grading Job Watchdog | Central backend | Custom, continuous polling | §10.7 |
 | MATLAB Session Supervisor | Central backend | Process supervisor | §10.7 |

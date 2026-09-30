@@ -1,4 +1,4 @@
-# Backend plan: status against `implementation-plan-backend-saad (1).md`
+# Backend plan: status against `implementation-plan-backend-saad.md`
 
 Status as of 2026-09-23 (late). Sections marked "Since 2026-09-22" and the "Waiting on other people" list are the current ones; earlier sections are kept as the record of when each thing was verified. Every item below was verified by running it, not by reading code. The test scripts named in the table can be re-run.
 
@@ -20,7 +20,7 @@ Status as of 2026-09-23 (late). Sections marked "Since 2026-09-22" and the "Wait
 | G | Simulink README fixed. `referenceQueueingModel('recommend')` runs daily into `resource_recommendations`, served by `GET /admin/resource-recommendations`. **§G.2's other half is now scheduled too:** the `.slx` runs weekly as the validation check (`simulinkValidation.js`), writes `simulink-model/out/last-validation.json`, is served by `GET /admin/simulink-validation`, and raises `simulink_model_diverged` when the two models stop agreeing or the run cannot happen. | Done | ran live: 49 s, all three metrics agree; `verify_backend_health.js` |
 | H | Venous beading and IRMA wired into the rule engine as 4-element boolean arrays; they are passed only when present | Done | `testRuleEngineSignals.m` (17) + `testBranchB.m` (54) |
 | I | `fovea_unreliable` stored; rule engine skips the quadrant criteria; tier held at B or higher. Tanuj's gate is merged, so this is end-to-end now. See the §I.3 note below. | Done | `testRuleEngineSignals.m`, live MATLAB run, `verify_fallback_parity.js` (720 cases) |
-| J | `neovascularizationSuspicion.m` now runs inside the per-case MATLAB call; the real score is stored instead of NULL/0 | Done | live run: NV 0.078 / 0.101 on real images |
+| J | `neovascularizationSuspicion.m` now runs inside the per-case MATLAB call; the real score is stored instead of NULL/0 | Done | live run: NV 0.119 / 0.166 on the sample images. *(Was 0.078 / 0.101, measured when `verifyPhase4.m` fed the vessel model the CLASSIFIER's preprocessing and got a speckled mask. The NV score is computed FROM that mask, so fixing the harness moved it. The new numbers come from the production mask.)* |
 | K | Camera probation | No action needed (as planned) | none |
 | M | `consentGivenAt` accepted and stored, at both the PHC and central | Done | tests |
 | N | ID-format spec for the mobile team, `docs/id-format-spec.md` | Done | self-check run against `ids.js` |
@@ -160,7 +160,7 @@ The plan's own corrected guidance: self-hosted Postgres has no built-in transpar
 | Failure reasons on a case (`failure_code`, `failure_reason`, `failed_at`, migration 0014) | Done. `GET /admin/system-health` groups failures by cause; case detail now returns `status`, which it never did |
 | Review labels for retraining (`dataset_labels`, migration 0013) + `scripts/exportTrainingSet.js` | Done. Written inside the review transaction; export enforces consent, dedupe and the newest label per case |
 | Tanuj's conformal v3 + referable-safety gate | Merged and re-verified. Both inference paths already implement it; nothing needed wiring |
-| M5 v2 (3-class red lesions) | Merged behind `RED_LESION_MODEL_VERSION`, still **v1**. The orchestrator stores the MA/HE split when it appears; the API mapper already reads it |
+| M5 v2 (3-class red lesions) | Merged behind `RED_LESION_MODEL_VERSION`. **This cell said "still v1" and contradicted the M5 v2 row further down this same file; corrected 2026-09-29 — the default is v2** (`segInfer.py`, no `.env` override), and every live `lesion_counts` row carries `redLesionModelVersion: v2` with real MA/HE totals. The orchestrator stores the split; the API mapper reads it |
 | 512 px classifier (v2a) | Merged, **not** the default. Tanuj has not finalised v2a vs v2b/v2c |
 | Tier floors (A -> B) | **Now tested.** `decideTier` extracted as a pure function; 18 checks in `verify_backend_pipeline.js` |
 | Parallel Computing Toolbox | 5 uses shipped (`sweepDistrictScenarios` via `parsim`, `monteCarloQueueing`, `calibrateQualityThresholds`, `batchGenerateReports`, and the `optimizeRuleThresholds` search); `runTask92` measured and left serial on purpose. **The threshold search only started using it on 2026-09-23** -- its gate accepted a pool that already existed, and `matlab -batch` starts with none, so it was wired in and ran serial. Now starts a pool above 2e5 evaluations: the v2 refit went from ~24 min to 215 s on 6 workers, byte-identical result |
@@ -398,7 +398,7 @@ Caveat: 5-fold CV said QWK 0.863, the held-out test said 0.692. Trust the held-o
 - **Also worth telling him** (not blocking us):
   - `verifyPhase4.m`'s crash is diagnosed and fixed — it was `models/` missing from the path, not a corrupt model. Three further defects in the same function are fixed with it.
   - His reports describe v2c as "deployed"; the code default is `branchA_v1`, and will stay so until the binary above arrives. Nothing in a slide should say v2c yet.
-  - `docs/implementation-plan-backend-saad (1).md` and `implementation-plan-ml-tanuj (1).md` are browser-download duplicates he committed; the second one REPLACED the original by rename, so it should be renamed back rather than deleted.
+  - ~~`docs/implementation-plan-backend-saad (1).md` and `implementation-plan-ml-tanuj (1).md` are browser-download duplicates~~ **Done 2026-09-29.** The saad one was byte-identical to its original and was removed; the tanuj one was the ONLY copy (its original was gone, replaced by the rename) and was renamed back rather than deleted, which is what the warning here was for.
 - **Frontend team:**
   - The login screen: `credentials: 'include'` plus the `X-CSRF-Token` header.
   - The claim flow and the disagreement rule (Confirm unavailable on disagreement cases).

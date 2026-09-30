@@ -1392,8 +1392,15 @@ function caseClinicalInputs(patientAge, questionnaire) {
   const rf = (questionnaire && questionnaire.riskFactors) || {};
   const provenance = { patientAge: 'measured' };
 
+  // `Number(null) === 0`, and 0 is finite -- so a field the current intake
+  // forms never collect (they send null, not omit the key) used to coerce
+  // to a false "0, measured" reading instead of falling through to the
+  // bucket. Guard the null/undefined case explicitly before coercing;
+  // Number(undefined) is already NaN and needed no guard, but null does.
+  const hasRealNumber = (v) => v !== null && v !== undefined && Number.isFinite(Number(v));
+
   // HbA1c: the real lab value when the form collected one, else the bucket.
-  let hba1c = Number(rf.hba1c);
+  let hba1c = hasRealNumber(rf.hba1c) ? Number(rf.hba1c) : NaN;
   if (Number.isFinite(hba1c)) {
     provenance.hba1c = 'measured';
   } else {
@@ -1402,7 +1409,7 @@ function caseClinicalInputs(patientAge, questionnaire) {
       : `assumed from glycemicControl='${rf.glycemicControl}'`;
   }
 
-  let years = Number(rf.yearsDiabetic);
+  let years = hasRealNumber(rf.yearsDiabetic) ? Number(rf.yearsDiabetic) : NaN;
   if (Number.isFinite(years)) {
     provenance.yearsDiabetic = 'measured';
   } else {

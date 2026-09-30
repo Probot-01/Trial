@@ -1,10 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { localApi } from '../../api/localApiClient';
 import { mockAiPredictions } from '../../api/mockData';
 import { USE_MOCK_DATA } from '../../config';
 import { LoadError } from '../shared/LoadError';
 import { DiagnosticResultModal } from './DiagnosticResultModal';
+import { InfoModalButton } from '../shared/InfoModalButton';
+
+const QUEUE_INFO_ROWS = [
+  { term: 'THE 5 STAGES', text: 'Every capture moves through: 1 Captured, 2 Quality check passed, 3 Sent to central, 4 Central is grading it, 5 Result ready. The five dots on each row show which stage that capture has reached.' },
+  { term: 'RETAKE REQUIRED', text: 'The image failed the on-the-spot quality check and was not uploaded. Retake it from the capture screen.' },
+  { term: 'QUALITY CHECK NOT RUN', text: 'The photo saved, but the quality check itself could not run just now. Re-check it from the capture screen — nothing is lost.' },
+  { term: 'QUESTIONNAIRE MISSING', text: 'The image passed quality, but it will not upload until both patient questionnaires are filled in.' },
+  { term: 'UPLOAD FAILED / INTERRUPTED', text: 'Either central refused the upload (rare — shown with the reason), or the connection dropped mid-transfer. The app keeps retrying on its own; no action needed unless it stays stuck a long time.' },
+  { term: 'SYNCED, AWAITING AI', text: 'Central has the case and is grading it now. This normally takes under a minute.' },
+  { term: 'SYNCED — GRADING FAILED AT CENTRAL', text: 'Central received the image but could not produce a result. This needs attention at central, not another retake here.' },
+  { term: 'RESULT READY / RESULT AT CENTRAL', text: 'Grading finished. This station may or may not show the grade itself, depending on setup — either way, the ophthalmologist’s queue at central always has it.' },
+];
 
 // The five stages of design doc §4.1, in order. A capture is at exactly one.
 //   1 Captured  2 Quality-passed  3 Synced  4 Result-pending  5 Result-delivered
@@ -37,7 +50,7 @@ function describe(item) {
     }
     if (item.qualityStatus === null) {
       return { ...base, label: 'QUALITY CHECK NOT RUN', badgeClass: 'stage-badge--blocked', isError: true,
-        detail: 'The image is saved, but the quality gate could not run (MATLAB unavailable?). Re-check it from the capture screen once it is.',
+        detail: 'The image is saved, but the quality check could not run just now. Re-check it from the capture screen.',
         actionText: 'WAITING (QA)' };
     }
     return { ...base, label: 'CAPTURED', badgeClass: 'stage-badge--captured', actionText: 'WAITING (QA)' };
@@ -58,6 +71,14 @@ function describe(item) {
     }
     if (item.uploadProgress) {
       return { ...base, label: `UPLOADING ${item.uploadProgress.sent}/${item.uploadProgress.total}`, actionText: 'UPLOADING…' };
+    }
+    // §10.2: this capture failed the gate (qualityStatus stays 'retake') but the
+    // technician marked it best effort, so it is queued like a real pass. Say
+    // so plainly -- "QUALITY PASS" would be a fabricated result for an image
+    // that did not pass.
+    if (item.bestEffort) {
+      return { ...base, label: 'BEST EFFORT — UNGRADABLE, QUEUED', badgeClass: 'stage-badge--pass', actionText: 'WAITING (SYNC)',
+        detail: 'This image failed the quality check but was sent anyway for mandatory ophthalmologist review.' };
     }
     return { ...base, label: item.formsComplete === true ? 'QUEUED — PENDING UPLOAD' : 'QUALITY PASS',
       badgeClass: 'stage-badge--pass', actionText: 'WAITING (SYNC)' };
@@ -88,6 +109,7 @@ function describe(item) {
 
 export const LocalQueueTable = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -136,6 +158,16 @@ export const LocalQueueTable = () => {
     setIsModalOpen(true);
   };
 
+  // Design doc §10.4: DR is graded per eye, so one visit is up to two
+  // independent captures for the same patient. Skips registration entirely --
+  // the patient already exists -- and reuses whatever questionnaire this
+  // station cached for them at registration, exactly as a normal capture does.
+  const handleCaptureOtherEye = (item, e) => {
+    e?.stopPropagation();
+    const query = new URLSearchParams({ patientId: item.patientId, name: item.patientName || '' }).toString();
+    navigate(`/capture?${query}`);
+  };
+
   const renderStageIndicator = (item) => {
     const config = describe(item);
     const stageNum = config.stage;
@@ -173,7 +205,10 @@ export const LocalQueueTable = () => {
   return (
     <div className="section queue-section">
       <div className="u-flex u-justify-between u-items-center u-mb-3">
-        <h1 className="t-h1 queue-title">{t('queue.title')}</h1>
+        <div className="u-flex u-items-center">
+          <h1 className="t-h1 queue-title">{t('queue.title')}</h1>
+          <InfoModalButton title="CAPTURE QUEUE" rows={QUEUE_INFO_ROWS} />
+        </div>
         <div className="t-mono" style={{ opacity: 0.6, fontSize: '0.85rem' }}>
           {queue.length} {t('queue.items')}
         </div>
@@ -249,24 +284,39 @@ export const LocalQueueTable = () => {
                       {renderStageIndicator(item)}
                     </td>
                     <td>
-                      {config.actionDisabled || !isReady ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                        {config.actionDisabled || !isReady ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="btn-action-col btn-action-col--disabled"
+                            title={config.detail || `Pipeline stage: ${config.label}`}
+                          >
+                            {config.actionText}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-action-col btn-action-col--active"
+                            onClick={(e) => handleOpenResult(item, e)}
+                          >
+                            {config.actionText}
+                          </button>
+                        )}
+                        {/* Design doc §10.4: DR is graded per eye. This capture's own
+                            stage never blocks starting the other eye -- it is an
+                            independent capture for the same patient, so this is
+                            always available, not gated behind config.actionDisabled. */}
                         <button
                           type="button"
-                          disabled
-                          className="btn-action-col btn-action-col--disabled"
-                          title={config.detail || `Pipeline stage: ${config.label}`}
+                          className="btn btn--outline btn--sm"
+                          style={{ fontSize: '10px', padding: '3px 8px' }}
+                          onClick={(e) => handleCaptureOtherEye(item, e)}
+                          data-testid="capture-other-eye"
                         >
-                          {config.actionText}
+                          CAPTURE OTHER EYE →
                         </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn-action-col btn-action-col--active"
-                          onClick={(e) => handleOpenResult(item, e)}
-                        >
-                          {config.actionText}
-                        </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );

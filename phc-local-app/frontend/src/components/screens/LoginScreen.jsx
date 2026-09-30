@@ -125,7 +125,14 @@ export const LoginScreen = ({ onLogin }) => {
         <div className={`login-auth-container ${isTransitioning ? 'login-auth-container--exit' : ''}`}>
           <div className="login-auth-topbar">
             <span style={{ fontWeight: 600 }}>
-              {t('login.auth.authenticatingAs', 'AUTHENTICATING AS: {{role}}', { role: 'PHC TECHNICIAN' })}
+              {/* This app has only ever offered the one technician login -- the
+                  interpolated role name used to be a hardcoded English literal,
+                  so it stayed 'PHC TECHNICIAN' even once the rest of the screen
+                  was in Hindi/Marathi. Use the same translated title the
+                  (currently unused) role-select copy already carries. */}
+              {t('login.auth.authenticatingAs', 'AUTHENTICATING AS: {{role}}', {
+                role: t('login.roles.technician.title', 'PHC TECHNICIAN'),
+              })}
             </span>
           </div>
 

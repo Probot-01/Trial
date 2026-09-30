@@ -278,7 +278,10 @@ async function gateCapture(captureId) {
     });
     commit();
 
-    // Sub-scores are for logging only -- api-contracts.md does not expose them.
+    // All seven raw sub-scores are for logging only. Three of them (focus,
+    // illumination, fov) also feed the derived qualityScore/metrics that
+    // toResponse() exposes (2026-09-30) -- glare/motion/occlusion still never
+    // leave this log line.
     console.log(`[captureHandler] ${captureId}: ${gate.status}`
       + `${gate.reason ? ` (${gate.reason})` : ''}`
       + ` engine=${gate.engine ? gate.engine.engine : 'unrecorded'}`
@@ -295,10 +298,75 @@ function recheckCapture(captureId) {
   return gateCapture(captureId);
 }
 
+/**
+ * markBestEffort(captureId)  (design doc §10.2)
+ *
+ * After a fixed number of failed retakes, the technician can mark the capture
+ * "best effort -- proceed as ungradable" rather than retaking forever or the
+ * case silently never being recorded. Only makes sense for an image that
+ * actually failed the gate: a 'pass'/'borderline' capture already queues
+ * itself, and 'pending' has no verdict yet to override.
+ *
+ * A 'retake' capture is normally never queued (gateCapture's own comment: "the
+ * technician is about to shoot it again"). This is the one path that queues one
+ * anyway -- with best_effort = 1 so central sees this is a technician override,
+ * not a real pass, and (a follow-up on the central side, not built here) can
+ * hold it at Tier C regardless of what the classifier says.
+ *
+ * Idempotent: calling it twice does not create a second sync_queue row.
+ */
+function markBestEffort(captureId) {
+  const row = db.prepare('SELECT * FROM captures WHERE capture_id = ?').get(captureId);
+  if (!row) throw new Error(`markBestEffort: capture_not_found (${captureId})`);
+  if (row.quality_status !== 'retake') {
+    throw Object.assign(
+      new Error("best_effort_not_applicable: only a capture the quality gate marked 'retake' can be proceeded as best effort"),
+      { code: 'best_effort_not_applicable', captureId });
+  }
+
+  const commit = db.transaction(() => {
+    db.prepare('UPDATE captures SET best_effort = 1 WHERE capture_id = ?').run(captureId);
+    const alreadyQueued = db.prepare('SELECT 1 FROM sync_queue WHERE capture_id = ?').get(captureId);
+    if (!alreadyQueued) {
+      // 'high' priority: this is exactly the kind of uncertain case §9.2 wants
+      // sent first, and there is no tier above 'high' in this queue's scale.
+      db.prepare(`
+        INSERT INTO sync_queue
+          (queue_id, capture_id, status, priority, chunks_sent, chunks_total, last_attempt_at)
+        VALUES (?, ?, 'pending', 'high', 0, 1, NULL)
+      `).run(generateLocalId(), captureId);
+    }
+  });
+  commit();
+
+  return toResponse(db.prepare('SELECT * FROM captures WHERE capture_id = ?').get(captureId));
+}
+
 /** The POST /captures response body for a capture row (api-contracts.md, plus qualityGateEngine). */
 function toResponse(row) {
   let engine = null;
   try { engine = row.quality_engine ? JSON.parse(row.quality_engine) : null; } catch { engine = null; }
+
+  // qualityScore/metrics (2026-09-30, api-contracts.md changelog): the MATLAB
+  // gate's own borderline threshold is `mean([focusScore, illuminationScore,
+  // fovScore]) < 0.7` (qualityGateMain.m) -- recomputed here from the stored
+  // sub-scores, not invented. null when the sub-scores were never recorded
+  // (capture predates this, or a fallback engine that doesn't produce them).
+  let scores = null;
+  try { scores = row.quality_scores ? JSON.parse(row.quality_scores) : null; } catch { scores = null; }
+  const hasTriad = scores
+    && typeof scores.focusScore === 'number'
+    && typeof scores.illuminationScore === 'number'
+    && typeof scores.fovScore === 'number';
+  const qualityScore = hasTriad
+    ? (scores.focusScore + scores.illuminationScore + scores.fovScore) / 3
+    : null;
+  const metrics = scores ? {
+    focusScore: scores.focusScore,
+    illuminationScore: scores.illuminationScore,
+    retinalCoverageScore: scores.coveragePercent,
+  } : null;
+
   return {
     captureId:     row.capture_id,
     patientId:     row.patient_id,
@@ -309,7 +377,12 @@ function toResponse(row) {
     // Which engine ran the gate ({ engine, fallback, detail }). null only for a
     // capture gated before this was stored -- never guessed.
     qualityGateEngine: engine,
+    // §10.2: a technician-forced proceed on an image that failed the gate.
+    // false for every ordinary capture, including a real pass/borderline.
+    bestEffort: !!row.best_effort,
+    qualityScore,
+    metrics,
   };
 }
 
-module.exports = { handleCapture, recheckCapture, STORAGE_DIR };
+module.exports = { handleCapture, recheckCapture, markBestEffort, STORAGE_DIR };

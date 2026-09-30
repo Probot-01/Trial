@@ -61,11 +61,13 @@ function logDir() {
 // ── ports and processes ──────────────────────────────────────────────────────
 function pidsOnPort(port) {
   if (process.platform === 'win32') {
-    const r = spawnSync('netstat', ['-ano', '-p', 'TCP'], { encoding: 'utf8' });
+    // No `-p TCP`: that lists IPv4 only, and Vite binds [::1] (localhost -> ::1), so its
+    // listeners were never found and never stopped. Plain -ano shows both families.
+    const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
     const pids = new Set();
     for (const line of (r.stdout || '').split(/\r?\n/)) {
       const cols = line.trim().split(/\s+/);
-      if (cols[3] === 'LISTENING' && /[:\]]/.test(cols[1]) && cols[1].endsWith(`:${port}`)) pids.add(Number(cols[4]));
+      if (cols[0] === 'TCP' && cols[3] === 'LISTENING' && /[:\]]/.test(cols[1]) && cols[1].endsWith(`:${port}`)) pids.add(Number(cols[4]));
     }
     return [...pids].filter(Boolean);
   }
@@ -111,8 +113,8 @@ function startNode(name, cwd, entry, extraEnv = {}) {
   return log;
 }
 
-function startVite(name, dir) {
-  return startNode(name, dir, path.join(dir, 'node_modules', 'vite', 'bin', 'vite.js'));
+function startVite(name, dir, extraEnv = {}) {
+  return startNode(name, dir, path.join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), extraEnv);
 }
 
 // ── waiting ──────────────────────────────────────────────────────────────────

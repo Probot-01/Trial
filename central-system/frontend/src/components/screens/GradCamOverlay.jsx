@@ -17,22 +17,31 @@ const RealGradCam = ({ showOverlay, caseData, onLoadError }) => {
   const overlaySrc = caseData.gradCamOverlayUrl ? `${CENTRAL_API_BASE}${caseData.gradCamOverlayUrl}` : null;
 
   return (
-    <div className="gradcam-viewer">
-      <img src={imageSrc} alt="Fundus capture" className="gradcam-viewer__fundus" onError={onLoadError} />
-      {overlaySrc && (
-        <img
-          src={overlaySrc}
-          alt="Grad-CAM attention overlay"
-          className={`gradcam-viewer__overlay ${showOverlay ? 'gradcam-viewer__overlay--visible' : ''}`}
-        />
-      )}
-      <div className="capture-zone__crosshair" />
-      <div className="gradcam-viewer__brackets">
-        <span className="gradcam-viewer__bracket gradcam-viewer__bracket--tl" />
-        <span className="gradcam-viewer__bracket gradcam-viewer__bracket--tr" />
-        <span className="gradcam-viewer__bracket gradcam-viewer__bracket--bl" />
-        <span className="gradcam-viewer__bracket gradcam-viewer__bracket--br" />
+    <div>
+      <div className="gradcam-viewer">
+        <img src={imageSrc} alt="Fundus capture" className="gradcam-viewer__fundus" onError={onLoadError} />
+        {overlaySrc && (
+          // A complete, pre-blended image (fundus + heatmap), not a
+          // transparent layer -- see the CSS comment on .gradcam-viewer__overlay.
+          <img
+            src={overlaySrc}
+            alt="Grad-CAM attention overlay"
+            className={`gradcam-viewer__overlay ${showOverlay ? 'gradcam-viewer__overlay--visible' : ''}`}
+          />
+        )}
+        <div className="capture-zone__crosshair" />
+        <div className="gradcam-viewer__brackets">
+          <span className="gradcam-viewer__bracket gradcam-viewer__bracket--tl" />
+          <span className="gradcam-viewer__bracket gradcam-viewer__bracket--tr" />
+          <span className="gradcam-viewer__bracket gradcam-viewer__bracket--bl" />
+          <span className="gradcam-viewer__bracket gradcam-viewer__bracket--br" />
+        </div>
       </div>
+      {showOverlay && overlaySrc && (
+        <p className="t-mono" style={{ fontSize: 'var(--fs-tiny)', opacity: 0.55, marginTop: 6, textAlign: 'center' }}>
+          Grad-CAM view shows the model's own cropped working image, not the original capture — the crop can look tighter or offset from the photo above.
+        </p>
+      )}
     </div>
   );
 };

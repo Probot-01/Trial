@@ -15,14 +15,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const BASE = process.env.DRYRUN_BASE || 'http://localhost:5000';
-const CENTRAL = path.join('C:', 'Users', '91740', 'Desktop', 'SIH',
-  'dr-screening-system', 'central-system', 'backend');
+const BASE = process.env.DRYRUN_BASE || 'http://localhost:5200';
+const CENTRAL = path.join(__dirname, 'central-system', 'backend');
 const pool = require(path.join(CENTRAL, 'db', 'pgClient'));
-const PHC_ID = '419402ef-84ff-43cc-99e2-60cc57da2ed2';
-const PHC_KEY = process.env.PHC_API_KEY;
-const IMAGE = path.join('C:', 'Users', '91740', 'Desktop', 'SIH', 'dr-screening-system',
-  'central-system', 'backend', 'ml-pipeline', 'datasets', 'idrid', 'grading',
+// This worktree's PHC001 (phc-local-app/backend/.env: PHC_CODE=PHC001) --
+// not a value that survives a different machine or a fresh DB either, so
+// both are env-overridable with this worktree's real ones as the default.
+const PHC_ID = process.env.DRYRUN_PHC_ID || '64c709e1-4e39-4166-9935-7db2590b3a92';
+const PHC_KEY = process.env.PHC_API_KEY || 'phc_8rOf15ZeL6hLWHdNoElLOqOYaNFwNTMKdPqGk491hWo';
+const IMAGE = path.join(CENTRAL, 'ml-pipeline', 'datasets', 'idrid', 'grading',
   'B. Disease Grading', '1. Original Images', 'a. Training Set', 'IDRiD_326.jpg');
 
 let failures = 0;

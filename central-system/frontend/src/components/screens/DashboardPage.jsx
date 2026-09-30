@@ -3,6 +3,16 @@ import { useTranslation } from 'react-i18next';
 import { centralApi } from '../../api/centralApiClient';
 import { USE_MOCK_DATA } from '../../config';
 import { LoadError } from '../shared/LoadError';
+import { InfoModalButton } from '../shared/InfoModalButton';
+
+const DASHBOARD_INFO_ROWS = [
+  { term: 'CASES TODAY / THIS WEEK', text: 'Cases received from all PHCs so far today, and over the last 7 days.' },
+  { term: 'TOTAL PROCESSED', text: 'All cases this server has ever graded, across every PHC.' },
+  { term: 'AVG REVIEW TIME', text: 'How long an ophthalmologist typically spends reviewing a case before confirming or overriding it.' },
+  { term: 'MODEL ACCURACY / OVERRIDE RATE / AVG. CONFIDENCE', text: 'How often the AI’s grade matches what an ophthalmologist confirms, how often it gets overridden, and how certain the model reports being on average. A rising override rate is worth investigating even if it is still a small percentage.' },
+  { term: 'IMAGES REJECTED (QUALITY)', text: 'Images the quality gate at a PHC sent back for a retake instead of grading — blur, poor lighting, glare, and similar capture problems.' },
+  { term: 'DR GRADE DISTRIBUTION', text: 'How many screened cases fell into each severity grade, 0 (No DR) through 4 (Proliferative DR).' },
+];
 import { Chart, registerables } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 
@@ -339,7 +349,10 @@ export const DashboardPage = () => {
       <div className="u-flex u-items-center u-justify-between u-mb-6">
         <div>
           <p className="section__subtitle">{t('central.dashboard.subtitle', 'DISTRICT WORKER')}</p>
-          <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.dashboard.title', 'DASHBOARD')}</h1>
+          <div className="u-flex u-items-center u-gap-3">
+            <h1 className="section__title" style={{ marginBottom: 0 }}>{t('central.dashboard.title', 'DASHBOARD')}</h1>
+            <InfoModalButton title="DASHBOARD" rows={DASHBOARD_INFO_ROWS} />
+          </div>
         </div>
         <span className="t-mono" style={{ opacity: 0.7 }}>
           {new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}

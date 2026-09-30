@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { File, Paths } from 'expo-file-system';
 import { makeStyles, useTheme } from '../theme/ThemeContext';
 import { ImageViewer } from '../components/ImageViewer';
 import { QualityResultPanel } from '../components/QualityResultPanel';
@@ -29,6 +30,36 @@ import { getQueueEntry, resetForRetry } from '../db/captures';
 import { CentralError, getReport, gradcamSource } from '../api/central';
 import { PhcReport, QueueEntry } from '../types';
 import { gradeLabel, isReferable, TIER_TEXT } from '../lib/grades';
+import { InfoModalButton } from '../components/InfoModalButton';
+
+// generateEvidenceReport.m (central) appends Branch B's under-grading/
+// calibration caveat as its own final sentence when one applies, after the
+// clinical finding. It is not a separate API field (evidenceSummaryText is
+// one string), so this is a display-only split: a methodology footnote about
+// a threshold being provisional is a fact about the SYSTEM, not the patient's
+// eye, and reads as equally-weighted clinical evidence when not set apart.
+// Mirrors central-system/frontend LesionEvidencePanel.jsx's splitCaveat.
+const CAVEAT_MARKERS = [
+  'PROVISIONAL', 'never been measured', 'should be refitted', 'was fitted on',
+  'This grade may be an under-call', 'not the literature',
+];
+function splitCaveat(text: string | null | undefined): { finding: string | null; caveat: string | null } {
+  if (!text) return { finding: text ?? null, caveat: null };
+  const sentences = text.match(/[^.]+\.(\s+|$)/g) || [text];
+  const last = sentences[sentences.length - 1] || '';
+  if (sentences.length > 1 && CAVEAT_MARKERS.some((m) => last.includes(m))) {
+    return { finding: sentences.slice(0, -1).join('').trim(), caveat: last.trim() };
+  }
+  return { finding: text, caveat: null };
+}
+
+const REPORT_INFO_ROWS = [
+  { term: 'CNN CONFIDENCE', text: 'The AI’s own certainty in its grade (0–100%). Below 70% warrants extra caution before treating this as settled.' },
+  { term: 'RULE ENGINE', text: 'A second, independent AI grade produced by counting specific lesion features against clinical thresholds — checked against the main AI grade to catch disagreements.' },
+  { term: 'BRANCHES: AGREE / DISAGREE', text: 'Whether the two AI methods above reached the same grade. DISAGREE means an ophthalmologist must resolve it manually before this case is considered settled.' },
+  { term: 'TIER', text: 'How much the case was auto-cleared vs held for review — A is the highest-confidence band, C the lowest.' },
+  { term: 'AI RESULT vs CONFIRMED vs CORRECTED', text: 'AI RESULT means no ophthalmologist has reviewed it yet — treat it as provisional. CONFIRMED means a doctor agreed with the AI. CORRECTED means a doctor assigned a different final grade.' },
+];
 import { formatDateTime, formatTime, pct } from '../lib/format';
 import { getConfig } from '../config';
 import { syncManager } from '../sync/syncManager';
@@ -78,9 +109,19 @@ export default function CaseReportScreen() {
 
   const shareSlip = async () => {
     try {
-      const { uri } = await Print.printToFileAsync({ html: slipHtml(entry, r, finalGrade) });
-      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Clinical slip' });
-      else await Print.printAsync({ uri });
+      // expo-print's returned uri is not readable by this app in Expo Go
+      // (neither Sharing nor File.copy can open it -- a print-spooler/scoped-
+      // storage permission gap, not something this app's own files are
+      // subject to). Asking for base64 sidesteps reading that uri entirely:
+      // the PDF bytes come back in the same response, written straight into
+      // a file this app owns and can share.
+      const { base64 } = await Print.printToFileAsync({ html: slipHtml(entry, r, finalGrade), base64: true });
+      if (!base64) throw new Error('Print did not return the PDF data.');
+      const dest = new File(Paths.cache, `clinical-slip-${captureId}.pdf`);
+      if (dest.exists) dest.delete();
+      dest.write(base64, { encoding: 'base64' });
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(dest.uri, { mimeType: 'application/pdf', dialogTitle: 'Clinical slip' });
+      else await Print.printAsync({ uri: dest.uri });
     } catch (e) {
       toast(`Could not create the clinical slip: ${(e as Error).message}`);
     }
@@ -90,7 +131,10 @@ export default function CaseReportScreen() {
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.header}>
         <View style={{ flex: 1 }}>
-          <Text style={s.badge}>● {r?.status === 'graded' ? 'AI DIAGNOSTIC REPORT' : 'CASE REPORT'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={s.badge}>● {r?.status === 'graded' ? 'AI DIAGNOSTIC REPORT' : 'CASE REPORT'}</Text>
+            {r?.status === 'graded' ? <InfoModalButton title="DIAGNOSTIC REPORT" rows={REPORT_INFO_ROWS} /> : null}
+          </View>
           <Text style={s.captureId}>CAPTURE ID: {captureId}</Text>
         </View>
         <Pressable onPress={() => navigation.goBack()} style={s.close} accessibilityRole="button" accessibilityLabel="Close report">
@@ -137,6 +181,11 @@ export default function CaseReportScreen() {
         {r?.gradCamAvailable ? (
           <Btn size="sm" variant={showGradcam ? 'primary' : 'outline'} label={showGradcam ? 'HIDE GRADCAM HEATMAP' : 'SHOW GRADCAM HEATMAP'}
             onPress={() => setShowGradcam((v) => !v)} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
+        ) : null}
+        {showGradcam && r?.gradCamAvailable ? (
+          <Text style={[s.caption, { textAlign: 'center', marginTop: 6 }]}>
+            Grad-CAM view shows the model's own cropped working image, not the original capture — the crop can look tighter or offset from the photo above.
+          </Text>
         ) : null}
 
         {/* Biomarkers */}
@@ -247,12 +296,14 @@ function FullReportVerdict({ state, entry, finalGrade, onRetry, onRetrySync, onl
     : r.review.decision === 'confirm'
       ? { text: `CONFIRMED BY OPHTHALMOLOGIST · ${formatDateTime(r.review.reviewedAt)}`, color: theme.c.success }
       : { text: `CORRECTED BY OPHTHALMOLOGIST (AI SAID: ${gradeLabel(r.drGradeCnn)?.toUpperCase() ?? 'N/A'})`, color: theme.c.crimson };
+  const { finding, caveat } = splitCaveat(r.evidenceSummaryText);
 
   return (
     <View style={{ gap: 8 }}>
       <Text style={s.grade}>{label ? `GRADE ${finalGrade} · ${label.toUpperCase()}` : 'NO GRADE PRODUCED'}</Text>
       <Text style={[s.confirm, { color: confirmation.color, borderColor: confirmation.color }]}>{confirmation.text}</Text>
-      <Text style={s.desc}>{r.evidenceSummaryText ?? 'Central produced no evidence summary for this case.'}</Text>
+      <Text style={s.desc}>{finding ?? 'Central produced no evidence summary for this case.'}</Text>
+      {caveat ? <Text style={s.caption}>ⓘ Methodology note: {caveat}</Text> : null}
       <View style={s.stats}>
         <Stat label="CNN CONFIDENCE" value={pct(r.confidenceScore)} />
         <Stat label="RULE ENGINE" value={r.drGradeRuleEngine === null ? 'N/A' : `GRADE ${r.drGradeRuleEngine}`} />

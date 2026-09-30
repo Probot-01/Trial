@@ -387,3 +387,53 @@ tested on a machine without MATLAB**. Try it well before the day, not on it.
 The same story can be told from one laptop by pointing at `capturedAt` being
 earlier than `receivedAt` on a synced case, which is the actual evidence that
 the case was taken offline and uploaded later.
+
+## 12. Backing the demo up, and putting it back
+
+There is a lot of state behind a working demo and none of it is in git: the
+Postgres database, the encrypted case media, and the PHC's SQLite file. A
+re-seed from scratch means re-running every capture through MATLAB, so take a
+snapshot once the demo set is graded and you are happy with it.
+
+```bash
+# Central: schema + data. -Fc is the compressed custom format, restorable
+# selectively; plain SQL is fine too if you would rather read it.
+pg_dump -Fc -d dr_screening_central -f demo-central.dump
+
+# The images and reports the case pages load. ENCRYPTED AT REST, so this is
+# useless without MEDIA_ENCRYPTION_KEY -- back that up too, separately, or the
+# restore gives you a database full of cases whose pictures will not open.
+tar -czf demo-media.tgz -C central-system/backend media
+
+# The PHC desktop's own database: patients, captures, technician accounts,
+# paired devices.
+cp phc-local-app/backend/db/local.sqlite demo-phc.sqlite
+```
+
+Restoring:
+
+```bash
+dropdb dr_screening_central && createdb dr_screening_central
+pg_restore -d dr_screening_central demo-central.dump
+tar -xzf demo-media.tgz -C central-system/backend
+cp demo-phc.sqlite phc-local-app/backend/db/local.sqlite
+```
+
+Two things that will bite otherwise:
+
+- **`MEDIA_ENCRYPTION_KEY` is not in the dump and not in git** (it lives in
+  `central-system/backend/.env`, git-ignored). Restore the media without it and
+  `/media` refuses to serve every image -- correctly, since it will not hand
+  out a file it cannot verify. Keep the key wherever this deployment keeps its
+  secrets. Losing it means the media is unrecoverable; `docs/SECURITY.md` says
+  the only remedy is a full re-seed.
+- **Restoring an old database against newer code needs `npm run migrate`
+  afterwards.** Migrations are forward-only and the dump carries whatever
+  schema version it was taken at.
+
+Full-disk encryption (plan §A.15) is still the separate, non-code piece: on
+Windows 11 Home that is Settings -> Privacy & security -> Device encryption,
+and someone with admin on the machine has to switch it on. It protects the
+Postgres data directory and the PHC SQLite file, which the application cannot
+encrypt itself. The case media is already encrypted independently of it.
+

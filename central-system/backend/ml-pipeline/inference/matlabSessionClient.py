@@ -75,8 +75,18 @@ def forward(model_name, x_nchw):
                     "(is it running? manageMatlabSession.ps1 status)")
             time.sleep(POLL_S)
 
-        with open(resp_path, encoding="utf-8") as f:
-            body = json.load(f)
+        # On Windows the response file exists before MATLAB's movefile has released it
+        # (PermissionError), or is half-written (JSONDecodeError). Read again until the
+        # same deadline instead of failing the request.
+        while True:
+            try:
+                with open(resp_path, encoding="utf-8") as f:
+                    body = json.load(f)
+                break
+            except (PermissionError, json.JSONDecodeError):
+                if time.time() > deadline:
+                    raise
+                time.sleep(POLL_S)
         if body.get("error"):
             raise MatlabSessionError(body["error"])
 

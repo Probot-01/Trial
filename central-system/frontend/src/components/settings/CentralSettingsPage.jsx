@@ -7,34 +7,21 @@ import { ToggleSwitch } from './ToggleSwitch';
 import { SegmentedControl } from './SegmentedControl';
 import '../../styles/settings.css';
 
-// Read real version from package metadata or build release
-const APP_VERSION = 'v1.4.2-apex (build 2026.09)';
-
 const STORAGE_KEY = 'netrasetu_settings';
 
+// Notifications, Offline & Data, Security and the fake password/version/cache
+// actions that used to live here were removed 2026-09-30: none of them called a
+// real endpoint (there is no notification system, no offline mode and no
+// account-settings API on this web app), and several claimed a fabricated
+// success ("Password updated successfully", "Sync complete: All 7 PHC
+// records...", "14.8 MB local memory freed") -- exactly what CLAUDE.md's
+// "no frontend fabricates a result" rule forbids. Language and Display are
+// real: both persist to localStorage and are read by App.jsx / ReviewQueuePage.
 const DEFAULT_SETTINGS = {
   // 1. Language
   language: 'en',
 
-  // 2. Notifications
-  soundAlerts: true,
-  vibration: true,
-  highPriorityFirst: true,
-  urgentReferrals: true,
-  pendingReports: false,
-  quietHours: false,
-
-  // 3. Offline & Data
-  syncOnWifiOnly: false,
-  lowDataMode: true,
-  imageQuality: 'Medium',
-  lastSynced: 'Today at 11:30 PM',
-
-  // 4. Security
-  pinOrFingerprint: true,
-  autoLogout: '15 min',
-
-  // 5. Display
+  // 2. Display
   textSize: 'Normal', // 'Small' (12px) | 'Normal' (14px) | 'Large' (16px)
   highContrast: false,
   compactTableView: false,
@@ -72,14 +59,8 @@ export const CentralSettingsPage = ({
   const [activeSection, setActiveSection] = useState('language');
 
   // Confirmation Modals & Dialogs state
-  const [modalType, setModalType] = useState(null); // 'clearCache' | 'changePassword' | 'logoutAll' | 'guide' | 'report' | 'privacy'
+  const [modalType, setModalType] = useState(null); // 'guide' | 'report' | 'privacy'
   const [toastMessage, setToastMessage] = useState(null);
-
-  // Change password local state
-  const [pwdCurrent, setPwdCurrent] = useState('');
-  const [pwdNew, setPwdNew] = useState('');
-  const [pwdConfirm, setPwdConfirm] = useState('');
-  const [pwdError, setPwdError] = useState('');
 
   // Report problem local state
   const [reportIssue, setReportIssue] = useState('');
@@ -159,60 +140,16 @@ export const CentralSettingsPage = ({
     }
   };
 
-  // Interactive Action Handlers
-  const handleSyncNow = () => {
-    const nowStr = new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
-    const fullTimestamp = `Today at ${nowStr}`;
-    updateSetting('lastSynced', fullTimestamp);
-    // TODO: Wire background WebSocket delta sync when online
-    showToast('✓ Sync complete: All 7 PHC records & telemetry up to date');
-  };
-
-  const handleClearCacheConfirm = () => {
-    try {
-      // Clear non-essential cached patient lists & thumbnail caches
-      sessionStorage.clear();
-      localStorage.removeItem('netrasetu_queue_cache');
-      localStorage.removeItem('netrasetu_referrals_cache');
-    } catch (e) {}
+  // "Report a problem": there is no bug-report endpoint on this backend, so this
+  // opens a real mailto: to the support address with the technician's own text
+  // in the body, rather than claiming it was "submitted to NIC Helpdesk" when
+  // nothing was sent anywhere.
+  const handleReportSubmit = () => {
+    const body = encodeURIComponent(reportIssue || '(describe the issue here)');
+    window.open(`mailto:support@netrasetu.gov.in?subject=${encodeURIComponent('NetraSetu issue report')}&body=${body}`, '_blank');
     setModalType(null);
-    showToast('✓ Cache cleared: 14.8 MB local memory freed');
-  };
-
-  const handlePasswordSubmit = (e) => {
-    e.preventDefault();
-    if (!pwdCurrent) {
-      setPwdError('Please enter current password');
-      return;
-    }
-    if (pwdNew.length < 6) {
-      setPwdError('New password must be at least 6 characters');
-      return;
-    }
-    if (pwdNew !== pwdConfirm) {
-      setPwdError('Passwords do not match');
-      return;
-    }
-    setPwdError('');
-    setPwdCurrent('');
-    setPwdNew('');
-    setPwdConfirm('');
-    setModalType(null);
-    showToast('✓ Password updated successfully');
-  };
-
-  const handleLogoutAllConfirm = () => {
-    setModalType(null);
-    if (onLogout) {
-      onLogout();
-    } else {
-      localStorage.removeItem('netra_user_role');
-      navigate('/');
-    }
-  };
-
-  const handleCheckUpdates = () => {
-    showToast(`✓ You are running the latest version (${APP_VERSION})`);
+    setReportIssue('');
+    showToast('Opening your email client with this report pre-filled.');
   };
 
   // Sidebar navigation click
@@ -263,34 +200,10 @@ export const CentralSettingsPage = ({
             </button>
             <button
               type="button"
-              className={`settings-sidebar__link ${activeSection === 'notifications' ? 'active' : ''}`}
-              onClick={() => handleNavClick('notifications')}
-            >
-              <span>2. Notifications</span>
-              <span className="settings-sidebar__link-arrow">›</span>
-            </button>
-            <button
-              type="button"
               className={`settings-sidebar__link ${activeSection === 'display' ? 'active' : ''}`}
               onClick={() => handleNavClick('display')}
             >
-              <span>3. Display</span>
-              <span className="settings-sidebar__link-arrow">›</span>
-            </button>
-            <button
-              type="button"
-              className={`settings-sidebar__link ${activeSection === 'offline' ? 'active' : ''}`}
-              onClick={() => handleNavClick('offline')}
-            >
-              <span>4. Offline & Data</span>
-              <span className="settings-sidebar__link-arrow">›</span>
-            </button>
-            <button
-              type="button"
-              className={`settings-sidebar__link ${activeSection === 'security' ? 'active' : ''}`}
-              onClick={() => handleNavClick('security')}
-            >
-              <span>5. Security</span>
+              <span>2. Display</span>
               <span className="settings-sidebar__link-arrow">›</span>
             </button>
             <button
@@ -298,12 +211,12 @@ export const CentralSettingsPage = ({
               className={`settings-sidebar__link ${activeSection === 'support' ? 'active' : ''}`}
               onClick={() => handleNavClick('support')}
             >
-              <span>6. Help & Support</span>
+              <span>3. Help & Support</span>
               <span className="settings-sidebar__link-arrow">›</span>
             </button>
           </aside>
 
-          {/* ── Left Column: Language, Notifications, Display ────────── */}
+          {/* ── Left Column: Language, Display ────────────────────────── */}
           <div className="settings-column">
             {/* 1. Language */}
             <SectionCard
@@ -332,99 +245,7 @@ export const CentralSettingsPage = ({
               />
             </SectionCard>
 
-            {/* 2. Notifications */}
-            <SectionCard
-              id="notifications"
-              title="Notifications"
-              icon="🔔"
-              badge="ALERTS"
-            >
-              <SettingRow
-                title="Sound alerts"
-                hint="Play a tone for new alerts."
-                control={
-                  <ToggleSwitch
-                    id="toggle-sound"
-                    ariaLabel="Toggle Sound alerts"
-                    checked={settings.soundAlerts}
-                    onChange={(val) => {
-                      updateSetting('soundAlerts', val);
-                      // TODO: Connect to Web Audio beep trigger in CentralNotificationService
-                    }}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Vibration"
-                hint="Vibrate when a new alert arrives."
-                control={
-                  <ToggleSwitch
-                    id="toggle-vibration"
-                    ariaLabel="Toggle Vibration"
-                    checked={settings.vibration}
-                    onChange={(val) => {
-                      updateSetting('vibration', val);
-                      if (val && navigator.vibrate) navigator.vibrate(100);
-                    }}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="High priority first"
-                hint="Urgent cases appear at the top of your alerts."
-                control={
-                  <ToggleSwitch
-                    id="toggle-priority"
-                    ariaLabel="Toggle High priority first"
-                    checked={settings.highPriorityFirst}
-                    onChange={(val) => updateSetting('highPriorityFirst', val)}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Urgent referrals"
-                hint="Always notify, even in quiet hours."
-                control={
-                  <ToggleSwitch
-                    id="toggle-urgent"
-                    ariaLabel="Toggle Urgent referrals"
-                    checked={settings.urgentReferrals}
-                    onChange={(val) => updateSetting('urgentReferrals', val)}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Pending reports"
-                hint="Remind me about reports not yet submitted."
-                control={
-                  <ToggleSwitch
-                    id="toggle-pending"
-                    ariaLabel="Toggle Pending reports"
-                    checked={settings.pendingReports}
-                    onChange={(val) => updateSetting('pendingReports', val)}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Quiet hours"
-                hint="Mute routine alerts from 10 PM to 6 AM."
-                control={
-                  <ToggleSwitch
-                    id="toggle-quiet"
-                    ariaLabel="Toggle Quiet hours"
-                    checked={settings.quietHours}
-                    onChange={(val) => updateSetting('quietHours', val)}
-                  />
-                }
-              />
-            </SectionCard>
-
-            {/* 5. Display */}
+            {/* 2. Display */}
             <SectionCard
               id="display"
               title="Display"
@@ -509,146 +330,9 @@ export const CentralSettingsPage = ({
             </SectionCard>
           </div>
 
-          {/* ── Right Column: Offline & Data, Security, Support ──────── */}
+          {/* ── Right Column: Help & Support ──────────────────────────── */}
           <div className="settings-column">
-            {/* 3. Offline & Data */}
-            <SectionCard
-              id="offline"
-              title="Offline & data"
-              icon="📡"
-              badge="STORAGE"
-            >
-              <SettingRow
-                title="Sync on Wi-Fi only"
-                hint="Save mobile data in the field."
-                control={
-                  <ToggleSwitch
-                    id="toggle-wifi"
-                    ariaLabel="Toggle Sync on Wi-Fi only"
-                    checked={settings.syncOnWifiOnly}
-                    onChange={(val) => updateSetting('syncOnWifiOnly', val)}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Low-data mode"
-                hint="Load smaller previews and fewer images."
-                control={
-                  <ToggleSwitch
-                    id="toggle-lowdata"
-                    ariaLabel="Toggle Low-data mode"
-                    checked={settings.lowDataMode}
-                    onChange={(val) => updateSetting('lowDataMode', val)}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Image upload quality"
-                hint="Higher quality uses more data."
-                fullWidth
-                control={
-                  <SegmentedControl
-                    id="setting-imgquality"
-                    ariaLabel="Image upload quality"
-                    value={settings.imageQuality}
-                    onChange={(val) => {
-                      updateSetting('imageQuality', val);
-                      showToast(`Image upload quality: ${val}`);
-                    }}
-                    options={['Low', 'Medium', 'High']}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Last synced"
-                hint={settings.lastSynced}
-                control={
-                  <button
-                    type="button"
-                    className="settings-btn settings-btn--primary"
-                    onClick={handleSyncNow}
-                  >
-                    Sync now
-                  </button>
-                }
-              />
-
-              <SettingRow
-                title="Cached data"
-                hint="Clears saved lists. Unsynced work is kept."
-                control={
-                  <button
-                    type="button"
-                    className="settings-btn settings-btn--warn"
-                    onClick={() => setModalType('clearCache')}
-                  >
-                    Clear
-                  </button>
-                }
-              />
-            </SectionCard>
-
-            {/* 4. Security */}
-            <SectionCard
-              id="security"
-              title="Security"
-              icon="🔒"
-              badge="POLICY"
-            >
-              <SettingRow
-                title="Unlock with PIN or fingerprint"
-                hint="Ask every time the app opens."
-                control={
-                  <ToggleSwitch
-                    id="toggle-biometrics"
-                    ariaLabel="Unlock with PIN or fingerprint"
-                    checked={settings.pinOrFingerprint}
-                    onChange={(val) => {
-                      updateSetting('pinOrFingerprint', val);
-                      // TODO: Connect to WebAuthn / biometric credential manager
-                    }}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Auto-logout after inactivity"
-                hint="Protects patient data on shared phones."
-                fullWidth
-                control={
-                  <SegmentedControl
-                    id="setting-autologout"
-                    ariaLabel="Auto-logout inactivity threshold"
-                    value={settings.autoLogout}
-                    onChange={(val) => {
-                      updateSetting('autoLogout', val);
-                      showToast(`Inactivity timeout: ${val}`);
-                    }}
-                    options={['5 min', '15 min', '30 min']}
-                  />
-                }
-              />
-
-              <SettingRow
-                title="Change password"
-                hint="Update your portal login credential."
-                isAction
-                onClick={() => setModalType('changePassword')}
-              />
-
-              <SettingRow
-                title="Log out of all devices"
-                hint="Terminates all active tele-retina sessions."
-                isAction
-                isWarn
-                onClick={() => setModalType('logoutAll')}
-              />
-            </SectionCard>
-
-            {/* 6. Help & Support */}
+            {/* 3. Help & Support */}
             <SectionCard
               id="support"
               title="Help & support"
@@ -699,23 +383,9 @@ export const CentralSettingsPage = ({
 
               <SettingRow
                 title="Privacy policy & terms"
-                hint="Health Data Management Policy (MoHFW)."
+                hint="How patient data is handled in this system."
                 isAction
                 onClick={() => setModalType('privacy')}
-              />
-
-              <SettingRow
-                title="Application version"
-                hint={APP_VERSION}
-                control={
-                  <button
-                    type="button"
-                    className="settings-btn"
-                    onClick={handleCheckUpdates}
-                  >
-                    Check for updates
-                  </button>
-                }
               />
             </SectionCard>
           </div>
@@ -732,142 +402,6 @@ export const CentralSettingsPage = ({
 
       {/* ── Dialog Modals ────────────────────────────────────────── */}
 
-      {/* Clear Cache Confirmation */}
-      {modalType === 'clearCache' && (
-        <div className="settings-modal-backdrop" onClick={() => setModalType(null)}>
-          <div className="settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-            <h3 className="settings-modal__title">
-              <span>⚠️</span>
-              Clear Cached Data
-            </h3>
-            <p className="settings-modal__desc">
-              Are you sure you want to clear cached records? This will delete local thumbnail
-              caches and saved search filters. Any unsynced grading or patient drafts will be preserved.
-            </p>
-            <div className="settings-modal__actions">
-              <button
-                type="button"
-                className="settings-btn"
-                onClick={() => setModalType(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="settings-btn settings-btn--warn"
-                onClick={handleClearCacheConfirm}
-              >
-                Clear Cache
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Change Password Dialog */}
-      {modalType === 'changePassword' && (
-        <div className="settings-modal-backdrop" onClick={() => setModalType(null)}>
-          <div className="settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-            <h3 className="settings-modal__title">
-              <span>🔒</span>
-              Change Password
-            </h3>
-            <form onSubmit={handlePasswordSubmit}>
-              <div className="settings-modal__field">
-                <label className="settings-modal__label">Current password</label>
-                <input
-                  type="password"
-                  className="settings-modal__input"
-                  value={pwdCurrent}
-                  onChange={(e) => setPwdCurrent(e.target.value)}
-                  placeholder="Enter current password"
-                  autoFocus
-                  required
-                />
-              </div>
-
-              <div className="settings-modal__field">
-                <label className="settings-modal__label">New password</label>
-                <input
-                  type="password"
-                  className="settings-modal__input"
-                  value={pwdNew}
-                  onChange={(e) => setPwdNew(e.target.value)}
-                  placeholder="Minimum 6 characters"
-                  required
-                />
-              </div>
-
-              <div className="settings-modal__field">
-                <label className="settings-modal__label">Confirm new password</label>
-                <input
-                  type="password"
-                  className="settings-modal__input"
-                  value={pwdConfirm}
-                  onChange={(e) => setPwdConfirm(e.target.value)}
-                  placeholder="Repeat new password"
-                  required
-                />
-              </div>
-
-              {pwdError && (
-                <div style={{ color: 'var(--red)', fontSize: '11px', fontWeight: 700, margin: '8px 0' }}>
-                  ✕ {pwdError}
-                </div>
-              )}
-
-              <div className="settings-modal__actions">
-                <button
-                  type="button"
-                  className="settings-btn"
-                  onClick={() => setModalType(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="settings-btn settings-btn--primary"
-                >
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Log Out All Devices Confirmation */}
-      {modalType === 'logoutAll' && (
-        <div className="settings-modal-backdrop" onClick={() => setModalType(null)}>
-          <div className="settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-            <h3 className="settings-modal__title">
-              <span>🚨</span>
-              Log out of all devices
-            </h3>
-            <p className="settings-modal__desc">
-              This will revoke all active tele-retina tokens across hospital desktops, mobile tablets,
-              and remote laptops. You will be redirected to the secure login portal.
-            </p>
-            <div className="settings-modal__actions">
-              <button
-                type="button"
-                className="settings-btn"
-                onClick={() => setModalType(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="settings-btn settings-btn--warn"
-                onClick={handleLogoutAllConfirm}
-              >
-                Confirm Log Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* User Guide Dialog */}
       {modalType === 'guide' && (
         <div className="settings-modal-backdrop" onClick={() => setModalType(null)}>
@@ -876,7 +410,7 @@ export const CentralSettingsPage = ({
             <div className="settings-modal__desc">
               <p>• <strong>DR Grading Guidelines:</strong> Adheres to ICDR 5-level scale (No DR, Mild NPDR, Moderate NPDR, Severe NPDR, PDR).</p>
               <p style={{ marginTop: '8px' }}>• <strong>AI Assist:</strong> Review Grad-CAM heatmaps for microaneurysms and exudate clusters.</p>
-              <p style={{ marginTop: '8px' }}>• <strong>Training modules:</strong> Access online video certification via MoHFW e-Sanjeevani portal.</p>
+              <p style={{ marginTop: '8px' }}>• <strong>Training materials:</strong> distributed separately by the programme office; not hosted in this app.</p>
             </div>
             <div className="settings-modal__actions">
               <button type="button" className="settings-btn settings-btn--primary" onClick={() => setModalType(null)}>
@@ -887,13 +421,16 @@ export const CentralSettingsPage = ({
         </div>
       )}
 
-      {/* Report Problem Dialog */}
+      {/* Report Problem Dialog — no bug-report endpoint exists, so this opens a
+          real mailto: with the description filled in, instead of claiming the
+          report was received somewhere. */}
       {modalType === 'report' && (
         <div className="settings-modal-backdrop" onClick={() => setModalType(null)}>
           <div className="settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             <h3 className="settings-modal__title">🛠️ Report a Problem</h3>
             <p className="settings-modal__desc">
-              Describe the issue encountered during retinal grading, synchronization, or patient record retrieval:
+              Describe the issue encountered during retinal grading, synchronization, or patient record retrieval.
+              This opens your email client addressed to support — nothing is sent from here directly.
             </p>
             <textarea
               className="settings-modal__input"
@@ -910,28 +447,27 @@ export const CentralSettingsPage = ({
               <button
                 type="button"
                 className="settings-btn settings-btn--primary"
-                onClick={() => {
-                  setModalType(null);
-                  setReportIssue('');
-                  showToast('✓ Issue report and diagnostic logs submitted to NIC Helpdesk');
-                }}
+                onClick={handleReportSubmit}
               >
-                Submit Report
+                Open email to support
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Privacy Policy Dialog */}
+      {/* Privacy Policy Dialog — states what is actually true today (media at
+          rest is AES-256-GCM encrypted; reviews and access are logged), not an
+          unverified claim of certification against a named government scheme. */}
       {modalType === 'privacy' && (
         <div className="settings-modal-backdrop" onClick={() => setModalType(null)}>
           <div className="settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             <h3 className="settings-modal__title">🛡️ Health Data Privacy</h3>
             <div className="settings-modal__desc">
-              <p>NetraSetu operates under the National Digital Health Mission (ABDM) specifications:</p>
-              <p style={{ marginTop: '8px' }}>• All fundus images and EHR records are end-to-end encrypted (AES-256).</p>
-              <p style={{ marginTop: '8px' }}>• Audit trails log every specialist sign-off and triage referral for medicolegal compliance.</p>
+              <p>This is a prototype system, not a certified production deployment:</p>
+              <p style={{ marginTop: '8px' }}>• Stored fundus images and reports are encrypted at rest (AES-256-GCM).</p>
+              <p style={{ marginTop: '8px' }}>• Every case review and every access to patient data is logged.</p>
+              <p style={{ marginTop: '8px' }}>• Only public research datasets are used for demos and testing — no real patient data.</p>
             </div>
             <div className="settings-modal__actions">
               <button type="button" className="settings-btn settings-btn--primary" onClick={() => setModalType(null)}>

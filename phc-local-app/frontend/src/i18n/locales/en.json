@@ -53,8 +53,144 @@
     "contact": "Contact Number (Required)",
     "contactPlaceholder": "+91...",
     "btnRegistering": "REGISTERING...",
-    "btnInitiate": "INITIATE CAPTURE ✦",
-    "secureModule": "SECURE OFFLINE MODULE V1.2.0"
+    "btnInitiate": "INITIATE CAPTURE →",
+    "btnClearAll": "CLEAR ALL",
+    "secureModule": "SECURE OFFLINE MODULE V1.2.0",
+    "sectionPatientInfo": "Patient Information",
+    "sectionAddress": "Address",
+    "patientType": "Patient Type",
+    "patientTypeOptions": {
+      "new": "New Patient",
+      "revisit": "Revisit",
+      "referral": "Referral"
+    },
+    "patientId": "Patient ID",
+    "patientIdPlaceholder": "auto-generated",
+    "abhaId": "ABHA ID (optional)",
+    "abhaIdPlaceholder": "14-digit ABHA number",
+    "visitNo": "Visit No.",
+    "visitNoPlaceholder": "e.g. 1",
+    "titleField": "Title",
+    "firstName": "First Name",
+    "firstNamePlaceholder": "e.g. Sunita",
+    "middleName": "Middle Name",
+    "middleNamePlaceholder": "Optional",
+    "lastName": "Last Name",
+    "lastNamePlaceholder": "e.g. Devi",
+    "gender": "Gender",
+    "genderOptions": {
+      "select": "Select",
+      "female": "Female",
+      "male": "Male",
+      "other": "Other"
+    },
+    "dob": "Date of Birth",
+    "dobPlaceholder": "DD/MM/YYYY",
+    "ageField": "Age",
+    "ageFieldPlaceholder": "e.g. 54",
+    "maritalStatus": "Marital Status",
+    "maritalStatusOptions": {
+      "select": "Select",
+      "single": "Single",
+      "married": "Married",
+      "widowed": "Widowed",
+      "divorced": "Divorced"
+    },
+    "bloodGroup": "Blood Group",
+    "addressField": "Address",
+    "addressPlaceholder": "Full address",
+    "state": "State",
+    "stateSelect": "Select",
+    "pincode": "Pincode",
+    "pincodePlaceholder": "6-digit PIN",
+    "district": "District",
+    "districtPlaceholder": "e.g. Pune",
+    "occupation": "Occupation",
+    "occupationOptions": {
+      "select": "Select",
+      "farmer": "Farmer",
+      "labourer": "Daily Labourer",
+      "homemaker": "Homemaker",
+      "govt_employee": "Govt. Employee",
+      "business": "Business",
+      "student": "Student",
+      "other": "Other"
+    },
+    "contactNumber": "Contact Number",
+    "contactNumberPlaceholder": "+91...",
+    "contactNumberTitle": "Required — only channel for delayed/offline result delivery",
+    "altPhone": "Alternate Phone",
+    "altPhonePlaceholder": "Optional",
+    "notDiabeticNote": "The record has no \"not diabetic\" value for years since diagnosis; it will be stored as \"< 1 yr\".",
+    "consent": {
+      "title": "Informed Verbal Consent (DPDP Act Sec 9.7)",
+      "body": "I confirm that informed verbal consent has been obtained from the patient for retinal image capture, clinical risk assessment, and tele-ophthalmology review.",
+      "alertRequired": "Informed verbal consent is required before initiating screening."
+    },
+    "missingPrefix": "Still to answer before capture: ",
+    "answerAllPrefix": "Answer every question before capture: ",
+    "missing": {
+      "knownDiabetic": "known diabetic?",
+      "yearsSinceDiagnosis": "years since diagnosis",
+      "glycemicControl": "glycemic control",
+      "bloodPressure": "blood pressure",
+      "pregnancy": "pregnancy",
+      "eyeSymptoms": "eye symptoms (or \"none of these\")"
+    },
+    "submitErrorTitle": "PATIENT NOT REGISTERED",
+    "duplicate": {
+      "heading": "Possible duplicate — {{count}} existing patient",
+      "heading_plural": "Possible duplicate — {{count}} existing patients",
+      "body": "Someone matching these details is already registered. Registering again creates a second record with a separate screening history. Check before continuing — you can still register if this is a different person.",
+      "age": "age {{age}}",
+      "matchedOn": "matched on {{fields}}",
+      "matchField": {
+        "name": "name",
+        "phone": "phone",
+        "age": "age"
+      },
+      "useThisPatient": "Use this patient →",
+      "opening": "Opening…"
+    },
+    "states": {
+      "Andhra Pradesh": "Andhra Pradesh",
+      "Arunachal Pradesh": "Arunachal Pradesh",
+      "Assam": "Assam",
+      "Bihar": "Bihar",
+      "Chhattisgarh": "Chhattisgarh",
+      "Goa": "Goa",
+      "Gujarat": "Gujarat",
+      "Haryana": "Haryana",
+      "Himachal Pradesh": "Himachal Pradesh",
+      "Jharkhand": "Jharkhand",
+      "Karnataka": "Karnataka",
+      "Kerala": "Kerala",
+      "Madhya Pradesh": "Madhya Pradesh",
+      "Maharashtra": "Maharashtra",
+      "Manipur": "Manipur",
+      "Meghalaya": "Meghalaya",
+      "Mizoram": "Mizoram",
+      "Nagaland": "Nagaland",
+      "Odisha": "Odisha",
+      "Punjab": "Punjab",
+      "Rajasthan": "Rajasthan",
+      "Sikkim": "Sikkim",
+      "Tamil Nadu": "Tamil Nadu",
+      "Telangana": "Telangana",
+      "Tripura": "Tripura",
+      "Uttar Pradesh": "Uttar Pradesh",
+      "Uttarakhand": "Uttarakhand",
+      "West Bengal": "West Bengal",
+      "Andaman & Nicobar Islands": "Andaman & Nicobar Islands",
+      "Chandigarh": "Chandigarh",
+      "Dadra & Nagar Haveli": "Dadra & Nagar Haveli",
+      "Daman & Diu": "Daman & Diu",
+      "Delhi": "Delhi",
+      "Jammu & Kashmir": "Jammu & Kashmir",
+      "Ladakh": "Ladakh",
+      "Lakshadweep": "Lakshadweep",
+      "Puducherry": "Puducherry"
+    }
   },
   "capture": {
     "title": "IMAGE CAPTURE",
@@ -83,6 +219,13 @@
       "Ensure room lighting is sufficiently dim.",
       "Instruct patient to focus on internal green target.",
       "Initiate capture when focus indicator is solid."
+    ],
+    "instructionsLens": [
+      "Dim the room; a dilated or naturally dark-adapted pupil helps most.",
+      "Rest the lens attachment gently against the patient's brow for a steady base.",
+      "Ask the patient to fix their gaze straight ahead, not at the lens.",
+      "Watch the phone screen, not the patient's eye, to judge focus and framing.",
+      "Capture on the phone or lens app, then import that image here from the gallery."
     ]
   },
   "metadata": {
@@ -96,17 +239,46 @@
   },
   "questionnaire": {
     "title": "CLINICAL QUESTIONNAIRE",
+    "sectionTitle": "Clinical Symptom & Risk Questionnaire",
     "knownDiabetic": "KNOWN DIABETIC?",
     "yearsSince": "YEARS SINCE DIAGNOSIS",
     "yearsPlaceholder": "e.g. 5",
-    "bpHistory": "BLOOD PRESSURE HISTORY",
+    "yearsOptions": {
+      "lt1": "< 1 yr",
+      "oneToFive": "1–5 yrs",
+      "fiveToTen": "5–10 yrs",
+      "gt10": "> 10 yrs"
+    },
+    "glycemicControl": "Glycemic Control (Blood Sugar)",
+    "glycemicOptions": {
+      "good": "Good",
+      "moderate": "Moderate",
+      "poor": "Poor"
+    },
+    "bpHistory": "Blood Pressure Status",
     "bpOptions": {
       "unknown": "Unknown / Not measured",
       "normal": "Normal",
       "high": "High (Hypertension)",
       "low": "Low (Hypotension)"
     },
-    "visionChanges": "RECENT VISION CHANGES? (BLURRINESS, SPOTS)"
+    "visionChanges": "RECENT VISION CHANGES? (BLURRINESS, SPOTS)",
+    "selectPlaceholder": "Select…",
+    "pregnancy": "Currently Pregnant?",
+    "eyeSymptoms": "Current Eye Symptoms (select all that apply)",
+    "symptoms": {
+      "blurredVision": "Blurred Vision",
+      "floaters": "Floaters",
+      "suddenVisionChange": "Sudden Vision Change",
+      "eyePain": "Eye Pain",
+      "none": "None of these"
+    }
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "notApplicable": "N / A",
+    "unknown": "Unknown"
   },
   "quality": {
     "btnQue": "QUE FOR SYNC ✦",

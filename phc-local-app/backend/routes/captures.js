@@ -23,7 +23,7 @@ const express = require('express');
 const multer  = require('multer');
 
 const db                  = require('../db/localDb');
-const { handleCapture, recheckCapture } = require('../services/captureHandler');
+const { handleCapture, recheckCapture, markBestEffort } = require('../services/captureHandler');
 const { generateLocalId } = require('../services/ids');
 
 const router = express.Router();
@@ -176,6 +176,29 @@ router.post('/:captureId/quality-check', async (req, res, next) => {
     res.json(await recheckCapture(req.params.captureId));
   } catch (err) {
     if (sendCaptureError(res, err)) return;
+    next(err);
+  }
+});
+
+// ── POST /captures/:captureId/best-effort ────────────────────────────────────
+// Design doc §10.2: after repeated failed retakes, the technician marks the
+// capture "best effort -- proceed as ungradable" instead of retaking forever
+// or the case silently never being recorded. Queues it (a 'retake' image is
+// normally never queued) with best_effort=1 so the case carries the flag all
+// the way to central.
+router.post('/:captureId/best-effort', (req, res, next) => {
+  const { captureId } = req.params;
+  if (!captureExists(captureId)) {
+    return res.status(404).json({
+      error: 'capture_not_found', message: `No capture with id ${captureId}`,
+    });
+  }
+  try {
+    res.json(markBestEffort(captureId));
+  } catch (err) {
+    if (err.code === 'best_effort_not_applicable') {
+      return bad(res, 'best_effort_not_applicable', err.message);
+    }
     next(err);
   }
 });
@@ -348,7 +371,7 @@ router.post('/:captureId/capture-metadata', (req, res) => {
 router.get('/', (req, res) => {
   const rows = db.prepare(`
     SELECT c.capture_id, c.patient_id, p.name AS patient_name,
-           c.quality_status, c.quality_reason, c.captured_at,
+           c.quality_status, c.quality_reason, c.captured_at, c.best_effort,
            q.status AS sync_status, q.central_status, q.last_error, q.error_kind,
            q.attempts, q.next_attempt_at, q.chunks_sent, q.chunks_total,
            EXISTS (SELECT 1 FROM questionnaire_responses qr WHERE qr.capture_id = c.capture_id) AS has_questionnaire,
@@ -370,6 +393,8 @@ router.get('/', (req, res) => {
     // 'pending' (gate not run) is internal and never returned as a quality status.
     qualityStatus: r.quality_status === 'pending' ? null : r.quality_status,
     qualityReason: r.quality_reason ?? null,
+    // §10.2: a technician-forced proceed on an image that failed the gate.
+    bestEffort: !!r.best_effort,
     // Both questionnaires recorded? Until they are, the capture cannot sync.
     formsComplete: !!(r.has_questionnaire && r.has_metadata),
     // What central last said about the case: awaiting_image | processing |
@@ -413,11 +438,14 @@ function lifecycleStatus(row) {
     }
     return 'synced';
   }
-  if (row.quality_status === 'pass' || row.quality_status === 'borderline') {
+  // §10.2: a best-effort 'retake' IS going somewhere -- it has a sync_queue row
+  // like a real pass -- so it must not read as "not going anywhere yet" below.
+  if (row.quality_status === 'pass' || row.quality_status === 'borderline' || row.best_effort) {
     return 'quality_passed';
   }
-  // 'retake' and the internal 'pending' both mean: an image exists, but this
-  // case has not cleared the gate and is not going anywhere yet.
+  // A plain (non-best-effort) 'retake', and the internal 'pending', both mean:
+  // an image exists, but this case has not cleared the gate and is not going
+  // anywhere yet.
   return 'captured';
 }
 

@@ -13,16 +13,32 @@ import { BLOOD_PRESSURE } from '../../api/captureOptions';
 // technician must record consent for the real person in front of them.
 const demo = (value, empty = '') => (USE_MOCK_DATA ? value : empty);
 
+// `dob` stays DD/MM/YYYY everywhere in this component (parsed at line ~172,
+// submitted at line ~276) -- <input type="date"> is the only change needed to
+// get a native calendar picker, but it speaks ISO (YYYY-MM-DD) to the DOM.
+// These convert at that one boundary so nothing downstream has to change.
+const ddmmyyyyToIso = (dob) => {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dob || '');
+  if (!m) return '';
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+};
+const isoToDdmmyyyy = (iso) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!m) return '';
+  const [, y, mo, d] = m;
+  return `${d}/${mo}/${y}`;
+};
+
 /* ── questionnaire options: exactly the API's values (api-contracts.md) ── */
 // (The form used to offer "Low (Hypotension)", which the API does not accept.)
-const BLOOD_PRESSURE_OPTIONS = BLOOD_PRESSURE.map((o) => ({ value: o.id, label: o.label }));
+// Ids only here -- the module scope has no i18n hook. Labels are looked up by
+// id from questionnaire.bpOptions/.symptoms at render time, inside the
+// component, with the English text from captureOptions.js as the t() fallback.
+const BLOOD_PRESSURE_IDS = BLOOD_PRESSURE.map((o) => o.id);
+const BLOOD_PRESSURE_LABELS = Object.fromEntries(BLOOD_PRESSURE.map((o) => [o.id, o.label]));
 
-const EYE_SYMPTOMS = [
-  { id: 'blurredVision',      label: 'BLURRED VISION' },
-  { id: 'floaters',           label: 'FLOATERS' },
-  { id: 'suddenVisionChange', label: 'SUDDEN VISION CHANGE' },
-  { id: 'eyePain',            label: 'EYE PAIN' },
-];
+const EYE_SYMPTOM_IDS = ['blurredVision', 'floaters', 'suddenVisionChange', 'eyePain'];
 
 const INDIAN_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh',
@@ -159,12 +175,12 @@ export const PatientRegistrationForm = () => {
   // diabetics; pregnancy only where it could apply.)
   const symptomsAnswered = noSymptoms || Object.values(eyeSymptoms).some(Boolean);
   const questionnaireMissing = [
-    knownDiabetic === null && 'known diabetic?',
-    knownDiabetic === true && !yearsSinceDx && 'years since diagnosis',
-    !glycemicControl && 'glycemic control',
-    !bloodPressure && 'blood pressure',
-    couldBePregnant && !pregnancy && 'pregnancy',
-    !symptomsAnswered && 'eye symptoms (or "none of these")',
+    knownDiabetic === null && t('registration.missing.knownDiabetic', 'known diabetic?'),
+    knownDiabetic === true && !yearsSinceDx && t('registration.missing.yearsSinceDiagnosis', 'years since diagnosis'),
+    !glycemicControl && t('registration.missing.glycemicControl', 'glycemic control'),
+    !bloodPressure && t('registration.missing.bloodPressure', 'blood pressure'),
+    couldBePregnant && !pregnancy && t('registration.missing.pregnancy', 'pregnancy'),
+    !symptomsAnswered && t('registration.missing.eyeSymptoms', 'eye symptoms (or "none of these")'),
   ].filter(Boolean);
 
   /* auto-compute age from DOB */
@@ -205,14 +221,62 @@ export const PatientRegistrationForm = () => {
     setConsentObtained(false); setConsentGivenAt(null);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Shared between a fresh registration and "USE THIS PATIENT" on a confirmed
+  // duplicate: the same today's-visit answers, either way.
+  const buildQuestionnaire = () => ({
+    knownDiabetic,
+    // The API has no "not diabetic" value for this question and requires
+    // one of the four buckets. For a patient who is not a known diabetic
+    // it is recorded as '< 1 yr' -- and the form says so on screen; it is
+    // never quietly a leftover default.
+    yearsSinceDiagnosis: knownDiabetic ? yearsSinceDx : 'lt1',
+    glycemicControl, bloodPressure,
+    // Not asked (and sent as null) where pregnancy cannot apply.
+    pregnancy: couldBePregnant ? pregnancy : 'not_applicable',
+    ...eyeSymptoms,
+  });
+
+  // §10.3: the technician confirms a search hit IS this same person. Reuse
+  // their existing id -- a second registration would start a second, unlinked
+  // screening history for one patient -- rather than creating a new record.
+  // Today's questionnaire is still recorded (risk factors and symptoms change
+  // between visits) and cached on this station the same way a fresh
+  // registration's is; the existing patient's own demographic record on the
+  // server is left untouched.
+  const [usingExistingId, setUsingExistingId] = useState(null);
+  const handleUseExisting = async (existing) => {
     if (!consentObtained) {
-      alert('Informed verbal consent is required before initiating screening.');
+      alert(t('registration.consent.alertRequired', 'Informed verbal consent is required before initiating screening.'));
       return;
     }
     if (!USE_MOCK_DATA && questionnaireMissing.length) {
-      setSubmitError({ message: 'Answer every question before capture: ' + questionnaireMissing.join(', ') + '.' });
+      setSubmitError({ message: t('registration.answerAllPrefix', 'Answer every question before capture: ') + questionnaireMissing.join(', ') + '.' });
+      return;
+    }
+    setSubmitError(null);
+    setUsingExistingId(existing.patientId);
+    try {
+      saveQuestionnaire(existing.patientId, buildQuestionnaire());
+      const query = new URLSearchParams({
+        patientId: existing.patientId,
+        name: existing.name || fullName,
+        age: String(existing.age ?? age ?? ''),
+        contact: contactNumber || '',
+      }).toString();
+      navigate(`/capture?${query}`);
+    } finally {
+      setUsingExistingId(null);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!consentObtained) {
+      alert(t('registration.consent.alertRequired', 'Informed verbal consent is required before initiating screening.'));
+      return;
+    }
+    if (!USE_MOCK_DATA && questionnaireMissing.length) {
+      setSubmitError({ message: t('registration.answerAllPrefix', 'Answer every question before capture: ') + questionnaireMissing.join(', ') + '.' });
       return;
     }
     setLoading(true);
@@ -228,18 +292,7 @@ export const PatientRegistrationForm = () => {
         firstName, middleName, lastName,
         gender, dob, maritalStatus, bloodGroup,
         address, state, pincode, district, occupation, altPhone,
-        questionnaire: {
-          knownDiabetic,
-          // The API has no "not diabetic" value for this question and requires
-          // one of the four buckets. For a patient who is not a known diabetic
-          // it is recorded as '< 1 yr' -- and the form says so on screen; it is
-          // never quietly a leftover default.
-          yearsSinceDiagnosis: knownDiabetic ? yearsSinceDx : 'lt1',
-          glycemicControl, bloodPressure,
-          // Not asked (and sent as null) where pregnancy cannot apply.
-          pregnancy: couldBePregnant ? pregnancy : 'not_applicable',
-          ...eyeSymptoms,
-        },
+        questionnaire: buildQuestionnaire(),
         consentGivenAt: consentGivenAt || new Date().toISOString(),
       };
       const newPatient = await localApi.registerPatient(payload);
@@ -273,160 +326,166 @@ export const PatientRegistrationForm = () => {
       <form className="reg-form" onSubmit={handleSubmit} noValidate>
 
         {/* ── 1. PATIENT INFORMATION ─────────────────────── */}
-        <SectionHeader title="PATIENT INFORMATION" label="01" />
+        <SectionHeader title={t('registration.sectionPatientInfo', 'Patient Information')} label="01" />
 
         <div className="reg-grid">
-          <Field label="PATIENT TYPE">
+          <Field label={t('registration.patientType', 'Patient Type')}>
             <select className="select reg-select" value={patientType} onChange={e => setPatientType(e.target.value)}>
-              <option value="new">New Patient</option>
-              <option value="revisit">Revisit</option>
-              <option value="referral">Referral</option>
+              <option value="new">{t('registration.patientTypeOptions.new', 'New Patient')}</option>
+              <option value="revisit">{t('registration.patientTypeOptions.revisit', 'Revisit')}</option>
+              <option value="referral">{t('registration.patientTypeOptions.referral', 'Referral')}</option>
             </select>
           </Field>
 
-          <Field label="PATIENT ID">
-            <input className="input" placeholder="auto-generated" readOnly />
+          <Field label={t('registration.patientId', 'Patient ID')}>
+            <input className="input" placeholder={t('registration.patientIdPlaceholder', 'auto-generated')} readOnly />
           </Field>
 
-          <Field label="ABHA ID (OPTIONAL)">
-            <input className="input" placeholder="14-digit ABHA number" value={abhaId}
+          <Field label={t('registration.abhaId', 'ABHA ID (optional)')}>
+            <input className="input" placeholder={t('registration.abhaIdPlaceholder', '14-digit ABHA number')} value={abhaId}
               onChange={e => setAbhaId(e.target.value)} maxLength={14} />
           </Field>
 
-          <Field label="VISIT NO.">
-            <input className="input" placeholder="e.g. 1" value={visitNo}
+          <Field label={t('registration.visitNo', 'Visit No.')}>
+            <input className="input" placeholder={t('registration.visitNoPlaceholder', 'e.g. 1')} value={visitNo}
               onChange={e => setVisitNo(e.target.value)} />
           </Field>
         </div>
 
         <div className="reg-grid">
-          <Field label="TITLE">
+          <Field label={t('registration.titleField', 'Title')}>
+            {/* Salutations kept as the standard Latin abbreviations across
+                languages, same as printed Indian govt forms -- not translated. */}
             <select className="select reg-select" value={title} onChange={e => setTitle(e.target.value)}>
-              {['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'].map(t => (
-                <option key={t} value={t}>{t}</option>
+              {['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'].map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </Field>
 
-          <Field label="FIRST NAME" required>
-            <input className="input" placeholder="e.g. Sunita" value={firstName}
+          <Field label={t('registration.firstName', 'First Name')} required>
+            <input className="input" placeholder={t('registration.firstNamePlaceholder', 'e.g. Sunita')} value={firstName}
               onChange={e => setFirstName(e.target.value)} required />
           </Field>
 
-          <Field label="MIDDLE NAME">
-            <input className="input" placeholder="Optional" value={middleName}
+          <Field label={t('registration.middleName', 'Middle Name')}>
+            <input className="input" placeholder={t('registration.middleNamePlaceholder', 'Optional')} value={middleName}
               onChange={e => setMiddleName(e.target.value)} />
           </Field>
 
-          <Field label="LAST NAME" required>
-            <input className="input" placeholder="e.g. Devi" value={lastName}
+          <Field label={t('registration.lastName', 'Last Name')} required>
+            <input className="input" placeholder={t('registration.lastNamePlaceholder', 'e.g. Devi')} value={lastName}
               onChange={e => setLastName(e.target.value)} required />
           </Field>
         </div>
 
         <div className="reg-grid">
-          <Field label="GENDER" required>
+          <Field label={t('registration.gender', 'Gender')} required>
             <select className="select reg-select" value={gender} onChange={e => setGender(e.target.value)} required>
-              <option value="">Select</option>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-              <option value="other">Other</option>
+              <option value="">{t('registration.genderOptions.select', 'Select')}</option>
+              <option value="female">{t('registration.genderOptions.female', 'Female')}</option>
+              <option value="male">{t('registration.genderOptions.male', 'Male')}</option>
+              <option value="other">{t('registration.genderOptions.other', 'Other')}</option>
             </select>
           </Field>
 
-          <Field label="DATE OF BIRTH" required>
-            <input className="input" placeholder="DD/MM/YYYY" value={dob}
-              onChange={e => setDob(e.target.value)} />
+          <Field label={t('registration.dob', 'Date of Birth')} required>
+            <input className="input" type="date" max={new Date().toISOString().slice(0, 10)}
+              value={ddmmyyyyToIso(dob)}
+              onChange={e => setDob(isoToDdmmyyyy(e.target.value))} />
           </Field>
 
-          <Field label="AGE" required>
-            <input className="input" type="number" placeholder="e.g. 54" value={age}
+          <Field label={t('registration.ageField', 'Age')} required>
+            <input className="input" type="number" placeholder={t('registration.ageFieldPlaceholder', 'e.g. 54')} value={age}
               onChange={e => setAge(e.target.value)} min="0" max="120" required />
           </Field>
 
-          <Field label="MARITAL STATUS">
+          <Field label={t('registration.maritalStatus', 'Marital Status')}>
             <select className="select reg-select" value={maritalStatus} onChange={e => setMaritalStatus(e.target.value)}>
-              <option value="">Select</option>
-              <option value="single">Single</option>
-              <option value="married">Married</option>
-              <option value="widowed">Widowed</option>
-              <option value="divorced">Divorced</option>
+              <option value="">{t('registration.maritalStatusOptions.select', 'Select')}</option>
+              <option value="single">{t('registration.maritalStatusOptions.single', 'Single')}</option>
+              <option value="married">{t('registration.maritalStatusOptions.married', 'Married')}</option>
+              <option value="widowed">{t('registration.maritalStatusOptions.widowed', 'Widowed')}</option>
+              <option value="divorced">{t('registration.maritalStatusOptions.divorced', 'Divorced')}</option>
             </select>
           </Field>
 
-          <Field label="BLOOD GROUP">
+          {/* Blood group letters (A+, O- ...) are a universal medical notation, not translated. */}
+          <Field label={t('registration.bloodGroup', 'Blood Group')}>
             <select className="select reg-select" value={bloodGroup} onChange={e => setBloodGroup(e.target.value)}>
               {['Unknown','A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg => (
-                <option key={bg} value={bg}>{bg}</option>
+                <option key={bg} value={bg}>{bg === 'Unknown' ? t('common.unknown', 'Unknown') : bg}</option>
               ))}
             </select>
           </Field>
         </div>
 
         {/* ── 2. ADDRESS ───────────────────────────────────── */}
-        <SectionHeader title="ADDRESS" label="02" />
+        <SectionHeader title={t('registration.sectionAddress', 'Address')} label="02" />
 
         <div className="reg-grid">
-          <Field label="ADDRESS" required span={2}>
-            <textarea className="input reg-textarea" placeholder="Full address" value={address}
+          <Field label={t('registration.addressField', 'Address')} required span={2}>
+            <textarea className="input reg-textarea" placeholder={t('registration.addressPlaceholder', 'Full address')} value={address}
               onChange={e => setAddress(e.target.value)} required rows={3} />
           </Field>
 
-          <Field label="STATE" required>
+          <Field label={t('registration.state', 'State')} required>
+            {/* value stays the canonical English state name -- that's what's
+                persisted; only the displayed option text is translated. */}
             <select className="select reg-select" value={state} onChange={e => setState(e.target.value)} required>
-              <option value="">Select</option>
-              {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              <option value="">{t('registration.stateSelect', 'Select')}</option>
+              {INDIAN_STATES.map(s => <option key={s} value={s}>{t(`registration.states.${s}`, s)}</option>)}
             </select>
           </Field>
 
-          <Field label="PINCODE">
-            <input className="input" placeholder="6-digit PIN" value={pincode}
+          <Field label={t('registration.pincode', 'Pincode')}>
+            <input className="input" placeholder={t('registration.pincodePlaceholder', '6-digit PIN')} value={pincode}
               onChange={e => setPincode(e.target.value)} maxLength={6} />
           </Field>
         </div>
 
         <div className="reg-grid">
-          <Field label="DISTRICT" required>
-            <input className="input" placeholder="e.g. Pune" value={district}
+          <Field label={t('registration.district', 'District')} required>
+            <input className="input" placeholder={t('registration.districtPlaceholder', 'e.g. Pune')} value={district}
               onChange={e => setDistrict(e.target.value)} required />
           </Field>
 
-          <Field label="OCCUPATION">
+          <Field label={t('registration.occupation', 'Occupation')}>
             <select className="select reg-select" value={occupation} onChange={e => setOccupation(e.target.value)}>
-              <option value="">Select</option>
-              <option value="farmer">Farmer</option>
-              <option value="labourer">Daily Labourer</option>
-              <option value="homemaker">Homemaker</option>
-              <option value="govt_employee">Govt. Employee</option>
-              <option value="business">Business</option>
-              <option value="student">Student</option>
-              <option value="other">Other</option>
+              <option value="">{t('registration.occupationOptions.select', 'Select')}</option>
+              <option value="farmer">{t('registration.occupationOptions.farmer', 'Farmer')}</option>
+              <option value="labourer">{t('registration.occupationOptions.labourer', 'Daily Labourer')}</option>
+              <option value="homemaker">{t('registration.occupationOptions.homemaker', 'Homemaker')}</option>
+              <option value="govt_employee">{t('registration.occupationOptions.govt_employee', 'Govt. Employee')}</option>
+              <option value="business">{t('registration.occupationOptions.business', 'Business')}</option>
+              <option value="student">{t('registration.occupationOptions.student', 'Student')}</option>
+              <option value="other">{t('registration.occupationOptions.other', 'Other')}</option>
             </select>
           </Field>
 
-          <Field label="CONTACT NUMBER" required>
-            <input className="input" type="tel" placeholder="+91..." value={contactNumber}
+          <Field label={t('registration.contactNumber', 'Contact Number')} required>
+            <input className="input" type="tel" placeholder={t('registration.contactNumberPlaceholder', '+91...')} value={contactNumber}
               onChange={e => setContactNumber(e.target.value)} required
-              title="Required — only channel for delayed/offline result delivery" />
+              title={t('registration.contactNumberTitle', 'Required — only channel for delayed/offline result delivery')} />
           </Field>
 
-          <Field label="ALTERNATE PHONE">
-            <input className="input" type="tel" placeholder="Optional" value={altPhone}
+          <Field label={t('registration.altPhone', 'Alternate Phone')}>
+            <input className="input" type="tel" placeholder={t('registration.altPhonePlaceholder', 'Optional')} value={altPhone}
               onChange={e => setAltPhone(e.target.value)} />
           </Field>
         </div>
 
         {/* ── 3. CLINICAL SYMPTOM & RISK QUESTIONNAIRE ─────── */}
-        <SectionHeader title="CLINICAL SYMPTOM & RISK QUESTIONNAIRE" label="03" />
+        <SectionHeader title={t('questionnaire.sectionTitle', 'Clinical Symptom & Risk Questionnaire')} label="03" />
 
         <div className="reg-questionnaire-card">
 
           {/* Known Diabetic -- an explicit YES / NO, not a toggle that starts on an answer */}
           <div className="reg-q-row">
-            <span className="meta-label">KNOWN DIABETIC? <span className="reg-req">*</span></span>
+            <span className="meta-label">{t('questionnaire.knownDiabetic', 'Known Diabetic?')} <span className="reg-req">*</span></span>
             <div className="reg-chip-group">
-              {[{ v: true, label: 'YES' }, { v: false, label: 'NO' }].map((o) => (
-                <button key={o.label} type="button"
+              {[{ v: true, label: t('common.yes', 'Yes') }, { v: false, label: t('common.no', 'No') }].map((o) => (
+                <button key={String(o.v)} type="button"
                   className={`reg-chip${knownDiabetic === o.v ? ' reg-chip--active' : ''}`}
                   onClick={() => setKnownDiabetic(o.v)}
                 >{o.label}</button>
@@ -434,7 +493,7 @@ export const PatientRegistrationForm = () => {
             </div>
             {knownDiabetic === false && (
               <div className="t-mono" style={{ fontSize: 11, opacity: 0.8, marginTop: 6 }}>
-                The record has no "not diabetic" value for years since diagnosis; it will be stored as "&lt; 1 yr".
+                {t('registration.notDiabeticNote', 'The record has no "not diabetic" value for years since diagnosis; it will be stored as "< 1 yr".')}
               </div>
             )}
           </div>
@@ -442,13 +501,13 @@ export const PatientRegistrationForm = () => {
           {/* Years Since Diagnosis (conditional) */}
           {knownDiabetic && (
             <div className="reg-q-row">
-              <span className="meta-label">YEARS SINCE DIAGNOSIS <span className="reg-req">*</span></span>
+              <span className="meta-label">{t('questionnaire.yearsSince', 'Years Since Diagnosis')} <span className="reg-req">*</span></span>
               <div className="reg-chip-group">
                 {[
-                  { id: 'lt1',   label: '< 1 YR'    },
-                  { id: '1to5',  label: '1–5 YRS'   },
-                  { id: '5to10', label: '5–10 YRS'  },
-                  { id: 'gt10',  label: '> 10 YRS'  },
+                  { id: 'lt1',   label: t('questionnaire.yearsOptions.lt1', '< 1 yr') },
+                  { id: '1to5',  label: t('questionnaire.yearsOptions.oneToFive', '1–5 yrs') },
+                  { id: '5to10', label: t('questionnaire.yearsOptions.fiveToTen', '5–10 yrs') },
+                  { id: 'gt10',  label: t('questionnaire.yearsOptions.gt10', '> 10 yrs') },
                 ].map(opt => (
                   <button key={opt.id} type="button"
                     className={`reg-chip${yearsSinceDx === opt.id ? ' reg-chip--active' : ''}`}
@@ -461,12 +520,12 @@ export const PatientRegistrationForm = () => {
 
           {/* Glycemic Control */}
           <div className="reg-q-row">
-            <span className="meta-label">GLYCEMIC CONTROL (BLOOD SUGAR) <span className="reg-req">*</span></span>
+            <span className="meta-label">{t('questionnaire.glycemicControl', 'Glycemic Control (Blood Sugar)')} <span className="reg-req">*</span></span>
             <div className="reg-chip-group">
               {[
-                { id: 'good',     label: 'GOOD'     },
-                { id: 'moderate', label: 'MODERATE' },
-                { id: 'poor',     label: 'POOR'     },
+                { id: 'good',     label: t('questionnaire.glycemicOptions.good', 'Good') },
+                { id: 'moderate', label: t('questionnaire.glycemicOptions.moderate', 'Moderate') },
+                { id: 'poor',     label: t('questionnaire.glycemicOptions.poor', 'Poor') },
               ].map(opt => (
                 <button key={opt.id} type="button"
                   className={`reg-chip${glycemicControl === opt.id ? ' reg-chip--active' : ''}`}
@@ -478,13 +537,13 @@ export const PatientRegistrationForm = () => {
 
           {/* Blood Pressure */}
           <div className="reg-q-row">
-            <span className="meta-label">BLOOD PRESSURE STATUS <span className="reg-req">*</span></span>
+            <span className="meta-label">{t('questionnaire.bpHistory', 'Blood Pressure Status')} <span className="reg-req">*</span></span>
             <select className="select meta-select"
               value={bloodPressure}
               onChange={e => setBloodPressure(e.target.value)}>
-              <option value="" disabled>SELECT…</option>
-              {BLOOD_PRESSURE_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+              <option value="" disabled>{t('questionnaire.selectPlaceholder', 'Select…')}</option>
+              {BLOOD_PRESSURE_IDS.map(id => (
+                <option key={id} value={id}>{t(`questionnaire.bpOptions.${id}`, BLOOD_PRESSURE_LABELS[id])}</option>
               ))}
             </select>
           </div>
@@ -492,12 +551,12 @@ export const PatientRegistrationForm = () => {
           {/* Pregnancy */}
           {couldBePregnant && (
             <div className="reg-q-row">
-              <span className="meta-label">CURRENTLY PREGNANT? <span className="reg-req">*</span></span>
+              <span className="meta-label">{t('questionnaire.pregnancy', 'Currently Pregnant?')} <span className="reg-req">*</span></span>
               <div className="reg-chip-group">
                 {[
-                  { id: 'yes',            label: 'YES' },
-                  { id: 'no',             label: 'NO'  },
-                  { id: 'not_applicable', label: 'N / A' },
+                  { id: 'yes',            label: t('common.yes', 'Yes') },
+                  { id: 'no',             label: t('common.no', 'No') },
+                  { id: 'not_applicable', label: t('common.notApplicable', 'N / A') },
                 ].map(opt => (
                   <button key={opt.id} type="button"
                     className={`reg-chip${pregnancy === opt.id ? ' reg-chip--active' : ''}`}
@@ -510,15 +569,15 @@ export const PatientRegistrationForm = () => {
 
           {/* Eye Symptoms */}
           <div className="reg-q-row">
-            <span className="meta-label">CURRENT EYE SYMPTOMS (SELECT ALL THAT APPLY) <span className="reg-req">*</span></span>
+            <span className="meta-label">{t('questionnaire.eyeSymptoms', 'Current Eye Symptoms (select all that apply)')} <span className="reg-req">*</span></span>
             <div className="reg-chip-group reg-chip-group--grid">
-              {EYE_SYMPTOMS.map(sym => (
-                <button key={sym.id} type="button"
-                  className={`reg-chip${eyeSymptoms[sym.id] ? ' reg-chip--active' : ''}`}
-                  onClick={() => toggleSymptom(sym.id)}
+              {EYE_SYMPTOM_IDS.map(id => (
+                <button key={id} type="button"
+                  className={`reg-chip${eyeSymptoms[id] ? ' reg-chip--active' : ''}`}
+                  onClick={() => toggleSymptom(id)}
                 >
-                  {eyeSymptoms[sym.id] && <span className="reg-chip__check">✓ </span>}
-                  {sym.label}
+                  {eyeSymptoms[id] && <span className="reg-chip__check">✓ </span>}
+                  {t(`questionnaire.symptoms.${id}`)}
                 </button>
               ))}
               <button type="button"
@@ -526,7 +585,7 @@ export const PatientRegistrationForm = () => {
                 onClick={chooseNoSymptoms}
               >
                 {noSymptoms && <span className="reg-chip__check">✓ </span>}
-                NONE OF THESE
+                {t('questionnaire.symptoms.none', 'None of these')}
               </button>
             </div>
           </div>
@@ -543,10 +602,9 @@ export const PatientRegistrationForm = () => {
               required
             />
             <div className="reg-consent-text">
-              <span className="reg-consent-title">INFORMED VERBAL CONSENT (DPDP ACT SEC 9.7)</span>
+              <span className="reg-consent-title">{t('registration.consent.title', 'Informed Verbal Consent (DPDP Act Sec 9.7)')}</span>
               <span className="reg-consent-body">
-                I confirm that informed verbal consent has been obtained from the patient for retinal image
-                capture, clinical risk assessment, and tele-ophthalmology review.
+                {t('registration.consent.body', 'I confirm that informed verbal consent has been obtained from the patient for retinal image capture, clinical risk assessment, and tele-ophthalmology review.')}
               </span>
             </div>
           </label>
@@ -556,7 +614,7 @@ export const PatientRegistrationForm = () => {
         {!USE_MOCK_DATA && questionnaireMissing.length > 0 && (
           <div className="t-mono" data-testid="questionnaire-missing"
             style={{ fontSize: 12, color: 'var(--c-crimson, #C42B2B)', margin: '8px 0' }}>
-            Still to answer before capture: {questionnaireMissing.join(' · ')}
+            {t('registration.missingPrefix', 'Still to answer before capture: ')}{questionnaireMissing.join(' · ')}
           </div>
         )}
         {/* ── POSSIBLE DUPLICATE ────────────────────────────────────────
@@ -576,16 +634,12 @@ export const PatientRegistrationForm = () => {
           >
             <div className="meta-card__header">
               <h3 className="meta-card__title">
-                POSSIBLE DUPLICATE — {dupes.length} EXISTING PATIENT
-                {dupes.length > 1 ? 'S' : ''}
+                {t('registration.duplicate.heading', 'Possible duplicate — {{count}} existing patient', { count: dupes.length })}
               </h3>
             </div>
             <div className="meta-card__body">
               <p style={{ fontSize: '12px', opacity: 0.75, marginTop: 0 }}>
-                Someone matching these details is already registered. Registering
-                again creates a second record with a separate screening history.
-                Check before continuing — you can still register if this is a
-                different person.
+                {t('registration.duplicate.body', 'Someone matching these details is already registered. Registering again creates a second record with a separate screening history. Check before continuing — you can still register if this is a different person.')}
               </p>
               {dupes.slice(0, 5).map((d) => (
                 <div
@@ -598,23 +652,39 @@ export const PatientRegistrationForm = () => {
                     {d.patientReference || d.patientId}
                   </span>
                   {d.age != null && (
-                    <span style={{ fontSize: '11px', opacity: 0.7 }}>age {d.age}</span>
+                    <span style={{ fontSize: '11px', opacity: 0.7 }}>{t('registration.duplicate.age', 'age {{age}}', { age: d.age })}</span>
                   )}
                   {Array.isArray(d.matchedOn) && d.matchedOn.length > 0 && (
                     <span className="badge badge--neutral" style={{ fontSize: '10px' }}>
-                      matched on {d.matchedOn.join(' + ')}
+                      {/* matchedOn is one of a fixed 3-value backend enum
+                          (routes/patients.js: 'name'/'phone'/'age') -- map
+                          each to a translated word rather than showing the
+                          raw English field identifier. */}
+                      {t('registration.duplicate.matchedOn', 'matched on {{fields}}', {
+                        fields: d.matchedOn.map((f) => t(`registration.duplicate.matchField.${f}`, f)).join(' + '),
+                      })}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--sm"
+                    style={{ marginLeft: 'auto', fontSize: '11px', padding: '4px 10px' }}
+                    disabled={usingExistingId === d.patientId}
+                    onClick={() => handleUseExisting(d)}
+                    data-testid="use-existing-patient"
+                  >
+                    {usingExistingId === d.patientId ? t('registration.duplicate.opening', 'Opening…') : t('registration.duplicate.useThisPatient', 'Use this patient →')}
+                  </button>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {submitError && <LoadError error={submitError} title="PATIENT NOT REGISTERED" compact />}
+        {submitError && <LoadError error={submitError} title={t('registration.submitErrorTitle', 'PATIENT NOT REGISTERED')} compact />}
         <div className="reg-footer">
           <button type="button" className="btn btn--outline" onClick={handleClearAll}>
-            <span>CLEAR ALL</span>
+            <span>{t('registration.btnClearAll', 'CLEAR ALL')}</span>
           </button>
           <button
             type="submit"
@@ -622,9 +692,9 @@ export const PatientRegistrationForm = () => {
             disabled={loading || !consentObtained || !firstName || !contactNumber
               || (!USE_MOCK_DATA && questionnaireMissing.length > 0)}
             title={!USE_MOCK_DATA && questionnaireMissing.length
-              ? 'Still to answer: ' + questionnaireMissing.join(', ') : undefined}
+              ? t('registration.missingPrefix', 'Still to answer before capture: ') + questionnaireMissing.join(', ') : undefined}
           >
-            <span>{loading ? 'REGISTERING...' : 'INITIATE CAPTURE →'}</span>
+            <span>{loading ? t('registration.btnRegistering', 'REGISTERING...') : t('registration.btnInitiate', 'INITIATE CAPTURE →')}</span>
           </button>
         </div>
 

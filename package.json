@@ -11,6 +11,8 @@
     "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
     "db:down": "docker compose -f docker-compose.dev.yml down",
     "db:migrate": "node scripts/setupCentralDb.js",
-    "db:seed": "node scripts/seed-demo.js --write-phc-env"
+    "db:seed": "node scripts/seed-demo.js --write-phc-env",
+    "models:verify": "node scripts/fetch-models.js --verify",
+    "models:fetch": "node scripts/fetch-models.js"
   }
 }

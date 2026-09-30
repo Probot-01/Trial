@@ -18,9 +18,17 @@ import { QualityResult } from '../types';
 import { POLICY } from '../config';
 import { CAMERA_PRESETS } from '../lib/quality/qualityGate';
 import { Btn, Notice } from './ui';
+import { InfoModalButton } from './InfoModalButton';
+
+const QUALITY_INFO_ROWS = [
+  { term: 'QUALITY PASS / BORDERLINE / FAIL', text: 'PASS means the image is good enough to grade as-is. BORDERLINE means no single problem is bad enough to reject it, but overall quality is low — it is still graded, with extra enhancement applied centrally. FAIL means retake: the image is not usable.' },
+  { term: 'QUALITY SCORE', text: 'Mean of focus, illumination and field of view. Below 70% is why an otherwise-passing image gets marked borderline.' },
+  { term: 'GLARE / MOTION / OCCLUSION', text: 'Separate checks from the quality score above — any one of these failing on its own sends the image straight to retake, regardless of the overall score.' },
+  { term: 'RETAKE LIMIT / BEST EFFORT', text: 'After several failed retakes for the same patient today, you can mark the image "best effort" and proceed anyway rather than retaking indefinitely — the case is still sent, flagged so the ophthalmologist knows it was a difficult capture.' },
+];
 
 export const QUALITY_REASON_MESSAGES: Record<string, string> = {
-  blur: 'Image is blurry — please stabilize the camera and retake',
+  blur: 'Image is blurry — hold the camera or lens steady on the patient’s eye and retake',
   low_illumination: 'Image is too dark — adjust lighting and retake',
   insufficient_fov: 'Insufficient field of view — ensure full retinal coverage',
   glare: 'Glare detected in image — reduce direct light source',
@@ -76,7 +84,10 @@ export function QualityResultPanel({
       <View style={[s.hero, { backgroundColor: hero.bg, borderColor: hero.border }]}>
         <View style={[s.heroIcon, { backgroundColor: hero.fg }]}><Text style={s.heroIconText}>{hero.icon}</Text></View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.heroTitle, { color: hero.fg }]}>{hero.title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[s.heroTitle, { color: hero.fg }]}>{hero.title}</Text>
+            <InfoModalButton title="QUALITY CHECK" rows={QUALITY_INFO_ROWS} />
+          </View>
           <Text style={s.heroSub}>{hero.sub}</Text>
         </View>
       </View>

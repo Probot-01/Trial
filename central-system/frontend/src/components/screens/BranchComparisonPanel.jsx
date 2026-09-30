@@ -42,7 +42,16 @@ export const BranchComparisonPanel = ({ caseData }) => {
       {/* Agreement Status */}
       <div className={`branch-agreement-bar ${isMismatch ? 'branch-agreement-bar--mismatch' : ''}`}>
         {c.branchAgreement === null ? (
-          <span className="t-mono" style={{ opacity: 0.3 }}>BRANCH B NOT YET AVAILABLE — SINGLE-BRANCH MODE</span>
+          c.drGradeRuleEngine === null ? (
+            <span className="t-mono" style={{ opacity: 0.3 }}>BRANCH B DID NOT RUN FOR THIS CASE — SINGLE-BRANCH MODE</span>
+          ) : (
+            // The rule engine caps at RULE_MAX_GRADE=3: it DID run and returned a
+            // grade, but that grade is a lower bound ("at least 3"), not a value
+            // that can be checked for agreement against the CNN's grade.
+            <span className="t-mono" style={{ color: 'var(--c-warning)', fontWeight: 700 }}>
+              ⚠ RULE ENGINE HIT ITS CEILING (GRADE {c.drGradeRuleEngine} MEANS "AT LEAST {c.drGradeRuleEngine}") — NOT DIRECTLY COMPARABLE TO THE CNN GRADE
+            </span>
+          )
         ) : c.branchAgreement ? (
           <span className="t-mono" style={{ color: 'var(--c-success)', fontWeight: 700 }}>
             ✓ BRANCHES AGREE — GRADE {c.drGradeCnn} CONFIRMED BY BOTH PIPELINES

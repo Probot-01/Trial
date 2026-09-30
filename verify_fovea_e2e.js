@@ -21,8 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const CENTRAL = path.join('C:', 'Users', '91740', 'Desktop', 'SIH',
-  'dr-screening-system', 'central-system', 'backend');
+const CENTRAL = path.join(__dirname, 'central-system', 'backend');
 const DATASET = path.join(CENTRAL, 'ml-pipeline', 'datasets', 'idrid',
   'localization', 'C. Localization', '1. Original Images', 'a. Training Set');
 

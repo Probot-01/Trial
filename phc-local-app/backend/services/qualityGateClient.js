@@ -89,7 +89,13 @@ function resolveCompiledExe() {
 const COMPILED_EXE = resolveCompiledExe();
 
 // Maximum time (ms) to wait for a single MATLAB call, including startup.
-const TIMEOUT_MS = parseInt(process.env.MATLAB_TIMEOUT_MS || '30000', 10);
+// 30s was measured against an otherwise-idle machine; a cold `matlab -batch`
+// start competing with central's persistent classification MATLAB session
+// (loaded weights resident) on the same laptop measured 30.9s here, i.e.
+// already over the old default -- confirmed with `time matlab -batch
+// "disp('warm')"` while that session was up. 60s gives real headroom for
+// that same-machine case without masking a genuinely hung process for long.
+const TIMEOUT_MS = parseInt(process.env.MATLAB_TIMEOUT_MS || '60000', 10);
 
 /**
  * spawnMatlabBatch(matlabExpr)
@@ -154,13 +160,26 @@ function spawnCollecting(cmd, args, label) {
     proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
 
-    proc.on('close', (code) => {
+    proc.on('close', (code, signal) => {
       if (code !== 0) {
         // qualityGateCli.m documents its exit codes: 2 = wrong arity, 3 = the
         // gate itself failed. Surfacing the number is what separates a
         // packaging mistake from an unreadable image in a PHC's logs.
+        //
+        // code === null with a signal means Node's own `timeout` option (or
+        // an external kill) ended the process before it exited on its own --
+        // a cold `matlab -batch` start competing with another resident MATLAB
+        // process (e.g. central's persistent classification session) on the
+        // same machine can genuinely take >30s, and that used to print as an
+        // unexplained "exited with code null" with no stderr, which reads
+        // like a crash rather than what it is: a timeout.
+        const reason = code === null && signal
+          ? `was killed by ${signal} (likely the ${TIMEOUT_MS}ms timeout -- ` +
+            'a cold MATLAB start is competing with another resident MATLAB ' +
+            'process on this machine; consider MATLAB_TIMEOUT_MS if this recurs)'
+          : `exited with code ${code}`;
         return reject(new Error(
-          `${label} exited with code ${code}.\nstderr: ${stderr.trim()}`
+          `${label} ${reason}.\nstderr: ${stderr.trim()}`
         ));
       }
       // MATLAB writes licence/startup banners to stderr, not stdout, and the
@@ -297,10 +316,25 @@ function parseGateOutput(raw) {
     (Array.isArray(reasonRaw) && reasonRaw.length === 0)
   ) ? null : reasonRaw;
 
+  // The borderline/pass threshold in qualityGateMain.m's own decision chain
+  // (Step 4, last branch): `compositeScore = mean([focus, illumination, fov])`,
+  // then `compositeScore < 0.7` -> borderline. Recomputed here from the three
+  // sub-scores it already returns -- the exact formula that decided this
+  // capture's own verdict, not a number invented for display. The mobile
+  // app's qualityGate.ts port of the same MATLAB source computes it
+  // identically (verified at parity, largest observed diff 2.55e-3).
+  const s = parsed.scores || {};
+  const compositeScore = (
+    typeof s.focusScore === 'number'
+    && typeof s.illuminationScore === 'number'
+    && typeof s.fovScore === 'number'
+  ) ? (s.focusScore + s.illuminationScore + s.fovScore) / 3 : null;
+
   return {
     status: parsed.status,
     reason,
     scores: parsed.scores,
+    compositeScore,
   };
 }
 

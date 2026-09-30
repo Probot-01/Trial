@@ -20,6 +20,32 @@ import React from 'react';
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const QUADS = ['SUP-TEMP', 'INF-TEMP', 'SUP-NASAL', 'INF-NASAL'];
 
+// generateEvidenceReport.m (backend) appends Branch B's under-grading/
+// calibration caveat as its own final sentence when one applies
+// (evidence.limitation), after the clinical finding and criterion sentences.
+// It is not carried as a separate field over the API (evidenceSummaryText is
+// one string), so this is a display-only split, not a re-derivation of the
+// grade: a methodology footnote about a threshold being provisional or
+// unmeasured is a fact about the SYSTEM, not about the patient's eye, and
+// reads as equally-weighted clinical evidence when it is not visually
+// distinguished from the finding above it.
+const CAVEAT_MARKERS = [
+  'PROVISIONAL', 'never been measured', 'should be refitted', 'was fitted on',
+  'This grade may be an under-call', 'not the literature',
+];
+function splitCaveat(text) {
+  if (!text) return { finding: text, caveat: null };
+  const sentences = text.match(/[^.]+\.(\s+|$)/g) || [text];
+  const last = sentences[sentences.length - 1] || '';
+  if (sentences.length > 1 && CAVEAT_MARKERS.some((m) => last.includes(m))) {
+    return {
+      finding: sentences.slice(0, -1).join('').trim(),
+      caveat: last.trim(),
+    };
+  }
+  return { finding: text, caveat: null };
+}
+
 const Quadrants = ({ counts }) => (
   Array.isArray(counts) && counts.length === 4 ? (
     <div className="t-mono" style={{ fontSize: 'var(--fs-tiny)', opacity: 0.6, marginTop: 4 }}>
@@ -98,15 +124,26 @@ export const LesionEvidencePanel = ({ caseData }) => {
         </div>
       </div>
 
-      {/* Evidence Summary */}
-      {c.evidenceSummaryText && (
-        <div className="u-mt-4" style={{ borderTop: 'var(--border)', paddingTop: 'var(--sp-4)' }}>
-          <span className="t-label" style={{ opacity: 0.5 }}>AI EVIDENCE SUMMARY</span>
-          <p className="t-body" style={{ marginTop: 'var(--sp-2)', fontSize: 'var(--fs-small)', lineHeight: 1.6 }}>
-            {c.evidenceSummaryText}
-          </p>
-        </div>
-      )}
+      {/* Evidence Summary. The clinical finding is the primary text; a
+          trailing methodology caveat (a threshold being provisional or
+          unmeasured -- a fact about this system, not this eye) is set apart
+          as a footnote rather than read as more clinical evidence. */}
+      {c.evidenceSummaryText && (() => {
+        const { finding, caveat } = splitCaveat(c.evidenceSummaryText);
+        return (
+          <div className="u-mt-4" style={{ borderTop: 'var(--border)', paddingTop: 'var(--sp-4)' }}>
+            <span className="t-label" style={{ opacity: 0.5 }}>AI EVIDENCE SUMMARY</span>
+            <p className="t-body" style={{ marginTop: 'var(--sp-2)', fontSize: 'var(--fs-small)', lineHeight: 1.6 }}>
+              {finding}
+            </p>
+            {caveat && (
+              <p className="t-mono" style={{ marginTop: 'var(--sp-2)', fontSize: 'var(--fs-tiny)', opacity: 0.55 }}>
+                ⓘ Methodology note: {caveat}
+              </p>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

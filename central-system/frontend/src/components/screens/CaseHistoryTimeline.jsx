@@ -90,20 +90,32 @@ const FundusSvg = ({ severity = 1 }) => {
   );
 };
 
+// The system's real referral statuses (ReferralTrackerPage.jsx / api-contracts.md):
+// referred -> contacted -> attended | lost, with manual_follow_up a parallel
+// state (SMS delivery failed) rather than a forward step. This used to list
+// 'SCHEDULED'/'SEEN', which do not exist -- a genuinely attended case matched
+// none of the four hardcoded steps and rendered as if referral had not started.
+const REFERRAL_STEPS = ['referred', 'contacted', 'attended'];
 const ReferralTracker = ({ status }) => {
   const { t } = useTranslation();
   if (!status) return null;
-  const steps = [
-    t('central.timeline.steps.referred', 'REFERRED'), 
-    t('central.timeline.steps.contacted', 'CONTACTED'), 
-    t('central.timeline.steps.scheduled', 'SCHEDULED'), 
-    t('central.timeline.steps.seen', 'SEEN')
-  ];
-  const currentIndex = steps.findIndex(s => s.toLowerCase() === status.toLowerCase());
 
+  if (status === 'lost' || status === 'manual_follow_up') {
+    return (
+      <div className="u-flex u-items-center u-gap-2 u-mt-2">
+        <span className={`badge ${status === 'lost' ? 'badge--fail' : 'badge--warning'}`} style={{ fontSize: '10px' }}>
+          {status === 'lost'
+            ? t('central.timeline.steps.lost', 'LOST TO FOLLOW-UP')
+            : t('central.timeline.steps.manualFollowUp', 'MANUAL FOLLOW-UP — SMS NOT DELIVERED')}
+        </span>
+      </div>
+    );
+  }
+
+  const currentIndex = REFERRAL_STEPS.indexOf(status);
   return (
     <div className="u-flex u-items-center u-gap-2 u-mt-2">
-      {steps.map((step, idx) => (
+      {REFERRAL_STEPS.map((step, idx) => (
         <div key={step} className="u-flex u-items-center u-gap-2">
           <div style={{
             width: '12px', height: '12px', borderRadius: '50%',
@@ -114,10 +126,10 @@ const ReferralTracker = ({ status }) => {
           <span className="t-mono" style={{ fontSize: '10px', opacity: idx <= currentIndex ? 1 : 0.5 }}>
             {step.toUpperCase()}
           </span>
-          {idx < steps.length - 1 && (
-            <div style={{ 
-              width: '20px', height: '2px', 
-              backgroundColor: 'var(--c-crimson)', 
+          {idx < REFERRAL_STEPS.length - 1 && (
+            <div style={{
+              width: '20px', height: '2px',
+              backgroundColor: 'var(--c-crimson)',
               opacity: idx < currentIndex ? 0.6 : 0.2,
               transition: 'opacity 0.3s ease',
             }} />
@@ -141,35 +153,34 @@ export const CaseHistoryTimeline = ({ priorAssessments }) => {
   }
 
   const renderLesions = (current, previous) => {
+    // Only the four flat clinical counts are diffable numbers; a detector
+    // that has not run reports null for its key (not zero -- "not measured"
+    // and "none found" are different claims), so those render their own
+    // not-measured text rather than a false "0" or a NaN diff.
     if (!current) return <p className="t-mono" style={{ opacity: 0.5 }}>NO LESION DATA</p>;
+    const entries = Object.entries(current).filter(([, val]) => val !== undefined);
+    if (entries.length === 0) return <p className="t-mono" style={{ opacity: 0.5 }}>NO LESION DATA</p>;
     return (
       <div className="grid--2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-2)' }}>
-        {Object.entries(current).map(([key, val]) => {
-          const prevVal = previous ? previous[key] : 0;
-          const diff = val - prevVal;
+        {entries.map(([key, val]) => {
           const label = key.replace(/([A-Z])/g, ' $1').toUpperCase();
+          const prevVal = previous ? previous[key] : null;
+          const haveBoth = typeof val === 'number' && typeof prevVal === 'number';
+          const diff = haveBoth ? val - prevVal : null;
 
           let diffColor = 'inherit';
           let diffText = '';
-
-          if (diffView && previous) {
-            if (diff > 0) {
-              diffColor = 'var(--c-danger, #C42B2B)';
-              diffText = ` (+${diff})`;
-            } else if (diff < 0) {
-              diffColor = 'var(--c-success)';
-              diffText = ` (${diff})`;
-            } else {
-              diffColor = 'inherit';
-              diffText = ' (0)';
-            }
+          if (diffView && previous && diff !== null) {
+            if (diff > 0) { diffColor = 'var(--c-danger, #C42B2B)'; diffText = ` (+${diff})`; }
+            else if (diff < 0) { diffColor = 'var(--c-success)'; diffText = ` (${diff})`; }
+            else { diffText = ' (0)'; }
           }
 
           return (
             <div key={key} className="u-flex u-justify-between u-items-center" style={{ padding: 'var(--sp-2)', border: '1px solid var(--c-border)' }}>
               <span className="t-mono" style={{ fontSize: '12px', opacity: 0.8 }}>{label}</span>
               <span className="t-mono" style={{ fontWeight: 700, color: diffView && previous ? diffColor : 'inherit' }}>
-                {val} {diffText}
+                {typeof val === 'number' ? val : <span style={{ opacity: 0.4 }}>NOT MEASURED</span>} {diffText}
               </span>
             </div>
           );
@@ -183,7 +194,7 @@ export const CaseHistoryTimeline = ({ priorAssessments }) => {
       <InfoBanner title={t('central.timeline.banner.title', 'PATIENT HISTORY & COMPARISON')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div><strong style={{ color: 'var(--c-crimson)' }}>DIFF VIEW:</strong> Automatically highlights changes in lesion evidence between adjacent visits. (+ / -) indicates progression or regression.</div>
-          <div><strong style={{ color: 'var(--c-crimson)' }}>REFERRAL STATUS:</strong> Tracks the patient's progress through the referral loop across different nodes (Referred → Contacted → Scheduled → Seen).</div>
+          <div><strong style={{ color: 'var(--c-crimson)' }}>REFERRAL STATUS:</strong> Tracks the patient's progress (Referred → Contacted → Attended), or shows Lost to Follow-up / Manual Follow-up (SMS not delivered) when the normal path did not complete.</div>
           <div><strong style={{ color: 'var(--c-crimson)' }}>LESION EVIDENCE:</strong> Provides a longitudinal breakdown of specific physiological features like microaneurysms and exudates detected by the AI.</div>
         </div>
       </InfoBanner>

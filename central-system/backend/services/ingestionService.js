@@ -552,9 +552,18 @@ async function getCaseDetail(caseId) {
   // Earlier screenings for the same patient — the longitudinal view on the
   // ophthalmologist's Case History panel (design doc §5.2).
   const prior = await pool.query(`
-    SELECT c.case_id, g.graded_at, g.dr_grade_cnn
+    SELECT c.case_id, g.graded_at, g.dr_grade_cnn, s.lesion_counts,
+      rev.decision AS review_decision, ref.status AS referral_status
     FROM cases c
     JOIN grading_results g ON g.case_id = c.case_id
+    LEFT JOIN segmentation_outputs s ON s.case_id = c.case_id
+    -- One case can have more than one review (a correction re-reviews it);
+    -- the latest decision is what the timeline badge should reflect.
+    LEFT JOIN LATERAL (
+      SELECT decision FROM ophthalmologist_reviews
+      WHERE case_id = c.case_id ORDER BY reviewed_at DESC LIMIT 1
+    ) rev ON true
+    LEFT JOIN referrals ref ON ref.case_id = c.case_id
     WHERE c.patient_id = $1 AND c.case_id <> $2 AND g.graded_at IS NOT NULL
     ORDER BY g.graded_at DESC
     LIMIT 10
@@ -698,10 +707,27 @@ async function getCaseDetail(caseId) {
       }
       : null,
 
+    // 2026-09-30: lesions/status/referralStatus added (api-contracts.md
+    // changelog) -- the Case History timeline's diff-view and referral
+    // tracker were built against these fields but the endpoint never sent
+    // them, so every prior visit rendered "NO LESION DATA" and no referral
+    // progress regardless of what actually happened.
     priorAssessments: prior.rows.map((x) => ({
-      caseId:     x.case_id,
-      gradedAt:   x.graded_at.toISOString(),
-      drGradeCnn: x.dr_grade_cnn ?? null,
+      caseId:         x.case_id,
+      gradedAt:       x.graded_at.toISOString(),
+      drGradeCnn:     x.dr_grade_cnn ?? null,
+      // The timeline's diff view compares four flat numbers; toContractShape's
+      // `detail` sub-object (per-quadrant arrays, procedure metadata) is for
+      // Case Detail's own evidence panel, not a value this view can diff.
+      lesions:        (() => {
+        const lc = lesionCounts.toContractShape(x.lesion_counts);
+        if (!lc) return null;
+        const { microaneurysms, hemorrhages, hardExudates, softExudates } = lc;
+        return { microaneurysms, hemorrhages, hardExudates, softExudates };
+      })(),
+      status:         x.review_decision === 'override' ? 'OVERRIDDEN'
+                        : x.review_decision === 'confirm' ? 'CONFIRMED' : null,
+      referralStatus: x.referral_status ?? null,
     })),
   };
 }

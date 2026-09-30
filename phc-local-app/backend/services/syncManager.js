@@ -191,6 +191,11 @@ function buildCaseFields({ capture, patient, questionnaire, metadata }) {
       workerUsabilityRating: metadata.worker_usability_rating,
       // §10.4. null for captures recorded before the field was stored.
       eyeLaterality:         metadata.eye_laterality ?? null,
+      // §10.2: a technician-forced proceed on an image that failed the local
+      // gate. Additive -- captureMetadata is stored verbatim centrally, so no
+      // central migration is needed to carry this; central deciding to hold
+      // such a case at Tier C regardless of the classifier is a follow-up.
+      ...(capture.best_effort ? { bestEffort: true } : {}),
     });
   }
 

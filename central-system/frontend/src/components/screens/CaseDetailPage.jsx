@@ -15,13 +15,17 @@ import { CaseHistoryTimeline } from './CaseHistoryTimeline';
 import { InfoBanner } from '../shared/InfoBanner';
 import { LoadError } from '../shared/LoadError';
 
-const MetricBar = ({ label, value, maxVal = 1, color = 'var(--c-crimson)' }) => {
+const MetricBar = ({ label, value, maxVal = 1, color = 'var(--c-crimson)', nullReason }) => {
   const pct = Math.round((value / maxVal) * 100);
   return (
     <div className="u-mb-4">
       <div className="u-flex u-justify-between u-items-center" style={{ marginBottom: 'var(--sp-1)' }}>
         <span className="t-label">{label}</span>
-        <span className="t-mono" style={{ fontWeight: 700, fontSize: 'var(--fs-small)' }}>
+        <span
+          className="t-mono"
+          style={{ fontWeight: 700, fontSize: 'var(--fs-small)' }}
+          title={typeof value !== 'number' ? nullReason : undefined}
+        >
           {typeof value === 'number' ? `${pct}%` : 'NOT COMPUTED'}
         </span>
       </div>
@@ -95,6 +99,7 @@ export const CaseDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [showGradCam, setShowGradCam] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showTechnical, setShowTechnical] = useState(false);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewOutcome, setReviewOutcome] = useState(null);
   const [claimedBy, setClaimedBy] = useState(null);   // name of ANOTHER reviewer holding it
@@ -106,6 +111,19 @@ export const CaseDetailPage = () => {
   const [sideErrors, setSideErrors] = useState([]);
   const [reloadKey, setReloadKey] = useState(0);
   const startTimeRef = useRef(Date.now());
+
+  // A non-primary engine answering for any output is a real caveat on the
+  // result above, not an implementation detail -- force the technical panel
+  // open so it is never hidden behind an extra click.
+  useEffect(() => {
+    if (!caseData) return;
+    const p = caseData.engineProvenance || {};
+    const seg = p.segmentation || {};
+    const anyFallback = [p.classifier, p.ruleEngine, p.qualityGate,
+      seg.vessel, seg.localization, seg.hardExudate, seg.redLesion]
+      .some((e) => e && e.fallback === true);
+    if (anyFallback) setShowTechnical(true);
+  }, [caseData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,6 +279,23 @@ export const CaseDetailPage = () => {
               {t('central.caseDetail.mismatchWarning', '⚠ BRANCH MISMATCH — REVIEW REQUIRED')}
             </span>
           )}
+
+          {/* Design doc §10.2: the PHC technician sent this image after it failed
+              the local quality gate, rather than retaking forever or dropping
+              the patient. Carried inside captureMetadata (additive, no contract
+              change) since it comes from the PHC front-ends, not the grading
+              pipeline. The grade above still reflects whatever the classifier
+              said about a genuinely substandard image -- this badge is the
+              reviewer's warning that it may not be trustworthy. */}
+          {c.captureMetadata?.bestEffort === true && (
+            <span
+              className="badge badge--fail"
+              title="The PHC's local quality gate rejected this image; the technician sent it anyway as best effort, after repeated failed retakes, rather than leave the patient unscreened."
+              data-testid="best-effort-badge"
+            >
+              ⚠ BEST EFFORT — FAILED LOCAL QUALITY GATE
+            </span>
+          )}
         </div>
       </div>
 
@@ -273,7 +308,7 @@ export const CaseDetailPage = () => {
       <InfoBanner title={t('central.caseDetail.banner.title', 'CLINICAL REVIEW GUIDANCE')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div><strong style={{ color: 'var(--c-crimson)' }}>CONFIDENCE:</strong> The confidence score shows the model's certainty. Lower scores should be scrutinized closely.</div>
-          <div><strong style={{ color: 'var(--c-crimson)' }}>UNCERTAINTY:</strong> Measures the model's epistemic uncertainty regarding the grade.</div>
+          <div><strong style={{ color: 'var(--c-crimson)' }}>UNCERTAINTY:</strong> How torn the model was between grades — separate from confidence, and a lower number is better here.</div>
           <div><strong style={{ color: 'var(--c-crimson)' }}>CONSISTENCY:</strong> Lesion-attention consistency ensures the model is looking at valid physiological features (like microaneurysms) rather than artifacts.</div>
           <div><strong style={{ color: 'var(--c-crimson)' }}>BRANCH MISMATCH:</strong> If the CNN and Rule Engine disagree, you must resolve this manually by providing a clinical reason.</div>
           <div><strong style={{ color: 'var(--c-crimson)' }}>GRAD-CAM:</strong> Use the Grad-CAM toggle to verify where the model is placing its attention on the fundus image.</div>
@@ -318,6 +353,33 @@ export const CaseDetailPage = () => {
               label={t('central.caseDetail.metrics.uncertainty', 'UNCERTAINTY')}
               value={c.uncertaintyScore}
               color="var(--c-warning)"
+              /* The scope caveat travels with the number, the way the urgency
+                 limitation does. MC-dropout here samples ONE dropout layer on
+                 the classifier head, over features the trunk fixed -- so it
+                 measures the head's uncertainty and cannot see representation
+                 uncertainty. A confidently wrong out-of-distribution image
+                 scores LOW, which is the opposite of what a reader assumes a
+                 high-uncertainty flag protects them from. */
+              title={typeof c.uncertaintyScore === 'number'
+                ? 'Normalised predictive entropy over 20 Monte-Carlo dropout passes '
+                  + '(0 = certain, 1 = uniform across all five grades). It samples the '
+                  + 'classifier HEAD over fixed image features, so it measures whether '
+                  + 'the classifier is torn between grades — it cannot see that an '
+                  + 'image is unlike anything the model was trained on. A confidently '
+                  + 'wrong out-of-distribution image scores LOW here.'
+                : undefined}
+              // Kept from Tanuj's fallback (2582cbf), with the reason corrected.
+              // His version said uncertainty "is not computed on the MATLAB
+              // classifier backend -- only under Python", which was true when he
+              // wrote it and is not any more: mcDropoutMatlab.m now computes it
+              // there too. A null on a MATLAB-graded case therefore means the
+              // case predates that wiring, or the measurement itself failed --
+              // never that the engine cannot do it.
+              nullReason={c.uncertaintyScore == null
+                ? 'Not computed for this case. Not a score of zero — zero would mean '
+                  + 'the model was maximally certain. Cases graded before MC-dropout was '
+                  + 'wired on this engine have no value stored; re-grading computes one.'
+                : undefined}
             />
             {/* NOT a MetricBar. The consistency score is an overlap fraction
                 and is meaningless without its chance level -- a bar coloured
@@ -427,11 +489,24 @@ export const CaseDetailPage = () => {
           </div>
 
           {/* WHICH ENGINE produced each output, the classifier build behind the
-              grade, and what the image file says about itself. The quality-gate
-              engine used to sit as a lone tile in the context grid above; it is
-              one of seven engine entries the backend records, so it now lives
-              with the other six instead of standing in for them. */}
-          <ProvenancePanel caseData={c} />
+              grade, and what the image file says about itself -- genuinely
+              useful for engineering troubleshooting and a demo Q&A, but it is
+              raw system internals (engine enum values, env-var flag names,
+              DICOM tags) that an ophthalmologist does not need in front of
+              them to make a clinical call. Collapsed by default; forced open
+              automatically when a non-primary engine actually answered for
+              this case, since that is a real caveat on the result above, not
+              an implementation detail. */}
+          <div style={{ marginTop: 'var(--sp-4)' }}>
+            <button
+              className="btn btn--outline u-w-full"
+              onClick={() => setShowTechnical(!showTechnical)}
+              style={{ justifyContent: 'center' }}
+            >
+              <span>{showTechnical ? '▼ HIDE TECHNICAL / ENGINE DETAILS' : '▶ SHOW TECHNICAL / ENGINE DETAILS'}</span>
+            </button>
+            {showTechnical && <ProvenancePanel caseData={c} />}
+          </div>
         </div>
       </div>
 

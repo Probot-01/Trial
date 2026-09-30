@@ -10,6 +10,38 @@
       "online": "ऑनलाइन",
       "offline": "ऑफलाइन",
       "pending": "प्रलंबित"
+    },
+    "logout": "लॉग आउट"
+  },
+  "login": {
+    "title": "नेत्रसेतू",
+    "subtitle": "डायबेटिक रेटिनोपॅथीसाठी स्पष्टीकरणीय AI",
+    "selectRole": "पुढे जाण्यासाठी ऑपरेटर प्रोफाइल निवडा",
+    "roles": {
+      "technician": {
+        "title": "PHC तंत्रज्ञ",
+        "subtitle": "रुग्ण नोंदणी व फंडस कॅप्चर",
+        "desc": "रुग्णांची नोंदणी करा, रेटिनल फंडस प्रतिमा कॅप्चर करा, तात्काळ स्थानिक AI गुणवत्ता तपासणी चालवा, आणि क्लिनिक रांग व्यवस्थापित करा.",
+        "stats": "PHC खराडी · स्थानिक AI तयार"
+      },
+      "field_worker": {
+        "title": "सामुदायिक आरोग्य कार्यकर्ता",
+        "subtitle": "कॅम्प स्क्रीनिंग व जलद व्हायटल्स",
+        "desc": "आउटरीच स्क्रीनिंग नोंदणी, जोखीम घटक प्रश्नावली, आणि सामुदायिक कॅम्प ट्रायेज इनटेक.",
+        "stats": "ग्रामीण आउटरीच · जलद रांग"
+      }
+    },
+    "auth": {
+      "authenticatingAs": "याप्रमाणे प्रमाणीकरण: {{role}}",
+      "back": "← मागे",
+      "username": "वापरकर्तानाव",
+      "password": "पासवर्ड",
+      "initiate": "सत्र सुरू करा ✦",
+      "authenticating": "प्रमाणीकरण करत आहे...",
+      "demo": "डेमो क्रेडेन्शियल्स:",
+      "errorEmpty": "कृपया वापरकर्तानाव आणि पासवर्ड दोन्ही टाका.",
+      "errorInvalid": "अवैध क्रेडेन्शियल्स. डेमो वापरा: krrish / tech123",
+      "errorInvalidField": "अवैध क्रेडेन्शियल्स. डेमो वापरा: asha_worker / camp123"
     }
   },
   "registration": {
@@ -21,8 +53,144 @@
     "contact": "संपर्क क्रमांक (आवश्यक)",
     "contactPlaceholder": "+91...",
     "btnRegistering": "नोंदणी करत आहे...",
-    "btnInitiate": "कॅप्चर सुरू करा ✦",
-    "secureModule": "सुरक्षित ऑफलाइन मॉड्यूल V1.2.0"
+    "btnInitiate": "कॅप्चर सुरू करा →",
+    "btnClearAll": "सर्व साफ करा",
+    "secureModule": "सुरक्षित ऑफलाइन मॉड्यूल V1.2.0",
+    "sectionPatientInfo": "रुग्णाची माहिती",
+    "sectionAddress": "पत्ता",
+    "patientType": "रुग्ण प्रकार",
+    "patientTypeOptions": {
+      "new": "नवीन रुग्ण",
+      "revisit": "पुनर्भेट",
+      "referral": "रेफरल"
+    },
+    "patientId": "रुग्ण आयडी",
+    "patientIdPlaceholder": "स्वयं-निर्मित",
+    "abhaId": "ABHA आयडी (ऐच्छिक)",
+    "abhaIdPlaceholder": "14-अंकी ABHA क्रमांक",
+    "visitNo": "भेट क्रमांक",
+    "visitNoPlaceholder": "उदा. 1",
+    "titleField": "उपाधी",
+    "firstName": "पहिले नाव",
+    "firstNamePlaceholder": "उदा. सुनीता",
+    "middleName": "मधले नाव",
+    "middleNamePlaceholder": "ऐच्छिक",
+    "lastName": "आडनाव",
+    "lastNamePlaceholder": "उदा. देवी",
+    "gender": "लिंग",
+    "genderOptions": {
+      "select": "निवडा",
+      "female": "स्त्री",
+      "male": "पुरुष",
+      "other": "इतर"
+    },
+    "dob": "जन्मतारीख",
+    "dobPlaceholder": "DD/MM/YYYY",
+    "ageField": "वय",
+    "ageFieldPlaceholder": "उदा. 54",
+    "maritalStatus": "वैवाहिक स्थिती",
+    "maritalStatusOptions": {
+      "select": "निवडा",
+      "single": "अविवाहित",
+      "married": "विवाहित",
+      "widowed": "विधवा/विधुर",
+      "divorced": "घटस्फोटित"
+    },
+    "bloodGroup": "रक्तगट",
+    "addressField": "पत्ता",
+    "addressPlaceholder": "पूर्ण पत्ता",
+    "state": "राज्य",
+    "stateSelect": "निवडा",
+    "pincode": "पिनकोड",
+    "pincodePlaceholder": "6-अंकी पिन",
+    "district": "जिल्हा",
+    "districtPlaceholder": "उदा. पुणे",
+    "occupation": "व्यवसाय",
+    "occupationOptions": {
+      "select": "निवडा",
+      "farmer": "शेतकरी",
+      "labourer": "रोजंदारी मजूर",
+      "homemaker": "गृहिणी",
+      "govt_employee": "सरकारी कर्मचारी",
+      "business": "व्यवसाय",
+      "student": "विद्यार्थी",
+      "other": "इतर"
+    },
+    "contactNumber": "संपर्क क्रमांक",
+    "contactNumberPlaceholder": "+91...",
+    "contactNumberTitle": "आवश्यक — विलंबित/ऑफलाइन निकाल पाठवण्याचे एकमेव माध्यम",
+    "altPhone": "पर्यायी फोन",
+    "altPhonePlaceholder": "ऐच्छिक",
+    "notDiabeticNote": "नोंदीमध्ये \"मधुमेह नाही\" साठी निदानानंतरच्या वर्षांचे कोणतेही मूल्य नाही; ते \"< 1 वर्ष\" म्हणून साठवले जाईल.",
+    "consent": {
+      "title": "माहितीपूर्ण तोंडी संमती (DPDP कायदा कलम 9.7)",
+      "body": "मी पुष्टी करतो/करते की रेटिनल प्रतिमा कॅप्चर, क्लिनिकल जोखीम मूल्यांकन, आणि टेली-नेत्ररोग पुनरावलोकनासाठी रुग्णाकडून माहितीपूर्ण तोंडी संमती घेण्यात आली आहे.",
+      "alertRequired": "स्क्रीनिंग सुरू करण्यापूर्वी माहितीपूर्ण तोंडी संमती आवश्यक आहे."
+    },
+    "missingPrefix": "कॅप्चरपूर्वी उत्तर देणे बाकी: ",
+    "answerAllPrefix": "कॅप्चरपूर्वी प्रत्येक प्रश्नाचे उत्तर द्या: ",
+    "missing": {
+      "knownDiabetic": "मधुमेह आहे का?",
+      "yearsSinceDiagnosis": "निदानानंतरची वर्षे",
+      "glycemicControl": "ग्लायसेमिक नियंत्रण",
+      "bloodPressure": "रक्तदाब",
+      "pregnancy": "गर्भधारणा",
+      "eyeSymptoms": "डोळ्यांची लक्षणे (किंवा \"यापैकी काहीही नाही\")"
+    },
+    "submitErrorTitle": "रुग्णाची नोंदणी झाली नाही",
+    "duplicate": {
+      "heading": "संभाव्य डुप्लिकेट — {{count}} विद्यमान रुग्ण",
+      "heading_plural": "संभाव्य डुप्लिकेट — {{count}} विद्यमान रुग्ण",
+      "body": "या तपशीलांशी जुळणारी व्यक्ती आधीच नोंदणीकृत आहे. पुन्हा नोंदणी केल्यास वेगळ्या स्क्रीनिंग इतिहासासह दुसरी नोंद तयार होते. पुढे जाण्यापूर्वी तपासा — जर ही वेगळी व्यक्ती असेल तर तुम्ही तरीही नोंदणी करू शकता.",
+      "age": "वय {{age}}",
+      "matchedOn": "{{fields}} वर जुळले",
+      "matchField": {
+        "name": "नाव",
+        "phone": "फोन",
+        "age": "वय"
+      },
+      "useThisPatient": "हा रुग्ण वापरा →",
+      "opening": "उघडत आहे…"
+    },
+    "states": {
+      "Andhra Pradesh": "आंध्र प्रदेश",
+      "Arunachal Pradesh": "अरुणाचल प्रदेश",
+      "Assam": "आसाम",
+      "Bihar": "बिहार",
+      "Chhattisgarh": "छत्तीसगड",
+      "Goa": "गोवा",
+      "Gujarat": "गुजरात",
+      "Haryana": "हरियाणा",
+      "Himachal Pradesh": "हिमाचल प्रदेश",
+      "Jharkhand": "झारखंड",
+      "Karnataka": "कर्नाटक",
+      "Kerala": "केरळ",
+      "Madhya Pradesh": "मध्य प्रदेश",
+      "Maharashtra": "महाराष्ट्र",
+      "Manipur": "मणिपूर",
+      "Meghalaya": "मेघालय",
+      "Mizoram": "मिझोराम",
+      "Nagaland": "नागालँड",
+      "Odisha": "ओडिशा",
+      "Punjab": "पंजाब",
+      "Rajasthan": "राजस्थान",
+      "Sikkim": "सिक्कीम",
+      "Tamil Nadu": "तामिळनाडू",
+      "Telangana": "तेलंगणा",
+      "Tripura": "त्रिपुरा",
+      "Uttar Pradesh": "उत्तर प्रदेश",
+      "Uttarakhand": "उत्तराखंड",
+      "West Bengal": "पश्चिम बंगाल",
+      "Andaman & Nicobar Islands": "अंदमान आणि निकोबार बेटे",
+      "Chandigarh": "चंदीगड",
+      "Dadra & Nagar Haveli": "दादरा आणि नगर हवेली",
+      "Daman & Diu": "दमण आणि दीव",
+      "Delhi": "दिल्ली",
+      "Jammu & Kashmir": "जम्मू आणि काश्मीर",
+      "Ladakh": "लडाख",
+      "Lakshadweep": "लक्षद्वीप",
+      "Puducherry": "पुद्दुचेरी"
+    }
   },
   "capture": {
     "title": "इमेज कॅप्चर",
@@ -32,7 +200,7 @@
       "quality": "2. गुणवत्ता तपासणी",
       "metadata": "3. मेटाडेटा आणि सिंक"
     },
-    "preview": "लाइव्ह फीड / प्रिव्ह्यू",
+    "liveFeed": "लाइव्ह फीड",
     "statusCaptured": "कॅप्चर केले",
     "statusReady": "तयार",
     "clickToInitiate": "कॅप्चर अनुक्रम सुरू करण्यासाठी क्लिक करा",
@@ -64,17 +232,46 @@
   },
   "questionnaire": {
     "title": "क्लिनिकल प्रश्नावली",
-    "knownDiabetic": "मधुमेह ज्ञात आहे?",
+    "sectionTitle": "क्लिनिकल लक्षणे व जोखीम प्रश्नावली",
+    "knownDiabetic": "मधुमेह आहे का?",
     "yearsSince": "निदानापासूनची वर्षे",
     "yearsPlaceholder": "उदा. 5",
-    "bpHistory": "रक्तदाबाचा इतिहास",
+    "yearsOptions": {
+      "lt1": "< 1 वर्ष",
+      "oneToFive": "1–5 वर्षे",
+      "fiveToTen": "5–10 वर्षे",
+      "gt10": "> 10 वर्षे"
+    },
+    "glycemicControl": "ग्लायसेमिक नियंत्रण (रक्तातील साखर)",
+    "glycemicOptions": {
+      "good": "चांगले",
+      "moderate": "मध्यम",
+      "poor": "खराब"
+    },
+    "bpHistory": "रक्तदाबाची स्थिती",
     "bpOptions": {
       "unknown": "अज्ञात / मोजले नाही",
       "normal": "सामान्य",
       "high": "उच्च (उच्च रक्तदाब)",
       "low": "कमी (कमी रक्तदाब)"
     },
-    "visionChanges": "अलीकडील दृष्टीतील बदल? (अस्पष्टता, डाग)"
+    "visionChanges": "अलीकडील दृष्टीतील बदल? (अस्पष्टता, डाग)",
+    "selectPlaceholder": "निवडा…",
+    "pregnancy": "सध्या गर्भवती आहात का?",
+    "eyeSymptoms": "सध्याची डोळ्यांची लक्षणे (लागू असतील ती सर्व निवडा)",
+    "symptoms": {
+      "blurredVision": "अस्पष्ट दृष्टी",
+      "floaters": "फ्लोटर्स",
+      "suddenVisionChange": "अचानक दृष्टी बदल",
+      "eyePain": "डोळ्यात दुखणे",
+      "none": "यापैकी काहीही नाही"
+    }
+  },
+  "common": {
+    "yes": "होय",
+    "no": "नाही",
+    "notApplicable": "लागू नाही",
+    "unknown": "अज्ञात"
   },
   "quality": {
     "btnQue": "सिंकसाठी रांगेत ठेवा ✦",

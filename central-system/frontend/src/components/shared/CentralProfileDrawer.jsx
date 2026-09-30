@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { centralApi } from '../../api/centralApiClient';
+import { USE_MOCK_DATA } from '../../config';
 
 export const CentralProfileDrawer = ({
   isOpen = false,
@@ -16,15 +18,46 @@ export const CentralProfileDrawer = ({
   const [view, setView] = useState(defaultView);
   const [saveToast, setSaveToast] = useState(null);
 
-  // Form states initialized with userProfile
+  // Form states initialized with userProfile. Live mode: every field the server
+  // does not report (phone, officerId, location) stays blank rather than a
+  // fabricated-looking default -- CLAUDE.md's "no frontend fabricates a result"
+  // rule applies to a profile screen exactly as much as a case screen. Mock
+  // mode keeps its demo defaults, since that screen is labelled DEMO DATA.
+  const mockDefaults = {
+    email: 'krrishgadekar@gmail.com',
+    phone: '+91 98230 44821',
+    officerId: isOphth ? 'MCI-MH-2018-09421' : 'DHW-MH-PUN-042',
+    location: isOphth ? 'District Civil Hospital & Regional Tele-Ophthalmology Centre, Pune' : 'Pune District (Rural & Peri-Urban Zone)',
+    designation: isOphth ? 'Chief Retina Specialist / Lead Ophthalmologist' : 'District Health Worker',
+  };
   const [formData, setFormData] = useState({
     name: userProfile?.fullName || userProfile?.email || 'Signed-in user',
-    email: userProfile?.email || 'krrishgadekar@gmail.com',
-    phone: userProfile?.phone || '+91 98230 44821',
-    officerId: userProfile?.officerId || (isOphth ? 'MCI-MH-2018-09421' : 'DHW-MH-PUN-042'),
-    location: userProfile?.district || userProfile?.location || (isOphth ? 'District Civil Hospital & Regional Tele-Ophthalmology Centre, Pune' : 'Pune District (Rural & Peri-Urban Zone)'),
-    designation: userProfile?.designation || (isOphth ? 'Chief Retina Specialist / Lead Ophthalmologist' : 'District Health Worker'),
+    email: userProfile?.email || (USE_MOCK_DATA ? mockDefaults.email : ''),
+    phone: userProfile?.phone || (USE_MOCK_DATA ? mockDefaults.phone : ''),
+    officerId: userProfile?.officerId || (USE_MOCK_DATA ? mockDefaults.officerId : ''),
+    location: userProfile?.district || userProfile?.location || (USE_MOCK_DATA ? mockDefaults.location : ''),
+    designation: userProfile?.designation || (USE_MOCK_DATA ? mockDefaults.designation : (isOphth ? 'Ophthalmologist' : 'District Admin')),
   });
+
+  // The real PHC list (GET /admin/phcs; the mock client reshapes its own
+  // fixture to the same shape), replacing what used to be seven hardcoded
+  // chip names. Fetched once per mount, not per role -- both roles see every
+  // PHC that feeds the case queue.
+  const [phcs, setPhcs] = useState(null); // null = loading, [] = loaded, empty
+  const [phcsError, setPhcsError] = useState(null);
+  useEffect(() => {
+    // GET /admin/phcs is district_admin-only -- an ophthalmologist session gets a
+    // real 403 for it, which is correct, but there is no equivalent PHC-list view
+    // for that role to fall back to. Don't call it at all for that role: showing
+    // the server's own permission error where a feature should be is not honesty,
+    // it's just a worse-looking version of the invented data this replaced.
+    if (isOphth) return undefined;
+    let cancelled = false;
+    centralApi.getPhcSyncStatuses()
+      .then((list) => { if (!cancelled) setPhcs(list); })
+      .catch((err) => { if (!cancelled) { setPhcsError(err.message || 'Could not load PHCs.'); setPhcs([]); } });
+    return () => { cancelled = true; };
+  }, [isOphth]);
 
   // Password fields
   const [currPassword, setCurrPassword] = useState('');
@@ -36,13 +69,14 @@ export const CentralProfileDrawer = ({
     if (userProfile) {
       setFormData({
         name: userProfile.fullName || userProfile.email || 'Signed-in user',
-        email: userProfile.email || 'krrishgadekar@gmail.com',
-        phone: userProfile.phone || '+91 98230 44821',
-        officerId: userProfile.officerId || (isOphth ? 'MCI-MH-2018-09421' : 'DHW-MH-PUN-042'),
-        location: userProfile.district || userProfile.location || (isOphth ? 'District Civil Hospital & Regional Tele-Ophthalmology Centre, Pune' : 'Pune District (Rural & Peri-Urban Zone)'),
-        designation: userProfile.designation || (isOphth ? 'Chief Retina Specialist / Lead Ophthalmologist' : 'District Health Worker'),
+        email: userProfile.email || (USE_MOCK_DATA ? mockDefaults.email : ''),
+        phone: userProfile.phone || (USE_MOCK_DATA ? mockDefaults.phone : ''),
+        officerId: userProfile.officerId || (USE_MOCK_DATA ? mockDefaults.officerId : ''),
+        location: userProfile.district || userProfile.location || (USE_MOCK_DATA ? mockDefaults.location : ''),
+        designation: userProfile.designation || (USE_MOCK_DATA ? mockDefaults.designation : (isOphth ? 'Ophthalmologist' : 'District Admin')),
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile, isOphth]);
 
   // Reset view when opened/closed
@@ -96,7 +130,7 @@ export const CentralProfileDrawer = ({
   };
 
   const getInitials = (name) => {
-    if (!name) return 'KG';
+    if (!name) return 'U';
     const parts = name.replace(/^Dr\.\s*/i, '').trim().split(/\s+/);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -175,128 +209,89 @@ export const CentralProfileDrawer = ({
                   <span className="retro-hero-name">{formData.name}</span>
                   <span className="retro-duty-badge">
                     <span className="retro-duty-dot" />
-                    {isOphth ? 'On call' : 'On duty'}
+                    Signed in
                   </span>
                 </div>
 
                 <div className="retro-hero-subtitle">
-                  {isOphth
-                    ? 'Chief Retina Specialist / Lead Ophthalmologist'
-                    : 'District Health Worker'}
+                  {formData.designation}
                 </div>
 
-                <div className="retro-badge-row">
-                  <span className="retro-id-badge">{formData.officerId}</span>
-                  <span className="retro-clearance-badge">
-                    <span className="retro-badge-shield">🛡</span>
-                    {isOphth ? 'Level 5 - Apex Diagnostic Lead' : 'Level 4 · District Chief'}
-                  </span>
-                </div>
+                {/* No officer ID or clearance level exists in the account model --
+                    the account only has name, email and role -- so nothing is shown
+                    here rather than a registration number nobody issued. Mock mode
+                    still shows its own demo badge, since that screen is labelled. */}
+                {(formData.officerId || USE_MOCK_DATA) && (
+                  <div className="retro-badge-row">
+                    {formData.officerId && <span className="retro-id-badge">{formData.officerId}</span>}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* 2. Stats Grid Card */}
-            <div className="retro-card retro-card--stats">
-              {isOphth ? (
-                <>
-                  <div className="retro-stat-col">
-                    <div className="retro-stat-num">7</div>
-                    <div className="retro-stat-lbl">Tele-retina<br />nodes</div>
+            {/* 2. PHCs Card — real GET /admin/phcs data, not an invented count or
+                chip list. Loading and empty are both real states, not silence.
+                Admin only: an ophthalmologist has no equivalent endpoint (see the
+                fetch effect above). */}
+            {!isOphth && (
+              <div className="retro-card retro-card--stats">
+                <div className="retro-stat-col">
+                  <div className="retro-stat-num">{phcs === null ? '—' : phcs.length}</div>
+                  <div className="retro-stat-lbl">PHCs in<br />the system</div>
+                </div>
+                <div className="retro-stat-col">
+                  <div className="retro-stat-num">
+                    {phcs === null ? '—' : phcs.filter((p) => p.status === 'active').length}
                   </div>
-                  <div className="retro-stat-col">
-                    <div className="retro-stat-num">212</div>
-                    <div className="retro-stat-lbl">Screenings<br />graded</div>
+                  <div className="retro-stat-lbl">Active<br />(synced recently)</div>
+                </div>
+                <div className="retro-stat-col">
+                  <div className="retro-stat-num">
+                    {phcs === null ? '—' : phcs.filter((p) => p.status !== 'active').length}
                   </div>
-                  <div className="retro-stat-col">
-                    <div className="retro-stat-num">9</div>
-                    <div className="retro-stat-lbl">Referrals<br />pending</div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="retro-stat-col">
-                    <div className="retro-stat-num">7</div>
-                    <div className="retro-stat-lbl">PHCs</div>
-                  </div>
-                  <div className="retro-stat-col">
-                    <div className="retro-stat-num">64</div>
-                    <div className="retro-stat-lbl">Villages</div>
-                  </div>
-                  <div className="retro-stat-col">
-                    <div className="retro-stat-num">18</div>
-                    <div className="retro-stat-lbl">Reports this<br />month</div>
-                  </div>
-                </>
-              )}
-            </div>
+                  <div className="retro-stat-lbl">Silent</div>
+                </div>
+              </div>
+            )}
 
             {/* 3. Base Hospital Card (Ophth only) */}
             {isOphth && (
               <div className="retro-card">
                 <div className="retro-card-heading">Base hospital</div>
                 <div className="retro-card-text">
-                  {formData.location}
+                  {formData.location || 'Not set on this account.'}
                 </div>
               </div>
             )}
 
-            {/* 4. Assigned PHCs / Connected Nodes Card */}
+            {/* 4. PHC List Card — the real sites, colour-coded on their real
+                GET /admin/phcs status, same source PhcHealthPage reads. Admin
+                only, for the same reason as the stats card above. */}
+            {!isOphth && (
             <div className="retro-card">
-              <div className="retro-card-heading">
-                {isOphth ? 'Connected tele-retina nodes' : 'Assigned PHCs'}
-              </div>
-              {!isOphth && (
-                <div className="retro-card-subtext">
-                  Pune district, rural and peri-urban zone
-                </div>
+              <div className="retro-card-heading">Assigned PHCs</div>
+              {phcs === null ? (
+                <div className="retro-card-subtext">Loading…</div>
+              ) : phcsError ? (
+                <div className="retro-card-subtext">{phcsError}</div>
+              ) : phcs.length === 0 ? (
+                <div className="retro-card-subtext">No PHCs registered yet.</div>
+              ) : (
+                <>
+                  <div className="retro-chip-grid">
+                    {phcs.map((p) => (
+                      <span className="retro-chip" key={p.phcId || p.phcCode || p.name}>
+                        <span className={`retro-chip-dot ${p.status === 'active' ? 'retro-chip-dot--green' : 'retro-chip-dot--amber'}`} />
+                        {p.name}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="retro-footnote">
+                    Amber means the PHC has not synced with central recently.
+                  </div>
+                </>
               )}
-              <div className="retro-chip-grid">
-                <span className="retro-chip">
-                  <span className="retro-chip-dot retro-chip-dot--green" />
-                  Kharadi
-                </span>
-                <span className="retro-chip">
-                  <span className="retro-chip-dot retro-chip-dot--green" />
-                  Wagholi
-                </span>
-                <span className="retro-chip">
-                  <span className="retro-chip-dot retro-chip-dot--green" />
-                  Hadapsar
-                </span>
-                <span className="retro-chip">
-                  <span className="retro-chip-dot retro-chip-dot--amber" />
-                  Lohegaon
-                </span>
-                <span className="retro-chip">
-                  <span className="retro-chip-dot retro-chip-dot--green" />
-                  Alandi
-                </span>
-                <span className="retro-chip">
-                  <span className="retro-chip-dot retro-chip-dot--green" />
-                  Saswad
-                </span>
-                <span className="retro-chip">
-                  <span className="retro-chip-dot retro-chip-dot--green" />
-                  Khed
-                </span>
-              </div>
-              <div className="retro-footnote">
-                {isOphth
-                  ? 'Amber means grading is pending.'
-                  : 'Amber means a report is pending.'}
-              </div>
             </div>
-
-            {/* 5. Specialty Focus Card (Ophth only) */}
-            {isOphth && (
-              <div className="retro-card">
-                <div className="retro-card-heading">Specialty focus</div>
-                <div className="retro-focus-list">
-                  <div className="retro-focus-tag">Medical retina</div>
-                  <div className="retro-focus-tag">Diabetic retinopathy (ICDR)</div>
-                  <div className="retro-focus-tag">AI-assisted tele-grading</div>
-                </div>
-              </div>
             )}
 
             {/* 6. Contact Card */}
@@ -331,57 +326,63 @@ export const CentralProfileDrawer = ({
                   <div className="retro-contact-lbl">
                     {isOphth ? 'Direct line / clinic ext.' : 'Direct line'}
                   </div>
-                  <div className="retro-contact-val">{formData.phone}</div>
+                  <div className="retro-contact-val">{formData.phone || 'Not set on this account'}</div>
                 </div>
-                <button
-                  type="button"
-                  className="retro-icon-box"
-                  title="Call / Copy phone"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(formData.phone);
-                    showToast('Phone number copied to clipboard.');
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1A1008" strokeWidth="2">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                  </svg>
-                </button>
+                {formData.phone && (
+                  <button
+                    type="button"
+                    className="retro-icon-box"
+                    title="Call / Copy phone"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(formData.phone);
+                      showToast('Phone number copied to clipboard.');
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1A1008" strokeWidth="2">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                  </button>
+                )}
               </div>
-
-              {!isOphth && (
-                <div className="retro-login-callout">
-                  Last login today, 9:12 AM from Pune
-                </div>
-              )}
             </div>
 
-            {/* 7. Action Menu Card */}
+            {/* 7. Action Menu Card. Edit profile / change password show only in mock
+                mode: neither calls a real endpoint (there is no PATCH /auth/me or
+                password-change route), so "Profile updated successfully" would be
+                a fabricated result on a live account -- exactly what CLAUDE.md's
+                "no frontend fabricates a result" rule forbids. Log out is real on
+                both. */}
+            {(USE_MOCK_DATA || isOphth) && (
             <div className="retro-card retro-card--menu">
-              <button
-                type="button"
-                className="retro-menu-item"
-                onClick={() => setView('edit')}
-              >
-                <span className="retro-menu-left">
-                  <span className="retro-menu-icon">✎</span>
-                  Edit profile
-                </span>
-                <span className="retro-menu-arrow">&gt;</span>
-              </button>
+              {USE_MOCK_DATA && (
+                <>
+                  <button
+                    type="button"
+                    className="retro-menu-item"
+                    onClick={() => setView('edit')}
+                  >
+                    <span className="retro-menu-left">
+                      <span className="retro-menu-icon">✎</span>
+                      Edit profile
+                    </span>
+                    <span className="retro-menu-arrow">&gt;</span>
+                  </button>
 
-              <div className="retro-menu-divider" />
+                  <div className="retro-menu-divider" />
 
-              <button
-                type="button"
-                className="retro-menu-item"
-                onClick={() => setView('password')}
-              >
-                <span className="retro-menu-left">
-                  <span className="retro-menu-icon">🔒</span>
-                  Change password
-                </span>
-                <span className="retro-menu-arrow">&gt;</span>
-              </button>
+                  <button
+                    type="button"
+                    className="retro-menu-item"
+                    onClick={() => setView('password')}
+                  >
+                    <span className="retro-menu-left">
+                      <span className="retro-menu-icon">🔒</span>
+                      Change password
+                    </span>
+                    <span className="retro-menu-arrow">&gt;</span>
+                  </button>
+                </>
+              )}
 
               {/* Log out option is only shown for ophthalmologist — district worker uses the EXIT button in the top navbar */}
               {isOphth && (
@@ -401,6 +402,7 @@ export const CentralProfileDrawer = ({
                 </>
               )}
             </div>
+            )}
           </>
         ) : view === 'edit' ? (
           /* ── Edit Details Form (Image 3 & 4) ─────────────────────── */
