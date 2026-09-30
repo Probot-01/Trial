@@ -213,3 +213,9 @@ tree.txt
 central-system/backend/ml-pipeline/test_output_*.png
 central-system/backend/ml-pipeline/training/diag*_out.txt
 central-system/backend/ml-pipeline/training/diag*_err.txt
+
+# Full-dataset backend test run (scripts/test-full-dataset.js): a manifest and
+# results file describing THIS machine's local dataset copy and THIS run's
+# outcome, resumable and regenerated on every run -- not something to version.
+full_dataset_manifest.json
+full_dataset_results.jsonl
