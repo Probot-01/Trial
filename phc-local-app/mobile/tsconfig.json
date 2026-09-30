@@ -5,9 +5,18 @@
     "baseUrl": ".",
     "resolveJsonModule": true,
     "paths": {
-      "@/*": ["netrasetu/*"]
+      "@/*": [
+        "netrasetu/*"
+      ]
     }
   },
-  "include": ["netrasetu/**/*.ts", "netrasetu/**/*.tsx", "App.tsx", "expo-env.d.ts"],
-  "exclude": ["node_modules", "src"]
+  "include": [
+    "netrasetu/**/*.ts",
+    "netrasetu/**/*.tsx",
+    "App.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "src"
+  ]
 }

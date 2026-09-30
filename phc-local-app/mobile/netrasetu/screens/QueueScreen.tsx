@@ -17,6 +17,17 @@ import { makeStyles, useTheme } from '../theme/ThemeContext';
 import { AppHeader } from '../components/AppHeader';
 import { PIPELINE, StageIndicator } from '../components/StageIndicator';
 import { Btn, Notice } from '../components/ui';
+import { InfoModalButton } from '../components/InfoModalButton';
+
+const QUEUE_INFO_ROWS = [
+  { term: 'THE 5 STAGES', text: 'Every capture moves through: 1 Captured, 2 Quality check passed, 3 Sent to central, 4 Central is grading it, 5 Result ready. The five dots on each card show which stage it has reached.' },
+  { term: 'CAPTURED (RETAKE NEEDED)', text: 'The image failed the on-the-spot quality check and was not uploaded. Open the card to retake it.' },
+  { term: 'QUALITY PASS (WAITING/SYNC FAILED)', text: 'Passed the quality check. Waiting to upload, or retrying if the connection dropped — the app keeps trying on its own.' },
+  { term: 'SYNCED, AWAITING IMAGE', text: 'Central has accepted the case and is receiving the full image.' },
+  { term: 'AI PENDING', text: 'Central is grading the case now. This normally takes under a minute.' },
+  { term: 'GRADING FAILED', text: 'Central received the image but could not produce a result. This needs attention at central, not another retake here.' },
+  { term: 'RESULT READY', text: 'Grading finished — open the card to see it.' },
+];
 import { listQueue, queueSize, resetForRetry } from '../db/captures';
 import { QueueEntry } from '../types';
 import { formatBytes, formatDateTime, shortId } from '../lib/format';
@@ -104,7 +115,10 @@ export default function QueueScreen() {
         ListHeaderComponent={
           <View style={{ gap: 10, marginBottom: 12 }}>
             <View style={s.titleRow}>
-              <Text style={s.h1}>{t('queue.title', 'LOCAL QUEUE')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={s.h1}>{t('queue.title', 'LOCAL QUEUE')}</Text>
+                <InfoModalButton title="LOCAL QUEUE" rows={QUEUE_INFO_ROWS} />
+              </View>
               <Text style={s.count}>{items?.length ?? 0} {t('queue.items', 'ITEMS')}</Text>
             </View>
             {sync.connectivity !== 'online' && sync.pendingCount > 0 ? (

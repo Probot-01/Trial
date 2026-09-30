@@ -23,6 +23,7 @@ import { AppHeader } from '../components/AppHeader';
 import { RetinalBackdrop } from '../components/RetinalBackdrop';
 import { Btn, ChipGroup, Field, Input, MultiChipGroup, Notice, Row, SectionHeader, Toggle } from '../components/ui';
 import { SelectField } from '../components/SelectField';
+import { DateField } from '../components/DateField';
 import { useToast } from '../components/Toast';
 import { Demographics, Patient, PatientQuestionnaire, Symptoms } from '../types';
 import { EMPTY_QUESTIONNAIRE, pregnancyApplies, questionnaireMissing } from '../lib/questionnaire';
@@ -234,7 +235,7 @@ export default function RegistrationScreen() {
                       options={[{ value: 'female', label: 'Female' }, { value: 'male', label: 'Male' }, { value: 'other', label: 'Other' }]} />
                   </Field>
                   <Field label="DATE OF BIRTH">
-                    <Input value={d.dob} onChangeText={onDob} placeholder="DD/MM/YYYY" keyboardType="numbers-and-punctuation" maxLength={10} />
+                    <DateField value={d.dob} onChange={onDob} />
                   </Field>
                 </Row>
                 <Row>
@@ -337,7 +338,7 @@ export default function RegistrationScreen() {
             >
               <View style={[s.checkbox, !!consentAt && s.checkboxOn]}>{consentAt ? <Text style={s.check}>✓</Text> : null}</View>
               <View style={{ flex: 1 }}>
-                <Text style={s.consentTitle}>INFORMED VERBAL CONSENT (DPDP ACT · §9.7)</Text>
+                <Text style={s.consentTitle}>INFORMED VERBAL CONSENT (DPDP ACT)</Text>
                 <Text style={s.consentBody}>
                   I confirm that informed verbal consent has been obtained from the patient for retinal image capture,
                   clinical risk assessment, and tele-ophthalmology review.
@@ -360,7 +361,7 @@ export default function RegistrationScreen() {
           <View style={s.modal}>
             <Text style={s.modalTitle}>POSSIBLE EXISTING PATIENT</Text>
             <Text style={s.modalBody}>
-              This registration looks like a patient already on this device. Using the existing record keeps one patient history (§10.3).
+              This registration looks like a patient already on this device. Using the existing record keeps one patient history.
             </Text>
             <ScrollView style={{ maxHeight: 260 }}>
               {(matches ?? []).map((m) => (
