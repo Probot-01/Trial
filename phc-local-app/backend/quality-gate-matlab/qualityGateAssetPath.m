@@ -30,9 +30,23 @@ candidates = {};
 
 if isdeployed
     % Compiled: the CTF archive is expanded under ctfroot.
+    %
+    % MEASURED 2026-10-02 (MATLAB Compiler 26.1): `mcc -o qualityGate -a <file>`
+    % puts the file at ctfroot\qualityGate\<file> -- a folder named after the
+    % component, which none of the three guesses below matched. The exe only
+    % worked inside the repo because the "next to the exe" candidate at the
+    % end resolves to quality-gate-matlab\, i.e. the SOURCE copy. Copied
+    % anywhere else it failed every capture with notFound.
+    candidates{end+1} = fullfile(ctfroot, 'qualityGate', name);
     candidates{end+1} = fullfile(ctfroot, name);
     candidates{end+1} = fullfile(ctfroot, 'quality-gate-matlab', name);
     candidates{end+1} = fullfile(ctfroot, 'phc-local-app', 'backend', 'quality-gate-matlab', name);
+    % Last resort inside the archive: wherever a future Compiler release
+    % decides to put it. Still the bundled copy, never the source tree.
+    hits = dir(fullfile(ctfroot, '**', name));
+    for k = 1:numel(hits)
+        candidates{end+1} = fullfile(hits(k).folder, hits(k).name); %#ok<AGROW>
+    end
     % Alongside the executable, for a file shipped next to it rather than
     % baked in — useful for editing presets at a site without a rebuild.
     candidates{end+1} = fullfile(fileparts(getExePath()), name);
