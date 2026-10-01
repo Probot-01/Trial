@@ -39,4 +39,12 @@ COPY phc-local-app/backend/scripts    ./phc-local-app/backend/scripts
 
 ENV NODE_ENV=production
 WORKDIR /app/phc-local-app/backend
-CMD ["node", "server.js"]
+# Creates the one demo technician login on first start -- `|| true` because
+# `technician.js add` exits 1 (not a crash, just process.exitCode) when the
+# account already exists, which happens on every restart after the first;
+# without `|| true` that would short-circuit this && chain and the server
+# would never start again after the very first boot. Fixed password (not
+# the script's own random default) so it's known ahead of time rather than
+# needing Shell access (not available on Render's free tier) to read it
+# back from a log after the fact.
+CMD node scripts/technician.js add demo "Demo Technician" --admin --password "Fundus-Comet-52" || true; exec node server.js

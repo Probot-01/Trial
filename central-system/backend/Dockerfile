@@ -47,13 +47,20 @@ COPY central-system/backend/services ./central-system/backend/services
 # is NOT optional: CMD below runs it on every container start (see this
 # file's header) -- its absence was previously undetected because nothing
 # had exercised this exact path end to end until local testing caught it.
-COPY scripts/setupCentralDb.js  ./scripts/setupCentralDb.js
-COPY scripts/provisionPhcKey.js ./scripts/provisionPhcKey.js
-COPY scripts/seedDemoUsers.js   ./scripts/seedDemoUsers.js
+COPY scripts/setupCentralDb.js        ./scripts/setupCentralDb.js
+COPY scripts/provisionPhcKey.js       ./scripts/provisionPhcKey.js
+COPY scripts/seedDemoUsers.js         ./scripts/seedDemoUsers.js
+# Render's free tier has no Shell/Jobs, so the normal one-off
+# `npm run provision-phc-key -- --create "<name>"` can't be run
+# interactively for this deployment -- this idempotent twin runs from CMD
+# instead and prints the new key to ordinary (Shell-free) logs exactly
+# once. See its own header for why a restart can't create a duplicate PHC.
+COPY scripts/provisionDemoPhcOnce.js  ./scripts/provisionDemoPhcOnce.js
 
 ENV NODE_ENV=production
 WORKDIR /app/central-system/backend
-# Shell form (not exec-form JSON) so the migrate/seed commands can run first;
-# `exec` on the last one so node becomes PID 1 and receives SIGTERM directly
-# for a graceful shutdown, instead of an intermediate shell swallowing it.
-CMD npm run migrate && npm run seed-users && exec node server.js
+# Shell form (not exec-form JSON) so the migrate/seed/provision commands can
+# run first; `exec` on the last one so node becomes PID 1 and receives
+# SIGTERM directly for a graceful shutdown, instead of an intermediate
+# shell swallowing it.
+CMD npm run migrate && npm run seed-users && node ../../scripts/provisionDemoPhcOnce.js && exec node server.js
