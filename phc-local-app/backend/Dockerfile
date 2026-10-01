@@ -10,8 +10,9 @@
 # real PHC -- the final round still runs this on-site, unchanged.
 #
 # Build context is the REPO ROOT (see render.yaml's dockerContext). The
-# quality-gate-matlab/ and test/ directories are not needed here and are
-# deliberately not copied -- no MATLAB exists on this host.
+# quality-gate-matlab/ .m sources and test/ are not needed here and are
+# deliberately not copied -- no MATLAB exists on this host. The one exception
+# is cameraPresets.json, which the JS gate reads (see the COPY below).
 
 FROM node:22-slim
 
@@ -36,6 +37,11 @@ COPY phc-local-app/backend/middleware ./phc-local-app/backend/middleware
 COPY phc-local-app/backend/routes     ./phc-local-app/backend/routes
 COPY phc-local-app/backend/services   ./phc-local-app/backend/services
 COPY phc-local-app/backend/scripts    ./phc-local-app/backend/scripts
+# The JS quality gate (services/qualityGateFallback.js, the only gate engine
+# on this MATLAB-less host) reads the SAME camera presets as the MATLAB gate,
+# from quality-gate-matlab/. Only that one file -- the .m sources stay out.
+COPY phc-local-app/backend/quality-gate-matlab/cameraPresets.json \
+     ./phc-local-app/backend/quality-gate-matlab/cameraPresets.json
 
 ENV NODE_ENV=production
 WORKDIR /app/phc-local-app/backend
