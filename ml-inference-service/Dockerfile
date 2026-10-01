@@ -51,25 +51,24 @@ COPY central-system/backend/ml-pipeline/models/calibration_branchA_v2c.json ./ml
 COPY central-system/backend/ml-pipeline/models/red_lesion_v2_config.json ./ml-pipeline/models/red_lesion_v2_config.json
 COPY central-system/backend/ml-pipeline/models/Model1/v2c/branchA_v2c_meta.json ./ml-pipeline/models/Model1/v2c/branchA_v2c_meta.json
 
-# Model weights: fetched from the private release at build time (see
-# fetch_models.py's own header) using a BuildKit secret mount, so the token
-# never lands in an image layer. MODELS_ARCHIVE_URL is not secret (just a
-# stable asset API URL) and is passed as a normal build arg. Contents:
-# the four segmentation ONNX exports, branch-A's ONNX export (with an extra
-# graph output tapping backbone.bn2.act for Grad-CAM) and its extracted
-# head.weight/head.bias (branchAInfer.py's own comment explains why both
-# are needed, and verifies them against the real torch path).
-ARG MODELS_ARCHIVE_URL
-ENV MODELS_ARCHIVE_URL=${MODELS_ARCHIVE_URL}
-RUN --mount=type=secret,id=MODELS_REPO_TOKEN \
-    MODELS_REPO_TOKEN="$(cat /run/secrets/MODELS_REPO_TOKEN 2>/dev/null || true)" \
-    python fetch_models.py
+# Model weights: fetched at CONTAINER START (CMD below), not build time --
+# see fetch_models.py's own header for why (Render did not wire the
+# BuildKit secret mount the way plain Docker/HF Spaces do; this moved to
+# the runtime env var path, which is Render's ordinary, well-established
+# mechanism). MODELS_ARCHIVE_URL and MODELS_REPO_TOKEN are both set as
+# normal Render environment variables -- no ARG, no --mount=type=secret.
+# Contents: the four segmentation ONNX exports, branch-A's ONNX export
+# (with an extra graph output tapping backbone.bn2.act for Grad-CAM) and
+# its extracted head.weight/head.bias (branchAInfer.py's own comment
+# explains why both are needed, and verifies them against the real torch
+# path).
 
 # Render injects PORT at runtime and expects the service to bind to it, not
-# a fixed port -- shell form (not exec-form JSON) so ${PORT} is expanded.
-# 7860 is only the fallback for a plain local `docker run` with no PORT set.
-# `exec` so uvicorn becomes PID 1 and receives SIGTERM directly, instead of
-# an intermediate shell swallowing it -- graceful shutdown, not a hang on
-# every deploy/restart.
+# a fixed port -- shell form (not exec-form JSON) so ${PORT} and the model
+# fetch can both run. 7860 is only the fallback for a plain local
+# `docker run` with no PORT set. `exec` on the last command so uvicorn
+# becomes PID 1 and receives SIGTERM directly, instead of an intermediate
+# shell swallowing it -- graceful shutdown, not a hang on every
+# deploy/restart.
 EXPOSE 7860
-CMD exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-7860}
+CMD python fetch_models.py && exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-7860}
