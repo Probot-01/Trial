@@ -64,6 +64,16 @@ services:
         generateValue: true          # 256-bit base64 -- >=32 chars required
       - key: TRUST_PROXY
         value: "1"                   # behind Render's load balancer
+      # REQUIRED cross-origin: the frontend (centralsys.vercel.app) and this
+      # backend (onrender.com) are different origins. The default
+      # COOKIE_SAMESITE=lax silently drops the session cookie on every
+      # cross-site request after login -- login itself returns 200 and sets
+      # it, but the next request has no cookie and gets 401, which is
+      # exactly what live testing caught. authConfig.js forces
+      # COOKIE_SECURE=true automatically whenever this is "none" (required
+      # by browsers for SameSite=None to be accepted at all).
+      - key: COOKIE_SAMESITE
+        value: none
       - key: PHC_AUTH_ENABLED
         value: "true"
       - key: MEDIA_ENCRYPTION_KEY
