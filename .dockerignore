@@ -1,0 +1,58 @@
+# Repo-root .dockerignore -- used by both the central/PHC backend
+# Dockerfiles and ml-inference-service's (dockerContext: repo root for all
+# three, so each one's COPY paths match the existing relative-import
+# expectations already baked into the Python/Node source, rather than
+# rearranging files to suit Docker).
+
+.git
+node_modules
+**/node_modules
+
+# Public datasets -- large, git-ignored already, never needed in any image
+# (cases are captured live; nothing serves a dataset image at runtime).
+datasets/
+
+# Model weights -- fetched by each image's own build step from the private
+# release, never copied from the host (they're git-ignored locally too, so
+# this mostly guards a machine that happens to have them unpacked already).
+central-system/backend/ml-pipeline/models/*.mat
+central-system/backend/ml-pipeline/models/*.pt
+central-system/backend/ml-pipeline/models/**/*.pt
+central-system/backend/ml-pipeline/models/**/*.onnx
+
+# Training artifacts (~750MB: checkpoints, exported predictions, parity
+# data) -- inference only needs the model-class definition in
+# export_to_onnx.py, kept with a negation below.
+central-system/backend/ml-pipeline/training/**
+!central-system/backend/ml-pipeline/training/export_to_onnx.py
+
+# Diagnostics output, media, local DB files, logs -- dev-time artifacts
+central-system/backend/ml-pipeline/diagnostics/
+central-system/backend/media/
+phc-local-app/backend/storage/
+phc-local-app/backend/uploads/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+
+# Mobile app -- irrelevant to any backend/inference image
+phc-local-app/mobile/
+
+# Frontends -- deployed separately on Vercel, not part of any backend image
+central-system/frontend/
+phc-local-app/frontend/
+
+# Env files -- never baked into an image; Render/HF Spaces env vars instead
+.env
+.env.*
+!.env.example
+
+# Simulink -- not usable on Render/HF Spaces (no MATLAB there)
+simulink-model/
+
+# Misc repo clutter not needed in any image
+tests/
+docs/
+demo_images/
+experimenting Frontend/

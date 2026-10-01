@@ -1,0 +1,21 @@
+# CPU-only builds -- this service runs on HF Spaces' free CPU tier, not GPU.
+# central-system/backend/ml-pipeline/requirements.txt's own header assumes a
+# CUDA wheel installed first; deliberately NOT reused verbatim here for that
+# reason (a CUDA wheel is both wrong and several GB larger than needed).
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch>=2.2.0
+torchvision>=0.17.0
+timm>=0.9.16
+segmentation-models-pytorch>=0.3.3
+albumentations>=1.4.0
+opencv-python-headless>=4.9.0
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.12.0
+scikit-learn>=1.4.0
+
+# HTTP wrapper
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
