@@ -266,8 +266,17 @@ All local and uncommitted. Nothing was pushed or deployed.
       - darkened copy: `retake/low_illumination`.
     - All match MATLAB. Peak container memory was 242 MB, with no OOM kill.
 
-**Not deployed yet.** The hosted PHC needs these commits on `origin/main` plus a manual Render deploy of
-`netrasetu-phc` (auto-deploy is off). See `docs/TASKS_TANUJ_DEPLOYMENT.md`.
+11. **Pushed to `origin/main`:** `f860c9c`, `014bfa7`, `87f50ef`, `d540e9e`, `346bc46`, then `adbdd06`.
+    `adbdd06` is the compiled `dist/qualityGate.exe`, force-added despite `.gitignore` so the shipped binary is in
+    the repo: 1,372,348 bytes, sha256 `e42d65306b86ec5d…`. Rebuild and re-commit it whenever a quality-gate `.m`
+    file or `cameraPresets.json` changes.
+
+**Deploy status (checked 2026-10-02 after the push):**
+- Vercel `phcapp` and `centralsys` auto-rebuilt from `346bc46` (GitHub deployment records and the bundles'
+  baked commit SHA both confirm it).
+- Render `netrasetu-phc` is **not confirmed updated**. Auto-deploy is off and Render posts no status to GitHub.
+  `/health` answers, but that says nothing about the code version, and a capture test needs a technician login.
+  It needs Tanuj's manual deploy (`docs/TASKS_TANUJ_DEPLOYMENT.md` item 2.1).
 
 **The standalone zip is unaffected.** It keeps the fallback disabled and always uses the compiled exe, so its
 bundled copy of the old `qualityGateFallback.js` is never called.
