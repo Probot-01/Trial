@@ -15,8 +15,16 @@ datasets/
 # Model weights (~1.5GB) -- fetched by each image's own build step from the
 # private release, never copied from the host (they're git-ignored locally
 # too, so this mostly guards a machine that happens to have them unpacked
-# already).
+# already). The two small, git-tracked config files below are NOT weights --
+# re-included for ml-inference-service's ONNX segmentation path.
 central-system/backend/ml-pipeline/models/
+!central-system/backend/ml-pipeline/models/calibration_branchA_v2c.json
+!central-system/backend/ml-pipeline/models/red_lesion_v2_config.json
+!central-system/backend/ml-pipeline/models/Model1/v2c/branchA_v2c_meta.json
+
+# ONNX segmentation exports (~340MB) -- same as the models/ weights above:
+# fetched at build time from the private release, not copied from the host.
+central-system/backend/ml-pipeline/training/onnx_out/
 
 # Training/eval datasets (~5.5GB: IDRiD, APTOS, Messidor-2, DRIVE, CHASE_DB1
 # images) -- no Docker image serves or trains on these; cases are captured

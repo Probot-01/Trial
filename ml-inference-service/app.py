@@ -1,17 +1,15 @@
 """
-app.py -- HTTP wrapper around the EXISTING, unmodified branchAInfer.py and
-segInfer.py CLI scripts, for the online (Render) demo deployment where the
-central Node backend can't run the Python ML stack itself (too little RAM
-on Render's free web-service plan for PyTorch + several U-Nets loaded at
-once -- see docs/TECHNICAL_DOCUMENTATION.md deployment section).
+app.py -- HTTP wrapper around the EXISTING branchAInfer.py and segInfer.py
+CLI scripts, for the online (Render) demo deployment where the central Node
+backend can't run the Python ML stack itself (too little RAM on Render's
+free web-service plan to hold PyTorch plus several models at once -- see
+docs/TECHNICAL_DOCUMENTATION.md deployment section).
 
-Deployed separately (Hugging Face Spaces, Docker SDK, free CPU tier: 16GB
-RAM). Central's gradingOrchestrator.js calls this over HTTP instead of
-spawning a local `python branchAInfer.py` subprocess, when
-INFERENCE_BACKEND=remote / SEG_INFERENCE_BACKEND=remote is set -- an
-additive, opt-in code path. Local dev and the existing `matlab`/`python`
-backends are completely unaffected; this service does not change a single
-line of branchAInfer.py or segInfer.py.
+Deployed separately on its own Render free web service. Central's
+gradingOrchestrator.js calls this over HTTP instead of spawning a local
+`python branchAInfer.py`/`segInfer.py` subprocess, when
+INFERENCE_BACKEND=remote is set -- an additive, opt-in code path. Local dev
+and the existing `matlab`/`python` backends are completely unaffected.
 
 Design: for each request, write the uploaded image to a temp file, spawn
 the SAME CLI script the Node backend already spawns locally, parse its
@@ -20,12 +18,34 @@ real difference -- read back any output image files (Grad-CAM, lesion
 masks) and base64-encode them into the JSON response, since this service
 and the central backend do not share a filesystem.
 
+Both scripts run their additive ONNX Runtime backend here, NOT the original
+PyTorch path: branch-a with BRANCH_A_INFERENCE_ENGINE=onnx, segmentation
+with SEG_INFERENCE_BACKEND=onnx (see each script's own comment). Neither
+subprocess imports torch at all (measured: ~75-90MB peak for branch-a,
+~250-270MB for segmentation, one U-Net at a time) -- torch alone costs
+~350MB just to import, which this host does not have to spare. Grad-CAM and
+MC-dropout are NOT lost: both are computed in closed form from the model's
+own frozen head weights instead of via autograd, verified numerically
+against the real torch path (logits, Grad-CAM map, a deterministic
+same-mask head-math cross-check) before being trusted -- see
+branchAInfer.py's own comment for the derivation.
+
+_LOCK below still serialises the two endpoints: real headroom now exists
+even running them concurrently (~75 + ~270 + baseline is comfortably under
+512MB), but gradingOrchestrator.js calls both concurrently for every case,
+and keeping them serialised costs only a few seconds of latency per case
+in exchange for not depending on that margin holding under every possible
+image size and GC timing. The final round (MATLAB, on-prem, real RAM) is
+untouched and still runs both in parallel.
+
 Endpoints:
   GET  /health
   POST /infer/branch-a      multipart: image=<file>; optional mcDropout=<int>
   POST /infer/segmentation  multipart: image=<file>
 """
+import asyncio
 import base64
+import functools
 import json
 import os
 import subprocess
@@ -42,6 +62,23 @@ SEG_INFER = os.path.join(ML_ROOT, "inference", "segInfer.py")
 PYTHON_EXE = sys.executable
 
 app = FastAPI(title="NetraSetu ML inference (remote)", version="1.0")
+
+# Serialises branch-a and segmentation -- see module docstring. A plain
+# asyncio.Lock (not a multiprocessing one): this service always runs as a
+# single uvicorn worker (one process), which a free-tier host enforces
+# anyway (no horizontal scaling on Render's free plan), so one event loop is
+# the whole story.
+_LOCK = asyncio.Lock()
+
+
+async def _run_subprocess(args, **kwargs):
+    """subprocess.run, off the event loop (so /health stays responsive
+    during a long inference call) and inside _LOCK (so branch-a and
+    segmentation never run at the same time -- see module docstring)."""
+    loop = asyncio.get_running_loop()
+    async with _LOCK:
+        return await loop.run_in_executor(
+            None, functools.partial(subprocess.run, args, **kwargs))
 
 
 @app.get("/health")
@@ -64,9 +101,15 @@ async def infer_branch_a(image: UploadFile = File(...), mcDropout: int = Form(20
             f.write(await image.read())
         gradcam_path = os.path.join(tmp, "gradcam.png")
 
-        proc = subprocess.run(
+        proc = await _run_subprocess(
             [PYTHON_EXE, BRANCH_A_INFER, img_path, "--gradcam", gradcam_path, "--mc-dropout", str(mcDropout)],
             capture_output=True, text=True, timeout=180,
+            # onnx, not torch: real gradients computed in closed form instead
+            # of via autograd (see branchAInfer.py's own comment) -- torch
+            # alone costs ~350MB to import, which this host doesn't have to
+            # spare. Grad-CAM and MC-dropout are unaffected: verified
+            # numerically against the torch path before this was trusted.
+            env={**os.environ, "BRANCH_A_INFERENCE_ENGINE": "onnx"},
         )
         if proc.returncode != 0:
             return JSONResponse(status_code=422, content={"error": "branchAInfer_failed", "code": proc.returncode, "stderr": proc.stderr[-2000:]})
@@ -89,10 +132,13 @@ async def infer_segmentation(image: UploadFile = File(...)):
         outdir = os.path.join(tmp, "out")
         os.makedirs(outdir, exist_ok=True)
 
-        proc = subprocess.run(
+        proc = await _run_subprocess(
             [PYTHON_EXE, SEG_INFER, img_path, "--outdir", outdir],
             capture_output=True, text=True, timeout=180,
-            env={**os.environ, "SEG_INFERENCE_BACKEND": "python"},  # no MATLAB here -- always python on this service
+            # onnx, not python: loads one U-Net at a time instead of all four
+            # -- see segInfer.py's own comment and this file's module
+            # docstring for why that's required on a 512MB host.
+            env={**os.environ, "SEG_INFERENCE_BACKEND": "onnx"},
         )
         if proc.returncode != 0:
             return JSONResponse(status_code=422, content={"error": "segInfer_failed", "code": proc.returncode, "stderr": proc.stderr[-2000:]})

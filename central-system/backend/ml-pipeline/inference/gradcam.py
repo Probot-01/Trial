@@ -38,7 +38,6 @@ outside the eye is itself a finding.
 
 import cv2
 import numpy as np
-import torch
 
 # The activation after the last conv. Not conv_head itself: Grad-CAM
 # conventionally uses the activated feature map, and the SiLU here is what the
@@ -65,6 +64,11 @@ def compute_gradcam(model, input_tensor, class_index=None, target_layer=TARGET_L
     during the backward pass would make the explanation different every time it
     was computed for the same image.
     """
+    import torch   # lazy: save_overlay()/retinal_mask() below never need torch,
+                   # and importing it merely to IMPORT this module (not call this
+                   # function) used to cost ~350MB -- see branchAInfer.py's
+                   # BRANCH_A_INFERENCE_ENGINE=onnx path, which imports
+                   # save_overlay alone and must not pull torch in to do it.
     if model.training:
         raise RuntimeError(
             "model must be in eval() mode: dropout would randomise the explanation")

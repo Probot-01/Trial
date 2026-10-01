@@ -566,6 +566,213 @@ def assign_tier(probs, calib):
     return tier, pred_set, reason, low, high, contiguous
 
 
+# ── ONNX Runtime backend (BRANCH_A_INFERENCE_ENGINE=onnx) ───────────────────
+# The SIH online-demo deployment only (ml-inference-service/, Render free
+# web service, 512MB). torch+timm alone cost ~480MB to import and load this
+# model -- measured directly, see the deployment session's own notes --
+# before a single inference runs, which does not fit. ONNX Runtime's own
+# import is ~30MB.
+#
+# Grad-CAM and MC-dropout are computed in CLOSED FORM instead of via
+# autograd: everything after backbone.bn2.act (the spatial feature map
+# gradcam.py already hooks, TARGET_LAYER) is global-average-pool ->
+# dropout (identity in eval mode for the point estimate) -> one Linear
+# layer (head.weight/head.bias) -- simple enough to differentiate and
+# resample by hand. This is the SAME technique mcDropoutMatlab.m already
+# uses for MC-dropout on the MATLAB backend (verified there to 8.3e-07
+# against the real head), extended here to Grad-CAM too:
+#
+#   d(logits[k])/d(acts[c,h,w]) = head.weight[k,c] / (H*W)   -- CONSTANT
+#   over all (h,w) for a fixed channel, because global-average-pooling's
+#   own gradient is uniform. So Grad-CAM's channel weights (normally the
+#   spatial MEAN of the backprop gradient) equal head.weight[class,:]/(H*W)
+#   exactly -- not an approximation, the same formula, computed differently.
+#
+# Verified against the real torch path (logits, Grad-CAM map, and a
+# deterministic same-dropout-mask head-math cross-check that isolates RNG
+# differences) across three distinct real images before being trusted:
+# logits max|diff| ~5e-6, Grad-CAM max|diff| ~3e-6, head-math cross-check
+# ~1e-6 -- see extract_branchA_onnx_artifacts.py's header for how the two
+# derived artifacts below were produced.
+#
+# ONLY supports branchA_v2c (the deployed default): branchA_v2c_graphcam.onnx
+# and branchA_v2c_head.npz were generated for that version specifically.
+BRANCH_A_INFERENCE_ENGINE = os.environ.get("BRANCH_A_INFERENCE_ENGINE", "torch").strip().lower()
+_ONNX_GRAPHCAM_PATH = os.path.join(ML_ROOT, "training", "onnx_out", "branchA_v2c_graphcam.onnx")
+_ONNX_HEAD_NPZ_PATH = os.path.join(MODEL_DIR, "Model1", "v2c", "branchA_v2c_head.npz")
+# The 5 fields preprocess()/load_calibration() need (img_size, channel_order,
+# normalize_mean, normalize_std, preprocessing), extracted once offline
+# (extract_branchA_onnx_artifacts.py) -- NOT read via load_checkpoint() here,
+# which would import torch just to read them, reintroducing the exact
+# ~480MB import cost this whole path exists to avoid.
+_ONNX_META_PATH = os.path.join(MODEL_DIR, "Model1", "v2c", "branchA_v2c_meta.json")
+_ACT_OUTPUT_NAME = "/backbone/bn2/act/Mul_output_0"
+
+
+def _softmax_rows(z):
+    z = z - z.max(axis=-1, keepdims=True)
+    e = np.exp(z)
+    return e / e.sum(axis=-1, keepdims=True)
+
+
+def _entropy(p, axis=-1):
+    return -(p * np.log(np.clip(p, 1e-12, None))).sum(axis=axis)
+
+
+def _mc_dropout_onnx(pooled, W, b, drop_rate, temperature, n_passes=20, seed=12345):
+    """MC-dropout over the head, closed form: resample a dropout mask on the
+    pooled features (the same point dropout acts at in
+    DRClassifier.forward: head(dropout(backbone(x)))) and apply the head's
+    own frozen weights by hand. Returns the same shape mcDropout.py's
+    mc_dropout() does, so both engines write the same quantity into
+    grading_results.uncertainty_score.
+    """
+    if n_passes < 2:
+        raise ValueError("n_passes must be at least 2")
+    if drop_rate <= 0:
+        raise ValueError("no active dropout (drop_rate<=0): every pass would "
+                         "be identical and the variance would be exactly 0")
+
+    rng = np.random.default_rng(seed)
+    keep_prob = 1.0 - drop_rate
+    n_classes = W.shape[0]
+    logits_passes = np.empty((n_passes, n_classes), dtype=np.float64)
+    for i in range(n_passes):
+        mask = (rng.random(pooled.shape[0]) < keep_prob).astype(np.float32) / keep_prob
+        logits_passes[i] = W @ (pooled * mask) + b
+
+    probs = _softmax_rows(logits_passes / float(temperature))
+    mean = probs.mean(axis=0)
+    var = probs.var(axis=0)
+
+    predictive_entropy = float(_entropy(mean))
+    expected_entropy = float(_entropy(probs, axis=1).mean())
+    mutual_information = max(0.0, predictive_entropy - expected_entropy)
+    max_entropy = float(np.log(n_classes))
+    score = float(np.clip(predictive_entropy / max_entropy, 0.0, 1.0))
+
+    return {
+        "uncertaintyScore": score,
+        "predictiveEntropy": predictive_entropy,
+        "expectedEntropy": expected_entropy,
+        "mutualInformation": mutual_information,
+        "normalisedMutualInformation": float(mutual_information / max_entropy),
+        "meanProbabilities": [float(v) for v in mean],
+        "perClassVariance": [float(v) for v in var],
+        "totalVariance": float(var.sum()),
+        "meanGrade": int(mean.argmax()),
+        "passes": int(n_passes),
+        "seed": int(seed),
+        "dropoutLayers": ["head-input (closed-form, BRANCH_A_INFERENCE_ENGINE=onnx)"],
+        "dropoutP": [float(drop_rate)],
+        "scope": ("head only -- the single dropout layer sits after the "
+                  "convolutional trunk, so this samples classifier uncertainty "
+                  "over fixed features and cannot see representation "
+                  "uncertainty. A confident out-of-distribution image scores "
+                  "LOW."),
+    }
+
+
+def run_onnx(image_path, gradcam_path, mc_dropout_passes):
+    """The ONNX Runtime twin of main()'s torch block: identical output dict
+    shape, computed without torch -- see this section's header comment."""
+    if BRANCH_A_MODEL_VERSION != "branchA_v2c":
+        _fail("BRANCH_A_INFERENCE_ENGINE=onnx only supports branchA_v2c, got "
+             f"BRANCH_A_MODEL_VERSION={BRANCH_A_MODEL_VERSION!r}")
+    import onnxruntime as ort
+
+    with open(_ONNX_META_PATH, encoding="utf-8") as fh:
+        ckpt = json.load(fh)   # synthetic -- see _ONNX_META_PATH's own comment
+    calib = load_calibration(ckpt)
+    x, base, _enhanced = preprocess(image_path, ckpt)
+
+    head = np.load(_ONNX_HEAD_NPZ_PATH)
+    W, b, drop_rate = head["head_weight"], head["head_bias"], float(head["drop_rate"])
+
+    sess = ort.InferenceSession(_ONNX_GRAPHCAM_PATH, providers=["CPUExecutionProvider"])
+    logits, acts = sess.run(["logits", _ACT_OUTPUT_NAME], {"input": x.astype(np.float32)})
+    logits = logits[0]
+    acts = acts[0]            # (C, H, W) -- backbone.bn2.act, pre-pool
+    del sess
+
+    raw = softmax(logits)
+    T = float(calib.get("temperature", 1.0))
+    cal = softmax(logits / T)
+    grade = int(cal.argmax())
+    tier, pred_set, tier_reason, set_low, set_high, set_contiguous = assign_tier(cal, calib)
+
+    p_referable = float(cal[2] + cal[3] + cal[4])
+    p34 = float(cal[3] + cal[4])
+    referable_threshold = calib.get("referableThreshold")
+    referable = (p34 > 0.5) or (
+        calib.get("calibrated", False) and referable_threshold is not None
+        and p_referable >= float(referable_threshold)
+    )
+
+    out = {
+        "drGradeCnn": grade,
+        "confidenceScore": float(cal[grade]),
+        "calibratedProbabilities": [float(v) for v in cal],
+        "rawProbabilities": [float(v) for v in raw],
+        "logits": [float(v) for v in logits],
+        "referable": bool(referable),
+        "conformalTier": tier,
+        "predictionSet": pred_set,
+        "predictionSetLow": set_low,
+        "predictionSetHigh": set_high,
+        "predictionSetContiguous": set_contiguous,
+        "tierReason": tier_reason,
+        "temperature": T,
+        "calibrated": bool(calib.get("calibrated", False)),
+        "modelVersion": BRANCH_A_MODEL_VERSION,
+        "imgSize": int(ckpt["img_size"]),
+        "preprocessing": ckpt.get("preprocessing", ""),
+    }
+    if calib.get("warning"):
+        out["calibrationWarning"] = calib["warning"]
+
+    pooled = acts.mean(axis=(1, 2))          # global average pool, (C,)
+
+    if mc_dropout_passes and mc_dropout_passes >= 2:
+        try:
+            uncertainty = _mc_dropout_onnx(pooled, W, b, drop_rate, T,
+                                           n_passes=mc_dropout_passes)
+            out["uncertaintyScore"] = uncertainty["uncertaintyScore"]
+            out["uncertainty"] = uncertainty
+        except Exception as exc:  # noqa: BLE001 -- must not fail the grade
+            out["uncertaintyScore"] = None
+            out["uncertaintyError"] = f"{type(exc).__name__}: {exc}"
+            print(f"branchAInfer: MC-dropout (onnx) failed: {exc}", file=sys.stderr)
+    else:
+        out["uncertaintyScore"] = None
+
+    if gradcam_path:
+        try:
+            Hc, Wc = acts.shape[1], acts.shape[2]
+            weights = W[grade] / (Hc * Wc)
+            cam = np.maximum(0.0, (weights[:, None, None] * acts).sum(axis=0)).astype(np.float32)
+            peak = cam.max()
+            if peak > 0:
+                cam = cam / peak
+            from gradcam import save_overlay
+            info = save_overlay(cam, base, gradcam_path)
+            out["gradcam"] = info
+            out["gradcamClass"] = grade
+            out["gradcamMap"] = [[float(v) for v in row] for row in cam]
+            out["gradcamPath"] = gradcam_path
+            if info.get("mostlyOutsideRetina"):
+                out["gradcamWarning"] = (
+                    "most of the model's attention fell OUTSIDE the retinal "
+                    "circle -- the grade may rest on camera artefacts rather "
+                    "than on the eye")
+        except Exception as exc:  # noqa: BLE001 -- must not fail the grade
+            out["gradcamPath"] = None
+            out["gradcamError"] = f"{type(exc).__name__}: {exc}"
+            print(f"branchAInfer: Grad-CAM (onnx) failed: {exc}", file=sys.stderr)
+
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("image", nargs="?", help="path to the fundus image")
@@ -582,6 +789,11 @@ def main():
         _fail(f"no file at {args.image}")
 
     try:
+        if BRANCH_A_INFERENCE_ENGINE == "onnx":
+            out = run_onnx(args.image, args.gradcam, args.mc_dropout)
+            print(json.dumps(out))
+            return 0
+
         import torch
         model, ckpt = load_model()
         calib = load_calibration(ckpt)

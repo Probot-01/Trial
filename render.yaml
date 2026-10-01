@@ -74,15 +74,17 @@ services:
       - key: DEMO_ADMIN_PASSWORD
         sync: false
 
-      # ── Frontend origins (both Vercel apps) ─────────────────────────────
+      # ── Frontend origin (central's own Vercel app) ──────────────────────
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        value: https://centralsys.vercel.app
 
       # ── Inference: this round's online demo only ────────────────────────
       - key: INFERENCE_BACKEND
         value: remote
+      # Fixed, not sync:false: same account/Blueprint, same deterministic
+      # onrender.com hostname pattern as CENTRAL_API_URL below.
       - key: ML_INFERENCE_SERVICE_URL
-        sync: false                  # the deployed ml-inference-service's HF Space URL
+        value: https://netrasetu-ml-inference.onrender.com
       # Not actually invoked (segment() short-circuits to remote before this
       # is ever read) -- set only so matlabSessionSupervisor's wanted() gate
       # (which reads this var too) doesn't try to babysit a MATLAB session
@@ -98,12 +100,21 @@ services:
       - key: SIMULINK_VALIDATION_ENABLED
         value: "false"
 
-      # ── SMS ──────────────────────────────────────────────────────────────
-      # Log referral SMS instead of sending them; no Twilio account is
-      # required for this deployment. Set to "0" and fill TWILIO_* below to
-      # send real messages during the demo instead.
-      - key: SMS_DRY_RUN
-        value: "1"
+      # ── SMS (Twilio) ──────────────────────────────────────────────────────
+      # SMS_DRY_RUN deliberately NOT set: unset/0 sends for real once these
+      # three are filled (see .env.example) -- real credentials already
+      # exist (the repo-root .env), reused here rather than regenerated.
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false
+      - key: REFERRAL_CLINIC_NAME
+        sync: false
+      # Twilio signs this URL; it must match exactly what Twilio calls back.
+      - key: TWILIO_STATUS_CALLBACK_URL
+        value: https://netrasetu-central.onrender.com/api/v1/notifications/sms-status
 
   - type: web
     name: netrasetu-phc
@@ -136,7 +147,7 @@ services:
         sync: false
       # This PHC's own Vercel frontend origin.
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        value: https://phcapp.vercel.app
       # No MATLAB and no compiled quality-gate exe on this host -- use the
       # existing JS port (services/qualityGateFallback.js), same opt-in flag
       # a MATLAB-less dev machine already uses.
