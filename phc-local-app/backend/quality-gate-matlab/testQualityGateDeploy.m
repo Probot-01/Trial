@@ -125,24 +125,47 @@ else
     else
         [n,f] = tbool(n, f, 'qualityGate.exe exists', true);
 
-        % The bundled asset is the packaging check that matters. Inside the exe
-        % isdeployed is true, so qualityGateAssetPath resolves cameraPresets.json
-        % out of the CTF archive — if `mcc -a` had missed it, the exe would build
-        % and run and fail here. Nothing else verifies that.
-        [n,f] = tbool(n, f, 'cameraPresets.json was bundled into the archive', ...
-            exist(fullfile(thisDir, 'dist', 'qualityGate.exe'), 'file') == 2);
+        % RUN A COPY, ISOLATED FROM THE SOURCE TREE (2026-10-02).
+        %
+        % This used to run dist\qualityGate.exe in place, and that hid a real
+        % packaging bug for weeks. qualityGateAssetPath's last candidate is the
+        % folder ABOVE the exe's -- for dist\ that is this source folder, so the
+        % exe silently read the SOURCE cameraPresets.json and this suite
+        % passed, while the same binary copied to a PHC failed every capture
+        % with notFound (the CTF puts the file under ctfroot\qualityGate\, which
+        % nothing looked at). The "bundled" check here was also a tautology: it
+        % re-tested that the exe exists.
+        %
+        % So: copy the exe alone into <tempdir>\<random>\bin\ (nothing else in
+        % either folder) and run it from there, with that folder as the working
+        % directory. The only cameraPresets.json it can find is the one inside
+        % its own archive.
+        isoRoot = tempname;
+        isoBin  = fullfile(isoRoot, 'bin');
+        mkdir(isoBin);
+        cleanupIso = onCleanup(@() rmdir(isoRoot, 's'));
+        isoExe = fullfile(isoBin, 'qualityGate.exe');
+        copyfile(exePath, isoExe);
+        strays = [dir(fullfile(isoRoot, '**', 'cameraPresets.json')); ...
+                  dir(fullfile(isoRoot, 'cameraPresets.json'))];
+        [n,f] = tbool(n, f, 'isolated copy has no cameraPresets.json beside it', isempty(strays));
 
         if ~isempty(testImage)
             % Running it needs the Runtime on PATH. On this machine that comes
             % from the full MATLAB install; on a PHC it comes from the separate
             % MATLAB Runtime package.
             runtimeDir = fullfile(matlabroot, 'runtime', computer('arch'));
-            cmd = sprintf('set "PATH=%s;%%PATH%%" && "%s" "%s" unknown', ...
-                          runtimeDir, exePath, testImage);
+            cmd = sprintf('cd /d "%s" && set "PATH=%s;%%PATH%%" && "%s" "%s" unknown', ...
+                          isoBin, runtimeDir, isoExe, testImage);
             [status, out] = system(cmd);
 
-            [n,f] = tbool(n, f, 'the exe runs and exits 0', status == 0, ...
+            [n,f] = tbool(n, f, 'the ISOLATED exe runs and exits 0', status == 0, ...
                 sprintf('status %d: %s', status, strtrim(out)));
+            % The packaging check that matters: if `mcc -a` had missed the
+            % presets, or qualityGateAssetPath could not find them inside the
+            % archive, the isolated run fails with qualityGateAssetPath:notFound.
+            [n,f] = tbool(n, f, 'cameraPresets.json resolved from inside the archive', ...
+                status == 0 && ~contains(out, 'notFound'), strtrim(out));
 
             jsonStart = strfind(out, '{');
             if status == 0 && ~isempty(jsonStart)
