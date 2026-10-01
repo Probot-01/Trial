@@ -5,11 +5,13 @@
 # live URL for the current round. Frontends are NOT here: both are already
 # on Vercel and stay there.
 #
-# ML inference is NOT on these services either: it runs on a separate
-# Hugging Face Space (ml-inference-service/), because Render's free web
-# plan (512MB RAM) can't hold the PyTorch classifier plus four U-Nets.
-# netrasetu-central talks to it over HTTP via INFERENCE_BACKEND=remote
-# (see central-system/backend/services/gradingOrchestrator.js).
+# ML inference is its own third service here (netrasetu-ml-inference,
+# ml-inference-service/) rather than living inside netrasetu-central: both
+# branch-A and segmentation run their additive ONNX Runtime backend (not
+# PyTorch) specifically so this fits a free 512MB web service at all --
+# measured peak ~263MB even under concurrent load. netrasetu-central talks
+# to it over HTTP via INFERENCE_BACKEND=remote (see central-system/backend/
+# services/gradingOrchestrator.js).
 #
 # autoDeployTrigger is "off" on both services deliberately: with a live demo
 # URL, a routine push to main should not silently redeploy it. Trigger
@@ -155,3 +157,23 @@ services:
         value: "1"
       - key: LOCAL_AUTH_ENABLED
         value: "true"
+
+  - type: web
+    name: netrasetu-ml-inference
+    runtime: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./ml-inference-service/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    healthCheckPath: /health
+    envVars:
+      # Not secret (a stable GitHub API asset URL) -- passed to the Docker
+      # build as a normal ARG. MODELS_REPO_TOKEN below is the actual secret,
+      # consumed only via the Dockerfile's BuildKit secret mount, never an
+      # ARG (see that file's own comment on why: ARGs persist in image
+      # layers, secret mounts don't).
+      - key: MODELS_ARCHIVE_URL
+        value: https://api.github.com/repos/tanujb03/netrasetu-models-private/releases/assets/603469029
+      - key: MODELS_REPO_TOKEN
+        sync: false
