@@ -182,12 +182,26 @@ const SEG_INFER      = path.join(ML_ROOT, 'inference', 'segInfer.py');
 //           INFERENCE_BACKEND=python to fall back to it (e.g. if the
 //           persistent session is down and restarting it isn't an option
 //           right now).
-// Segmentation (segInfer.py) is UNCHANGED either way -- this switch is
-// Branch A/classifier only.
+// 'remote': the SIH online-demo round only (2026-10). Render's free
+//           web-service RAM can't hold the PyTorch classifier plus several
+//           U-Nets, so this calls ml-inference-service/ (a separate HTTP
+//           wrapper around the SAME, unmodified branchAInfer.py/segInfer.py,
+//           deployed on Hugging Face Spaces) instead of spawning a local
+//           Python process. Unlike the matlab/python switch above, 'remote'
+//           ALSO redirects segmentation -- see segment() below -- because on
+//           this deployment there is no local Python/PyTorch install to fall
+//           back to at all. The final round keeps running 'matlab' locally;
+//           this exists only for the hosted demo.
 const INFERENCE_BACKEND = (process.env.INFERENCE_BACKEND || 'matlab').toLowerCase();
-if (!['python', 'matlab'].includes(INFERENCE_BACKEND)) {
-  throw new Error(`INFERENCE_BACKEND must be 'python' or 'matlab', got '${INFERENCE_BACKEND}'`);
+if (!['python', 'matlab', 'remote'].includes(INFERENCE_BACKEND)) {
+  throw new Error(`INFERENCE_BACKEND must be 'python', 'matlab', or 'remote', got '${INFERENCE_BACKEND}'`);
 }
+const ML_INFERENCE_SERVICE_URL = (process.env.ML_INFERENCE_SERVICE_URL || '').replace(/\/+$/, '');
+if (INFERENCE_BACKEND === 'remote' && !ML_INFERENCE_SERVICE_URL) {
+  throw new Error('INFERENCE_BACKEND=remote requires ML_INFERENCE_SERVICE_URL '
+    + '(the deployed ml-inference-service base URL, e.g. an HF Space URL)');
+}
+const ML_INFERENCE_TIMEOUT_MS = parseInt(process.env.ML_INFERENCE_TIMEOUT_MS || '180000', 10);
 const PREPROCESS_TENSOR = path.join(ML_ROOT, 'inference', 'preprocessBranchATensor.py');
 // branchAInferMatlab.m itself is no longer addpath'd/invoked per call from
 // here -- the persistent session (matlabSession/runMatlabInferenceSession.m)
@@ -335,6 +349,111 @@ async function runBranchAInferenceMatlab(imagePath, gradcamPath) {
   }
 }
 
+// ── Remote ML inference (ml-inference-service/, Hugging Face Spaces) ───────
+// INFERENCE_BACKEND=remote only -- see that switch's comment above for why
+// this exists. Both functions below call the SAME CLI scripts as the python
+// backend, just over HTTP; nothing downstream of them needs to know.
+/**
+ * postToInferenceService(urlPath, imagePath, extraFields)
+ *
+ * Uploads imagePath as multipart/form-data to ML_INFERENCE_SERVICE_URL +
+ * urlPath using Node's built-in fetch/FormData/Blob (no new dependency).
+ * Throws `ml_inference_service_unavailable` (permanent, like the MATLAB/
+ * Python spawn failures above) when the service cannot be reached at all,
+ * so gradingQueue does not burn retries on a URL that is simply wrong.
+ */
+async function postToInferenceService(urlPath, imagePath, extraFields = {}) {
+  const buf = await fs.promises.readFile(imagePath);
+  const form = new FormData();
+  form.append('image', new Blob([buf]), path.basename(imagePath));
+  for (const [key, val] of Object.entries(extraFields)) form.append(key, String(val));
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ML_INFERENCE_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(`${ML_INFERENCE_SERVICE_URL}${urlPath}`, {
+      method: 'POST', body: form, signal: controller.signal,
+    });
+  } catch (err) {
+    throw unavailable('ml_inference_service_unavailable',
+      `Failed to reach ml-inference-service at ${ML_INFERENCE_SERVICE_URL}${urlPath}: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  let body;
+  try {
+    body = await res.json();
+  } catch (err) {
+    throw new Error(`ml-inference-service ${urlPath} returned non-JSON (status ${res.status}): ${err.message}`);
+  }
+  if (!res.ok) {
+    throw new Error(`ml-inference-service ${urlPath} returned ${res.status}: `
+      + `${body.error || ''} ${(body.stderr || '').toString().slice(0, 300)}`);
+  }
+  return body;
+}
+
+/**
+ * runBranchAInferenceRemote(imagePath, gradcamPath)
+ *
+ * The remote twin of runBranchAInference: identical resolved JSON shape.
+ * The one real difference the split architecture forces: the Grad-CAM PNG
+ * comes back as base64 (this service and the HF Space share no filesystem)
+ * and is written here to the SAME local gradcamPath the caller already
+ * decided on (mediaPaths.gradcamPath), so the DB write and the frontend's
+ * /media URL are unaffected either way.
+ */
+async function runBranchAInferenceRemote(imagePath, gradcamPath) {
+  const result = await postToInferenceService('/infer/branch-a', imagePath);
+  if (gradcamPath && result.gradcamBase64) {
+    await fs.promises.writeFile(gradcamPath, Buffer.from(result.gradcamBase64, 'base64'));
+    result.gradcamPath = gradcamPath;
+  } else {
+    result.gradcamPath = null;
+  }
+  delete result.gradcamBase64;
+  return result;
+}
+
+/**
+ * runSegInferenceRemote(imagePath, outdir)
+ *
+ * The remote twin of runSegInference/runSegInferenceSession: NULL on any
+ * failure, never throws (see runSegInference's header -- Branch B is the
+ * second opinion, losing it degrades a case rather than failing it; there is
+ * no MATLAB-engine exception path here because the service always forces
+ * SEG_INFERENCE_BACKEND=python, see ml-inference-service/app.py).
+ *
+ * Decodes each base64 mask PNG back into a real file under outdir, using the
+ * same naming convention segInfer.py itself uses, so segResult.masks is a
+ * map of real local file paths exactly as buildCasePipelineInput and the
+ * segmentation_outputs insert already expect -- neither needs to know this
+ * round ran the models on a different machine.
+ */
+async function runSegInferenceRemote(imagePath, outdir) {
+  let result;
+  try {
+    result = await postToInferenceService('/infer/segmentation', imagePath);
+  } catch (err) {
+    console.warn(`[gradingOrchestrator] remote segmentation failed: ${err.message}`);
+    return null;
+  }
+  const masksBase64 = result.masksBase64 || {};
+  const base = path.basename(imagePath, path.extname(imagePath));
+  const masks = {};
+  if (outdir) fs.mkdirSync(outdir, { recursive: true });
+  for (const [name, b64] of Object.entries(masksBase64)) {
+    if (!b64) continue;
+    const maskPath = path.join(outdir, `${base}_${name}.png`);
+    await fs.promises.writeFile(maskPath, Buffer.from(b64, 'base64'));
+    masks[name] = maskPath;
+  }
+  result.masks = masks;
+  delete result.masksBase64;
+  return result;
+}
+
 /**
  * runSegInference(imagePath, outdir)
  *
@@ -448,6 +567,12 @@ async function runSegInferenceSession(imagePath, outdir) {
  * reason given there.
  */
 async function segment(imagePath, outdir) {
+  // INFERENCE_BACKEND=remote: no local Python/PyTorch install to fall back to
+  // on this deployment at all (see that switch's comment) -- the worker and
+  // the per-call spawn below are both skipped, not merely de-prioritised.
+  if (INFERENCE_BACKEND === 'remote') {
+    return runSegInferenceRemote(imagePath, outdir);
+  }
   if (segSession.alive()) {
     const viaWorker = await runSegInferenceSession(imagePath, outdir);
     if (viaWorker) return viaWorker;
@@ -771,6 +896,8 @@ async function gradeCase(caseId, plainImagePath) {
   // needs to know which one ran. Segmentation is unaffected either way.
   const runBranchA = INFERENCE_BACKEND === 'matlab'
     ? runBranchAInferenceMatlab
+    : INFERENCE_BACKEND === 'remote'
+    ? runBranchAInferenceRemote
     : runBranchAInference;
   // Probation lookup runs alongside the two inference calls rather than
   // after them -- it only needs caseRow fields already in hand, and adding it
@@ -1612,6 +1739,9 @@ function buildEngineProvenance({ inferenceBackend, segResult, casePipelineVia })
   const classifier = inferenceBackend === 'matlab'
     ? engineEntry('matlab', 'MATLAB session (branchAInferMatlab.m); input tensor '
       + 'preprocessed in Python (preprocessBranchATensor.py)')
+    : inferenceBackend === 'remote'
+    ? engineEntry('python', 'branchAInfer.py via ml-inference-service on Hugging '
+      + 'Face Spaces (INFERENCE_BACKEND=remote) -- same script, different machine')
     : engineEntry('python', 'branchAInfer.py (INFERENCE_BACKEND=python)');
 
   let segmentation = null;
@@ -1643,7 +1773,7 @@ function buildEngineProvenance({ inferenceBackend, segResult, casePipelineVia })
 module.exports = {
   processCase, assignTier, decideTier, buildCasePipelineInput, caseRuleOpts, readFoveaUnreliable,
   caseClinicalInputs,
-  runBranchAInference, runBranchAInferenceMatlab, INFERENCE_BACKEND,
+  runBranchAInference, runBranchAInferenceMatlab, runBranchAInferenceRemote, INFERENCE_BACKEND,
   isCaptureUngradable, hasClearedCameraSiteProbation, CAMERA_PROBATION_MIN_CASES,
   segment, buildEngineProvenance,
 };

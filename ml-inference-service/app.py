@@ -76,6 +76,7 @@ async def infer_branch_a(image: UploadFile = File(...), mcDropout: int = Form(20
             return JSONResponse(status_code=502, content={"error": "unparseable_output", "detail": str(exc), "stdout": proc.stdout[-2000:]})
 
         result["gradcamBase64"] = _b64_if_exists(gradcam_path)
+        result.pop("gradcamPath", None)  # only valid on this service's own filesystem
         return result
 
 
