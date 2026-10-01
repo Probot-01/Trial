@@ -138,13 +138,23 @@ async function waitFor(what, check, timeoutMs, everyMs = 2000) {
   throw new Error(`timed out after ${Math.round(timeoutMs / 1000)} s waiting for ${what}${last ? ` (last error: ${last})` : ''}`);
 }
 
-/** Central /health with every component green (MATLAB session and segmentation worker included). */
+/** Central /health with every component green (MATLAB session and segmentation worker included).
+ *
+ * segWorker's own status vocabulary is 'healthy' | 'restarting' | 'down' | 'disabled'
+ * (services/segWorkerSupervisor.js) -- 'disabled' is the CORRECT steady state whenever
+ * SEG_INFERENCE_BACKEND=matlab (the default, and the only backend all four segmentation
+ * models now serve from), since the persistent Python segmentation worker isn't started
+ * at all in that mode. Requiring strictly 'healthy' here meant this check could never
+ * pass under the default/recommended config -- demo-reset/dev-up timed out at 360s
+ * every time despite every real component already being fine, confirmed by curling
+ * /health directly during the "failed" wait. */
 async function centralHealthy(port) {
   const { status, body } = await getJson(`http://localhost:${port}/health`);
   const c = body && body.components;
   if (status !== 200 || !c) return false;
+  const segOk = c.python.segWorker.status === 'healthy' || c.python.segWorker.status === 'disabled';
   return c.db.status === 'ok' && c.queue.status === 'ok' && c.matlabSession.status === 'healthy'
-    && c.python.status === 'ok' && c.python.segWorker.status === 'healthy' ? c : false;
+    && c.python.status === 'ok' && segOk ? c : false;
 }
 
 async function httpOk(url) {
