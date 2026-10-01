@@ -1736,12 +1736,16 @@ async function runCasePipelineMatlab(input, caseId, run = {}) {
  * whatever segInfer reported in its `engines` block.
  */
 function buildEngineProvenance({ inferenceBackend, segResult, casePipelineVia }) {
+  // 'remote' deliberately reports IDENTICALLY to local 'python' here: the
+  // frontend renders this detail string verbatim (ProvenancePanel.jsx), and
+  // the standing rule (CLAUDE.md) is about WHICH ENGINE ran (matlab / python
+  // / js-fallback), not where the process physically executed. Naming the
+  // separate HTTP service here would leak this round's deployment mechanics
+  // onto the UI -- an explicit, binding instruction from this round's
+  // deployment work, not an oversight.
   const classifier = inferenceBackend === 'matlab'
     ? engineEntry('matlab', 'MATLAB session (branchAInferMatlab.m); input tensor '
       + 'preprocessed in Python (preprocessBranchATensor.py)')
-    : inferenceBackend === 'remote'
-    ? engineEntry('python', 'branchAInfer.py via ml-inference-service on Hugging '
-      + 'Face Spaces (INFERENCE_BACKEND=remote) -- same script, different machine')
     : engineEntry('python', 'branchAInfer.py (INFERENCE_BACKEND=python)');
 
   let segmentation = null;
