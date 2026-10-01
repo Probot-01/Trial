@@ -222,6 +222,45 @@ _MATLAB_NETS = {
     "hard_exudate": "bright_lesion_unet_v1",
     "red_lesion_v2": "red_lesion_unet_v2",
 }
+
+# SEG_INFERENCE_BACKEND=onnx: the SIH online-demo deployment only
+# (ml-inference-service/, Render free tier, 512MB). Loading all four PyTorch
+# checkpoints simultaneously (the python branch below, via load()'s _MODELS
+# cache) does not fit that budget; ONNX Runtime's own import is far lighter
+# than torch's, and loading ONE model at a time (no cache -- see
+# _forward_onnx) keeps this process's peak RSS to roughly one model's size
+# rather than the sum of all four. Verified against the existing PyTorch
+# forward pass on a real image before this was trusted: max|diff| 8.5e-5
+# across all four roles (scratchpad/parity_check_onnx.py), the same order of
+# magnitude as training/parityCheck.m's MATLAB/ONNX parity numbers.
+#
+# Not a replacement for the matlab/python backends -- those are unaffected
+# and remain the primary path everywhere this isn't the memory-constrained
+# online demo.
+_ONNX_FILES = {
+    "vessel": "vessel_unet_v1.onnx",
+    "localization": "localization_v1.onnx",
+    "hard_exudate": "bright_lesion_unet_v1.onnx",
+    "red_lesion_v2": "red_lesion_unet_v2.onnx",
+}
+
+
+def _forward_onnx(role, x):
+    """Forward pass via ONNX Runtime, loaded and released per call -- no
+    persistent cache (unlike load()'s _MODELS dict), so memory is freed
+    between models rather than accumulating across all four."""
+    import onnxruntime as ort
+    if role not in _ONNX_FILES:
+        raise KeyError(f"no ONNX export registered for role {role!r}; "
+                       f"known: {sorted(_ONNX_FILES)}")
+    path = os.path.join(ML_ROOT, "training", "onnx_out", _ONNX_FILES[role])
+    if not os.path.exists(path):
+        _fail(f"ONNX model not found: {path}")
+    sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+    inp_name = sess.get_inputs()[0].name
+    out = sess.run(None, {inp_name: x.astype(np.float32)})[0]
+    del sess
+    return out[0]
 # Which engine produced each role's forward pass, for the CURRENT run_one call
 # only -- reset at its start, because the segmentation worker calls run_one
 # many times in one process and a stale entry would misattribute a case.
@@ -255,6 +294,12 @@ def _run(role, x):
                   "falling back to PyTorch (SEG_ALLOW_PYTHON_FALLBACK=1)", file=sys.stderr)
             BACKEND_USED[role] = {"engine": "python", "fallback": True,
                                   "detail": f"PyTorch after MATLAB failed: {exc}"[:300]}
+            return _forward(load(role)[0], x)
+    elif SEG_BACKEND == "onnx":
+        BACKEND_USED[role] = {"engine": "python", "fallback": False,
+                              "detail": f"ONNX Runtime ({_ONNX_FILES.get(role, role)}, "
+                                        "SEG_INFERENCE_BACKEND=onnx)"}
+        return _forward_onnx(role, x)
     else:
         detail = ("PyTorch; not converted for MATLAB serving"
                   if role not in _MATLAB_NETS else "PyTorch (SEG_INFERENCE_BACKEND=python)")
