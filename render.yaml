@@ -24,9 +24,11 @@
 #      then set them on netrasetu-phc.
 #   2. Run `npm run technician -- add <username> "<Full Name>"` on
 #      netrasetu-phc (Render Shell/Jobs) so someone can log in to it.
-# (DB migrations and the two demo clinician accounts ARE automated --
-# preDeployCommand below runs both on every deploy; both scripts are
-# idempotent.)
+# (DB migrations and the two demo clinician accounts ARE automated -- but
+# via netrasetu-central's Dockerfile CMD, not preDeployCommand: Render's
+# free tier does not support preDeployCommand at all (the Blueprint apply
+# step refuses a render.yaml that sets it on a free-tier service). Both
+# scripts are idempotent and run on every container start instead.)
 
 databases:
   - name: netrasetu-db
@@ -44,11 +46,9 @@ services:
     dockerContext: .
     autoDeployTrigger: "off"
     healthCheckPath: /health
-    # Both scripts are idempotent (see their own headers) -- safe to run on
-    # every deploy, not just the first. Same scripts local dev already uses
-    # (package.json: npm run migrate / npm run seed-users), not a
-    # Docker-specific migration path.
-    preDeployCommand: npm run migrate && npm run seed-users
+    # Migrations + demo-user seeding run from the Dockerfile's own CMD, not
+    # preDeployCommand -- see the header comment above and that Dockerfile's
+    # own comment for why.
     envVars:
       - key: NODE_ENV
         value: production

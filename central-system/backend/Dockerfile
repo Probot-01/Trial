@@ -3,7 +3,7 @@
 # NetraSetu central backend -- Render deployment, SIH online-demo round only.
 # Pure Node: no ml-pipeline, no Python, no MATLAB. This deployment always runs
 # INFERENCE_BACKEND=remote (see services/gradingOrchestrator.js), which calls
-# the separate ml-inference-service on Hugging Face Spaces instead of a local
+# the separate netrasetu-ml-inference Render service instead of a local
 # Python process. ml-pipeline/ is deliberately NOT copied into this image --
 # it is ~8GB on disk, almost entirely datasets and training artifacts this
 # image never touches. Local dev (npm run dev:all) and a machine that runs
@@ -14,8 +14,15 @@
 # repo's central-system/backend/scripts.* layout is preserved under /app
 # rather than flattened, so the existing `npm run migrate` / `npm run
 # seed-users` (package.json: `node ../../scripts/...`) work completely
-# unmodified as Render's preDeployCommand -- the same scripts local dev
-# already uses, not a Docker-specific migration path.
+# unmodified -- the same scripts local dev already uses, not a
+# Docker-specific migration path.
+#
+# Run from CMD, not Render's preDeployCommand: Render's free tier does not
+# support preDeployCommand at all (confirmed by the Blueprint apply step
+# itself refusing render.yaml with it set -- not documented anywhere ahead
+# of time). Both scripts are idempotent (see their own headers), so running
+# them on every container START rather than once per deploy is still safe
+# -- a crash-triggered restart just re-applies already-applied state.
 
 FROM node:22-slim
 
@@ -33,13 +40,20 @@ COPY central-system/backend/middleware ./central-system/backend/middleware
 COPY central-system/backend/routes   ./central-system/backend/routes
 COPY central-system/backend/services ./central-system/backend/services
 
-# The one-off provisioning scripts (db/migrations are run via package.json's
-# own `npm run migrate`, already copied above with db/) -- these two reach
-# outside central-system/backend by design (one key/account per PHC, shared
-# tooling), same relative path math as `npm run migrate`.
+# Repo-root scripts this image's own CMD and the one-off provisioning steps
+# need -- all three reach outside central-system/backend by design (shared
+# tooling, one key/account per PHC), same relative path math as package.json's
+# `npm run migrate`/`npm run seed-users` already use locally. setupCentralDb.js
+# is NOT optional: CMD below runs it on every container start (see this
+# file's header) -- its absence was previously undetected because nothing
+# had exercised this exact path end to end until local testing caught it.
+COPY scripts/setupCentralDb.js  ./scripts/setupCentralDb.js
 COPY scripts/provisionPhcKey.js ./scripts/provisionPhcKey.js
 COPY scripts/seedDemoUsers.js   ./scripts/seedDemoUsers.js
 
 ENV NODE_ENV=production
 WORKDIR /app/central-system/backend
-CMD ["node", "server.js"]
+# Shell form (not exec-form JSON) so the migrate/seed commands can run first;
+# `exec` on the last one so node becomes PID 1 and receives SIGTERM directly
+# for a graceful shutdown, instead of an intermediate shell swallowing it.
+CMD npm run migrate && npm run seed-users && exec node server.js
