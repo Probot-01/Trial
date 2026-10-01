@@ -1,0 +1,146 @@
+# NetraSetu -- Render Blueprint for the SIH online-demo deployment ONLY.
+#
+# The final round still runs everything locally via MATLAB (see
+# docs/TECHNICAL_DOCUMENTATION.md) -- this exists purely to give judges a
+# live URL for the current round. Frontends are NOT here: both are already
+# on Vercel and stay there.
+#
+# ML inference is NOT on these services either: it runs on a separate
+# Hugging Face Space (ml-inference-service/), because Render's free web
+# plan (512MB RAM) can't hold the PyTorch classifier plus four U-Nets.
+# netrasetu-central talks to it over HTTP via INFERENCE_BACKEND=remote
+# (see central-system/backend/services/gradingOrchestrator.js).
+#
+# autoDeployTrigger is "off" on both services deliberately: with a live demo
+# URL, a routine push to main should not silently redeploy it. Trigger
+# deploys manually from the Render Dashboard when ready.
+#
+# One-time manual steps after first deploy (not expressible as Blueprint
+# config -- see the handoff notes given alongside this file):
+#   1. Run `npm run provision-phc-key -- --create "<PHC name>"` on
+#      netrasetu-central (Render Shell/Jobs) to mint PHC_ID + PHC_API_KEY,
+#      then set them on netrasetu-phc.
+#   2. Run `npm run technician -- add <username> "<Full Name>"` on
+#      netrasetu-phc (Render Shell/Jobs) so someone can log in to it.
+# (DB migrations and the two demo clinician accounts ARE automated --
+# preDeployCommand below runs both on every deploy; both scripts are
+# idempotent.)
+
+databases:
+  - name: netrasetu-db
+    databaseName: netrasetu_central
+    plan: free
+    region: singapore
+
+services:
+  - type: web
+    name: netrasetu-central
+    runtime: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./central-system/backend/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    healthCheckPath: /health
+    # Both scripts are idempotent (see their own headers) -- safe to run on
+    # every deploy, not just the first. Same scripts local dev already uses
+    # (package.json: npm run migrate / npm run seed-users), not a
+    # Docker-specific migration path.
+    preDeployCommand: npm run migrate && npm run seed-users
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: netrasetu-db
+          property: connectionString
+
+      # ── Auth / media encryption ──────────────────────────────────────────
+      - key: AUTH_ENABLED
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true          # 256-bit base64 -- >=32 chars required
+      - key: TRUST_PROXY
+        value: "1"                   # behind Render's load balancer
+      - key: PHC_AUTH_ENABLED
+        value: "true"
+      - key: MEDIA_ENCRYPTION_KEY
+        generateValue: true          # 256-bit base64 -- exactly what mediaCrypto.js expects
+      # Demo clinician logins (seedDemoUsers.js refuses its .env.example
+      # fallback passwords once NODE_ENV=production, by design -- these two
+      # MUST be filled in the Dashboard before the first deploy succeeds).
+      - key: DEMO_OPHTHALMOLOGIST_PASSWORD
+        sync: false
+      - key: DEMO_ADMIN_PASSWORD
+        sync: false
+
+      # ── Frontend origins (both Vercel apps) ─────────────────────────────
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+      # ── Inference: this round's online demo only ────────────────────────
+      - key: INFERENCE_BACKEND
+        value: remote
+      - key: ML_INFERENCE_SERVICE_URL
+        sync: false                  # the deployed ml-inference-service's HF Space URL
+      # Not actually invoked (segment() short-circuits to remote before this
+      # is ever read) -- set only so matlabSessionSupervisor's wanted() gate
+      # (which reads this var too) doesn't try to babysit a MATLAB session
+      # that doesn't exist on this host.
+      - key: SEG_INFERENCE_BACKEND
+        value: python
+
+      # ── No MATLAB/local Python on this host -- stop watching for them ───
+      - key: MATLAB_SUPERVISOR_ENABLED
+        value: "false"
+      - key: SEG_WORKER_SUPERVISOR_ENABLED
+        value: "false"
+      - key: SIMULINK_VALIDATION_ENABLED
+        value: "false"
+
+      # ── SMS ──────────────────────────────────────────────────────────────
+      # Log referral SMS instead of sending them; no Twilio account is
+      # required for this deployment. Set to "0" and fill TWILIO_* below to
+      # send real messages during the demo instead.
+      - key: SMS_DRY_RUN
+        value: "1"
+
+  - type: web
+    name: netrasetu-phc
+    runtime: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./phc-local-app/backend/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Fixed, not fromService: a Render web service's public hostname is
+      # deterministic (https://<name>.onrender.com) and this is simpler and
+      # more obviously correct than relying on Render's private network
+      # reaching across two independently-deployed services for a demo.
+      - key: CENTRAL_API_URL
+        value: https://netrasetu-central.onrender.com
+      - key: PHC_CODE
+        value: PHC001
+      - key: PHC_NAME
+        value: NetraSetu Demo PHC
+      # From `npm run provision-phc-key` on netrasetu-central (step 1 in the
+      # header above) -- cannot be known until that service is deployed and
+      # migrated once.
+      - key: PHC_ID
+        sync: false
+      - key: PHC_API_KEY
+        sync: false
+      # This PHC's own Vercel frontend origin.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # No MATLAB and no compiled quality-gate exe on this host -- use the
+      # existing JS port (services/qualityGateFallback.js), same opt-in flag
+      # a MATLAB-less dev machine already uses.
+      - key: QUALITY_GATE_ALLOW_FALLBACK
+        value: "1"
+      - key: LOCAL_AUTH_ENABLED
+        value: "true"
