@@ -5,6 +5,8 @@
     "ml-pipeline/inference/segSession/*.heartbeat",
     "ml-pipeline/inference/segSession/*.pid",
     "ml-pipeline/diagnostics/out/**",
+    "media/**",
+    "explainability-outputs/**",
     "*.log"
   ]
 }
