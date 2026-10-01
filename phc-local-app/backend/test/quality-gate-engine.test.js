@@ -2,13 +2,20 @@
 
 /**
  * Quality gate with the JS fallback tier OPTED IN (QUALITY_GATE_ALLOW_FALLBACK=1)
- * and no MATLAB on the machine.
+ * and no MATLAB on the machine -- the hosted (Linux, MATLAB-less) PHC's setup.
  *
- * The JS tier is switched off in code (its decisions diverged from MATLAB's), so
- * "opted in, MATLAB absent" must end the same way as "not opted in": a truthful
- * 503 quality_gate_failed with the image kept -- NOT a made-up verdict such as the
- * old { status: 'retake', reason: 'MATLAB_UNAVAILABLE' }, which told technicians
- * to retake photographs that had never been checked.
+ * History: the JS tier was switched off on 2026-09-27 because its scores had
+ * drifted from MATLAB's, and this test pinned the resulting 503. On
+ * 2026-10-02 qualityGateFallback.js was rewritten as a step-by-step port and
+ * re-enabled only after verify_quality_gate_parity.js reached zero mismatches
+ * (plus a 52-image check: 40 public-dataset images and 12 degraded copies, every
+ * decision identical). So this test now demands the stronger property: the
+ * opted-in fallback returns the SAME verdict MATLAB gives for this fixture,
+ * scores within the parity tolerance, and says which engine produced it.
+ *
+ * The "gate cannot run at all -> truthful 503, never an invented verdict"
+ * guarantee is unchanged and still tested in sync-flow.test.js (fallback NOT
+ * opted in).
  */
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -34,6 +41,23 @@ process.env.QUALITY_GATE_ALLOW_FALLBACK = '1';
 delete process.env.QUALITY_GATE_EXE;
 
 const FIXTURE = path.resolve(__dirname, '../../../tests/fixtures/idrid_163_good_borderline.jpg');
+
+// qualityGateMain('tests/fixtures/idrid_163_good_borderline.jpg', 'unknown') in
+// MATLAB R2026a, 2026-10-02.
+const MATLAB_REFERENCE = {
+  status: 'borderline',
+  scores: {
+    focusScore: 0.30255740693643762,
+    illuminationScore: 0.6237602954220296,
+    fovScore: 1,
+    coveragePercent: 0.69098585155332881,
+    glareScore: 0,
+    motionScore: 0.0042264045638183275,
+    occlusionScore: 0.060510727182704595,
+  },
+};
+const TOL = 1e-3;   // verify_quality_gate_parity.js's tolerance
+
 let server, base;
 
 before(async () => {
@@ -43,7 +67,7 @@ before(async () => {
 });
 after(() => { server?.close(); server?.closeAllConnections?.(); });
 
-test('fallback opted in but switched off: 503, never a verdict', async () => {
+test('fallback opted in, no MATLAB: MATLAB\'s own verdict, labelled js-fallback', async () => {
   const p = await (await fetch(`${base}/patients`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: 'Fallback Test', age: 44, contactNumber: '+919833333333' }),
@@ -55,14 +79,21 @@ test('fallback opted in but switched off: 503, never a verdict', async () => {
   const res = await fetch(`${base}/captures`, { method: 'POST', body: form });
   const body = await res.json();
 
-  assert.equal(res.status, 503, JSON.stringify(body));
-  assert.equal(body.error, 'quality_gate_failed');
-  assert.match(body.message, /switched off/i);
-  assert.equal(body.qualityStatus, undefined, 'no quality verdict is invented');
+  assert.equal(res.status, 201, JSON.stringify(body));
   assert.match(body.captureId, /^PHC001-/);
+  assert.equal(body.qualityStatus, MATLAB_REFERENCE.status);
 
   const db = require('../db/localDb');
-  const c = db.prepare('SELECT quality_status FROM captures WHERE capture_id = ?').get(body.captureId);
-  assert.equal(c.quality_status, 'pending', 'the capture waits for a real check');
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM sync_queue').get().n, 0);
+  const row = db.prepare('SELECT quality_status, quality_scores, quality_engine FROM captures WHERE capture_id = ?')
+    .get(body.captureId);
+  assert.equal(row.quality_status, MATLAB_REFERENCE.status);
+
+  const engine = JSON.parse(row.quality_engine);
+  assert.equal(engine.engine, 'js-fallback', 'the engine that judged the image is recorded');
+  assert.equal(engine.fallback, true);
+
+  const scores = JSON.parse(row.quality_scores);
+  for (const [k, want] of Object.entries(MATLAB_REFERENCE.scores)) {
+    assert.ok(Math.abs(scores[k] - want) <= TOL, `${k}: js=${scores[k]} matlab=${want}`);
+  }
 });

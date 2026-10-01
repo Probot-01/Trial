@@ -249,7 +249,7 @@ async function runQualityGate(imagePath, cameraDeviceId) {
         '[qualityGateClient] MATLAB is not installed on this machine — using the '
         + 'JS quality-gate fallback (qualityGateFallback.js) instead. On a machine '
         + 'with MATLAB (or QUALITY_GATE_EXE) this code path is never taken.');
-      return withEngine(await runQualityGateFallback(imagePath), 'js-fallback', true,
+      return withEngine(await runQualityGateFallback(imagePath, deviceId), 'js-fallback', true,
         'qualityGateFallback.js -- MATLAB not installed, QUALITY_GATE_ALLOW_FALLBACK=1');
     }
     throw new Error(`Quality gate MATLAB call failed: ${err.message}`);
