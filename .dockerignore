@@ -12,13 +12,17 @@ node_modules
 # (cases are captured live; nothing serves a dataset image at runtime).
 datasets/
 
-# Model weights -- fetched by each image's own build step from the private
-# release, never copied from the host (they're git-ignored locally too, so
-# this mostly guards a machine that happens to have them unpacked already).
-central-system/backend/ml-pipeline/models/*.mat
-central-system/backend/ml-pipeline/models/*.pt
-central-system/backend/ml-pipeline/models/**/*.pt
-central-system/backend/ml-pipeline/models/**/*.onnx
+# Model weights (~1.5GB) -- fetched by each image's own build step from the
+# private release, never copied from the host (they're git-ignored locally
+# too, so this mostly guards a machine that happens to have them unpacked
+# already).
+central-system/backend/ml-pipeline/models/
+
+# Training/eval datasets (~5.5GB: IDRiD, APTOS, Messidor-2, DRIVE, CHASE_DB1
+# images) -- no Docker image serves or trains on these; cases are captured
+# live. Separate from the repo-root datasets/ exclude above, which is a
+# different, much smaller directory.
+central-system/backend/ml-pipeline/datasets/
 
 # Training artifacts (~750MB: checkpoints, exported predictions, parity
 # data) -- inference only needs the model-class definition in
@@ -29,6 +33,7 @@ central-system/backend/ml-pipeline/training/**
 # Diagnostics output, media, local DB files, logs -- dev-time artifacts
 central-system/backend/ml-pipeline/diagnostics/
 central-system/backend/media/
+central-system/backend/media-archive/
 phc-local-app/backend/storage/
 phc-local-app/backend/uploads/
 *.sqlite
