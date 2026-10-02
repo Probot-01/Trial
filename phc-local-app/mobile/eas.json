@@ -1,0 +1,20 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_CENTRAL_API_URL": "https://netrasetu-central.onrender.com",
+        "EXPO_PUBLIC_PHC_CODE": "PHC001",
+        "EXPO_PUBLIC_PHC_NAME": "NetraSetu Demo PHC",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
+      }
+    }
+  }
+}
