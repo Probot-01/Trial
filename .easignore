@@ -1,0 +1,20 @@
+# Repo-root .easignore -- EAS Build archives from the git repository root by
+# default (monorepo support), not just phc-local-app/mobile/ where app.json
+# actually lives. Without this, it was trying to compress the whole ~8GB
+# monorepo (central-system/backend/ml-pipeline alone is ~8GB, .git is
+# 3.6GB) -- the real cause of a build that hung at "Compressing project
+# files" for 30 minutes straight. Only phc-local-app/mobile/ is needed to
+# build this app.
+#
+# .easignore REPLACES .gitignore for EAS's own archiving once it exists (it
+# does not merge with it), so mobile's own node_modules/.expo excludes are
+# repeated here explicitly rather than assumed inherited.
+
+*
+!phc-local-app/mobile/
+!phc-local-app/mobile/**
+
+phc-local-app/mobile/node_modules/
+phc-local-app/mobile/.expo/
+phc-local-app/mobile/dist/
+phc-local-app/mobile/web-build/
