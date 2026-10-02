@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "NetraSetu PHC",
-    "slug": "retina-saarthi",
+    "slug": "netrasetu-phc",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.retinasaarthi.phc"
+      "bundleIdentifier": "com.netrasetu.phc"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FAF6EF"
       },
-      "package": "com.retinasaarthi.phc",
+      "package": "com.netrasetu.phc",
       "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA",
@@ -57,11 +57,11 @@
       "expo-splash-screen",
       "expo-secure-store"
     ],
+    "owner": "tanujb03",
     "extra": {
       "eas": {
-        "projectId": "34a08582-4be0-4ba3-bad3-1aa84a485d7b"
+        "projectId": "67368179-6d0a-494e-8850-31c7d7d47b89"
       }
-    },
-    "owner": "tanujb03"
+    }
   }
 }
