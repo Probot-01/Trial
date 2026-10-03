@@ -249,8 +249,13 @@ they answer two different questions a hackathon round asks.
 does the full MATLAB-native pipeline work end to end?"** This is the system as designed: the
 classifier, segmentation nets, rule engine, camera checks, evidence text and quality gate all run
 natively inside MATLAB (persistent session, or the free MATLAB Runtime via compiled standalone
-executables — see the MATLAB-applications deliverables in the Drive folder above). This is the
-configuration the Simulink models validate and the one intended for a real PHC rollout.
+executables). This is the configuration the Simulink models validate and the one intended for a
+real PHC rollout.
+
+Seven standalone applications prove this out, all built and all listed with full detail in
+`docs/TECHNICAL_DOCUMENTATION.md` §12.2–12.3. Six ship directly in this repo; the inference engine
+(classifier + all four segmentation models, 265MB) is too large for a normal git push and is
+instead a **[GitHub Release](https://github.com/krrishgadekar/SIH_2026/releases/tag/inference-engine-v1)**.
 
 **Hosted / online deployment — "can a judge reach this system from anywhere, instantly, with no
 local setup?"** Render's and Vercel's free tiers have no MATLAB available at all, so this
