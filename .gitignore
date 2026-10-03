@@ -77,6 +77,7 @@ requiredMCRProducts.txt
 # which is the reviewable source of truth for it.
 simulink-model/slprj/
 simulink-model/deployable/slprj/
+simulink-model/deployable/pipeline/slprj/
 *.slxc
 # Regenerated on every run of referenceQueueingModel.m
 simulink-model/simulation-results.csv
@@ -126,6 +127,10 @@ dist/
 !simulink-model/deployable/dist/
 !simulink-model/deployable/dist/*.log
 !simulink-model/deployable/dist/requiredMCRProducts.txt
+!simulink-model/deployable/pipeline/dist/
+!simulink-model/deployable/pipeline/dist/*.log
+!simulink-model/deployable/pipeline/dist/requiredMCRProducts.txt
+!simulink-model/deployable/pipeline/dist/NetraSetuPipelineDashboard.exe
 build/
 .next/
 out/
