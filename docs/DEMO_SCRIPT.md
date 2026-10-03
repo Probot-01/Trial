@@ -45,7 +45,7 @@
 ## [PARTH] 1:00 – 2:10 — Capture, quality-gate reject, retake, accept
 
 1. Choose the eye (Left/OS) and the camera preset. Import `idrid_164_bad_blur_dark.jpg` (from `tests/fixtures/`). Click **RUN QUALITY CHECK →**.
-2. While it runs (~10–15 s), say: *"The quality check runs right here on the clinic's machine, in MATLAB. A bad photo should be caught before the patient leaves the chair, not after a specialist has wasted time on it."*
+2. While it runs (~10–15 s), say: *"The quality check runs right here on the clinic's machine, in MATLAB, on hardware a rural PHC can actually afford. A bad photo should be caught before the patient leaves the chair — not after a specialist in another city has wasted time on it, and not after someone's made a return trip they couldn't easily afford."*
 3. Expect: Quality fail, "Image below diagnostic threshold", engine MATLAB, issue "Image is too dark". Say: *"It says exactly what's wrong — the image is too dark."* Click **↺ RETAKE IMAGE (RESOLVE DEFECT)**.
 4. Import `idrid_010_good_pass_w1800.jpg` and click **RUN QUALITY CHECK →**. Expect: Quality pass. Click **ACCEPT & CONTINUE →**.
 5. Complete the capture questionnaire (dilated, indoor clinic, none noticed), then click **SAVE & SYNC TO SERVER →**. (There is no separate "clear" step on this form — the questionnaire submits directly.)
@@ -65,9 +65,9 @@
 
 1. Log out of the intro, choose OPHTHALMOLOGIST, and log in as `ophthalmologist@demo.netrasetu.local`.
 2. On the CASES queue, say: *"This is the specialist's review queue. Cases the system is least sure about come first. Only cases the calibrated system is confident are non-referable can skip this queue — everything else is reviewed by an ophthalmologist."*
-3. Open a referable case where the branches agree. Point at the two grade columns and say: *"Every image is graded twice, independently: by a deep-learning classifier, and by a rule engine applying the clinical ICDR criteria to microaneurysms, haemorrhages and exudates counted in each quadrant. When they agree, confidence goes up."*
+3. Open a referable case where the branches agree. Point at the two grade columns and say: *"This is where 'explainable' stops being a buzzword. Every image is graded twice, independently: by a deep-learning classifier, and by a rule engine applying the clinical ICDR criteria to microaneurysms, haemorrhages and exudates counted in each quadrant. When they agree, confidence goes up."*
 4. Click **○ GRAD-CAM OFF** to turn the heatmap on (it becomes **✦ GRAD-CAM ON**). Say: *"This heatmap shows which regions of the retina most influenced the classifier's decision, so the doctor can check it's looking at real lesions — not a black box."*
-5. Scroll to the lesion evidence and the confidence tier. Say: *"Each case gets a calibrated confidence tier, not a raw model score. It decides whether a case needs full review, AI-assisted review, or can be cleared."*
+5. Scroll to the lesion evidence and the confidence tier. Say: *"The doctor doesn't just see a grade — they see the actual lesions counted, the exact clinical rule that fired, and a calibrated confidence tier, not a raw model score. That tier decides whether a case needs full review, AI-assisted review, or can be cleared — every one of those decisions is traceable back to a reason, not a guess."*
 
 ---
 
@@ -117,8 +117,6 @@
 - Referable DR, in-domain: 95.0% sensitivity · 91.0% specificity
 - Unseen camera (Messidor-2): 75.2% sensitivity → unvalidated cameras always get human review
 - 0 grade-4 cases auto-cleared (in-domain safety study)
-
-> If the Claude Code verification finds the unvalidated-camera cap is **not** enforced in code, say instead: *"…which is why we're adding a rule that images from unvalidated cameras always get human review."* Update the card to match.
 
 ---
 

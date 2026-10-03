@@ -25,22 +25,29 @@ function netraSetuInferMain(mode, argPath, outputJsonPath)
 %
 %   Branch A's imported net needs 16 of them; each segmentation net needs 5.
 %
-%#function branchA_v1.ReduceMeanLayer1000
-%#function branchA_v1.ReduceMeanLayer1001
-%#function branchA_v1.ReduceMeanLayer1002
-%#function branchA_v1.ReduceMeanLayer1003
-%#function branchA_v1.ReduceMeanLayer1004
-%#function branchA_v1.ReduceMeanLayer1005
-%#function branchA_v1.ReduceMeanLayer1006
-%#function branchA_v1.ReduceMeanLayer1007
-%#function branchA_v1.ReduceMeanLayer1008
-%#function branchA_v1.ReduceMeanLayer1009
-%#function branchA_v1.ReduceMeanLayer1010
-%#function branchA_v1.ReduceMeanLayer1011
-%#function branchA_v1.ReduceMeanLayer1012
-%#function branchA_v1.ReduceMeanLayer1013
-%#function branchA_v1.ReduceMeanLayer1014
-%#function branchA_v1.ReduceMeanLayer1015
+%   branchA_v2c, not branchA_v1: branchAInferMatlab.m's live default is
+%   branchA_v2c (see its own cfg table), and its custom layer classes live in
+%   their own +branchA_v2c package -- a different namespace from v1's, even
+%   though both happen to have the same 16 ReduceMeanLayer names. Packaging
+%   v1's classes here would satisfy mcc's dependency analysis but not the net
+%   this archive actually loads at runtime.
+%
+%#function branchA_v2c.ReduceMeanLayer1000
+%#function branchA_v2c.ReduceMeanLayer1001
+%#function branchA_v2c.ReduceMeanLayer1002
+%#function branchA_v2c.ReduceMeanLayer1003
+%#function branchA_v2c.ReduceMeanLayer1004
+%#function branchA_v2c.ReduceMeanLayer1005
+%#function branchA_v2c.ReduceMeanLayer1006
+%#function branchA_v2c.ReduceMeanLayer1007
+%#function branchA_v2c.ReduceMeanLayer1008
+%#function branchA_v2c.ReduceMeanLayer1009
+%#function branchA_v2c.ReduceMeanLayer1010
+%#function branchA_v2c.ReduceMeanLayer1011
+%#function branchA_v2c.ReduceMeanLayer1012
+%#function branchA_v2c.ReduceMeanLayer1013
+%#function branchA_v2c.ReduceMeanLayer1014
+%#function branchA_v2c.ReduceMeanLayer1015
 
 try
     if nargin < 3

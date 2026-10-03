@@ -43,8 +43,17 @@ if ~isfolder(outDir), mkdir(outDir); end
 
 % Source folders the chain spans. mcc follows calls from the entry point, so
 % these are for the resolver, not a manual dependency list.
+%
+% 'inference' is added ONLY for the infer target, not unconditionally: it
+% holds branchAInferMatlab.m's full Deep Learning/ONNX chain, which
+% netraSetuCaseMain never calls, and exposing it anyway risks the same
+% dependency-analysis trouble that a similarly-oversized shared directory
+% caused for the resource-model build (see buildResourceModelExe.m).
 srcDirs = {'grading', 'explainability', 'preprocessing', 'cameraCalibration', ...
-           'segmentation', 'calibration', 'inference'};
+           'segmentation', 'calibration'};
+if any(strcmpi(target, {'infer', 'both'}))
+    srcDirs{end+1} = 'inference';
+end
 for k = 1:numel(srcDirs)
     d = fullfile(mlRoot, srcDirs{k});
     if isfolder(d), addpath(d); end
@@ -64,17 +73,24 @@ end
 
 if any(strcmpi(target, {'infer', 'both'}))
     % The weights, plus the custom layer packages the imported nets are made
-    % of. The .m files in models/+branchA_v1 and friends are CODE mcc cannot
+    % of. The .m files in models/+branchA_v2c and friends are CODE mcc cannot
     % reach by following calls -- see the %#function block in
     % netraSetuInferMain.m -- so the package folders go in as well.
+    %
+    % branchA_v2c, not branchA_v1: it is branchAInferMatlab.m's live default.
+    % Packaging v1 here would build an archive that loads successfully and
+    % then fails at the first real inference call, because the default
+    % version it actually requests was never bundled. calibration_branchA_v2c
+    % .json, never calibration_v1.json, for the same reason -- see that
+    % file's own "NEVER calibration_v1.json for a non-v1 version" comment.
     inferAssets = { ...
-        fullfile(mlRoot, 'models', 'branchA_v1.mat'), ...
-        fullfile(mlRoot, 'models', 'calibration_v1.json'), ...
+        fullfile(mlRoot, 'models', 'branchA_v2c.mat'), ...
+        fullfile(mlRoot, 'models', 'calibration_branchA_v2c.json'), ...
         fullfile(mlRoot, 'models', 'vessel_unet_v1.mat'), ...
         fullfile(mlRoot, 'models', 'localization_v1.mat'), ...
         fullfile(mlRoot, 'models', 'bright_lesion_unet_v1.mat')};
     inferDirs = { ...
-        fullfile(mlRoot, 'models', '+branchA_v1'), ...
+        fullfile(mlRoot, 'models', '+branchA_v2c'), ...
         fullfile(mlRoot, 'models', '+vessel_unet_v1'), ...
         fullfile(mlRoot, 'models', '+localization_v1'), ...
         fullfile(mlRoot, 'models', '+bright_lesion_unet_v1')};
@@ -103,7 +119,28 @@ end
 
 % ═══════════════════════════════════════════════════════════════════════════
 function buildOne(name, thisDir, outDir, assets, dirs)
-args = {'-m', fullfile(thisDir, [name '.m']), '-d', outDir, '-o', name, '-v'};
+% -N + explicit -p toolbox paths: without -N, mcc's dependency resolver walks
+% into MATLAB's own Import Tool (internal.matlab.importtool...) and fails on
+% an unrelated unresolvable symbol there, regardless of target -- the same
+% "Build 2" failure buildQualityGateExe.m hit and fixed the same way. Both
+% targets here need Image Processing (camera check, NV score), Medical
+% Imaging (DICOM) and Statistics (urgency score); the infer target also needs
+% Deep Learning (nnet) for the imported networks -- harmless to pass nnet's
+% path for the case-only build too, since mcc only follows what the entry
+% point actually calls.
+% toolbox/compiler/runtime, not just toolbox/compiler: the parent folder does
+% NOT recursively add this subfolder (MATLAB's path is not recursive), and
+% runtimeInitializationChecks.m -- which the compiled exe's own bootstrap
+% calls -- lives specifically in the runtime subfolder. Omitting it produces
+% an exe that builds cleanly and then fails at launch with "Unrecognized
+% function or variable 'runtimeInitializationChecks'" -- found by actually
+% running the resource-model exe, not assumed (see buildResourceModelExe.m).
+toolboxPaths = {'images', 'medical', 'stats', 'nnet', 'compiler', ...
+                fullfile('compiler', 'runtime')};
+args = {'-m', fullfile(thisDir, [name '.m']), '-d', outDir, '-o', name, '-N', '-v'};
+for k = 1:numel(toolboxPaths)
+    args = [args, {'-p', fullfile(matlabroot, 'toolbox', toolboxPaths{k})}]; %#ok<AGROW>
+end
 for k = 1:numel(assets)
     if isfile(assets{k})
         args = [args, {'-a', assets{k}}]; %#ok<AGROW>
