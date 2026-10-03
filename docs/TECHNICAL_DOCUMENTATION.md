@@ -465,7 +465,7 @@ Only public research datasets are used anywhere in this system, and no real pati
 | PHC local backend (API) | Render (Docker, free tier) | https://netrasetu-phc.onrender.com/health |
 | ML inference service | Render (Docker, free tier) | internal, reached by the central backend over HTTP |
 | Database | Render Postgres (free tier) | internal |
-| Mobile app | EAS-built standalone APK, direct install | https://expo.dev/artifacts/eas/5TiUfOgF5QnLMuWpHRVH3o8fiXl-0a7gshoxj07ynBI.apk |
+| Mobile app | EAS-built standalone APK, direct install | https://expo.dev/artifacts/eas/AXeqZ3jshQkh7qTIsaXkO3nUBWXyqH9XnyRv1di0jYo.apk |
 
 **What a judge can do on the demo.** Log in to the PHC web app with the demo technician account
 (`demo` / `Fundus-Comet-52`), register a patient, capture or upload a fundus image, and watch it
