@@ -76,6 +76,7 @@ requiredMCRProducts.txt
 # Task 3.8 deliverable — but it is rebuilt by buildDistrictScreeningModel.m,
 # which is the reviewable source of truth for it.
 simulink-model/slprj/
+simulink-model/deployable/slprj/
 *.slxc
 # Regenerated on every run of referenceQueueingModel.m
 simulink-model/simulation-results.csv
