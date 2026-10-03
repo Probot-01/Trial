@@ -6,6 +6,16 @@ processing throughput and review capacity, to optimise resource allocation for
 a district program serving **100,000+ patients annually**.
 
 
+## Standalone app (Simulink Compiler): `deployable/`
+
+The resource model is also packaged as a **Windows app that runs without MATLAB** (free MATLAB Runtime only):
+`deployable/dist/NetraSetuResourceModel.exe`. It has a GUI and a `--json` headless mode.
+
+SimEvents blocks cannot generate code, so they can't be deployed with Simulink Compiler. The app therefore
+simulates `deployable/districtResourceModel.slx`, a code-generation-capable model that reproduces
+`referenceQueueingModel.m` **exactly** for the same parameters and seed (verified in MATLAB, in Rapid Accelerator
+deployment mode, and in the compiled exe). Details, verification and build steps: [`deployable/README.md`](deployable/README.md).
+
 ## The live model: `netraSetuPipeline.slx`
 
 The whole pipeline, built to be watched and driven while it runs.

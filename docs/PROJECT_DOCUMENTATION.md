@@ -419,6 +419,7 @@ parity is reported as 1e-6 to 4e-5 (TECHNICAL_DOCUMENTATION §3). PyTorch remain
 | Evidence-report PDF | Report Generator (core fallback renderer exists) | Central | Live, on demand |
 | District resource model | **Simulink + SimEvents** | Central (scheduled) | `netraSetuPipeline.slx` / `districtScreeningSimEvents.slx` run to completion. The live Resource Recommendations data comes from the pure-MATLAB `referenceQueueingModel.m`; the `.slx` is the weekly cross-check (disabled by default, `SIMULINK_VALIDATION_ENABLED`) |
 | Central inference packaging | MATLAB Compiler | Central | Trial targets in `ml-pipeline/deploy/` (`netraSetuCaseMain.m`, `netraSetuInferMain.m`); not the serving path |
+| **Resource model as a standalone app** | **Simulink Compiler** + MATLAB Compiler | Any Windows PC (free Runtime) | **Built 2026-10-03**: `simulink-model/deployable/` → `NetraSetuResourceModel.exe` (GUI + `--json`). SimEvents can't generate code, so the app runs `districtResourceModel.slx`, a code-generation-capable model that reproduces `referenceQueueingModel.m` exactly (normal mode, Rapid Accelerator deployment mode, and the compiled exe all verified) |
 
 **Simulink model** (`simulink-model/`): patient images are entities, PHC arrival rates feed a bandwidth-limited
 network across three connectivity tiers, and ophthalmologist review is a limited-capacity server where Tier C
