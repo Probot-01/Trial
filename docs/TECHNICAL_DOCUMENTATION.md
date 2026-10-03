@@ -552,11 +552,15 @@ prove out §12.1's licensing-free target architecture:
 | Central case-chain engine | Rule engine, camera check, evidence text | **Built** |
 | Central inference engine | Classifier + all four segmentation models | **Built** |
 | Clinical-rationale PDF report generator | The per-case evidence PDF | **Built** |
-| Weekly SimEvents self-validation | The district model's own cross-check | Planned |
 | Interactive full-pipeline dashboard (§7.2) | The watchable whole-pipeline demo, live controls mid-run | **Built** |
 
 These are build artifacts, not part of the hosted demo's request path; they exist to demonstrate
 that the licensing-free deployment story in §12.1 is real and buildable, not aspirational.
+
+**Not packaged as a standalone app, by decision:** the weekly SimEvents self-validation (§7). It's
+a scheduled background comparison the central backend already runs on its own, with no
+interactive use a standalone app would add — the same underlying model is already the one judges
+can run and watch, as the interactive dashboard above.
 
 ### 12.3 Standalone offline PHC station, and other downloadable components
 
@@ -567,9 +571,13 @@ with the hosted demo PHC's — and syncs to the same central backend as the rest
 Tested end to end: registration, capture, the compiled quality gate, sync, central grading, and
 the result returning to the station, including restarts and working offline.
 
-| Component | Needs |
-|---|---|
-| Standalone PHC station (zip, distributed outside git) | Windows + the free MATLAB Runtime; its own site credentials issued by central |
-| District resource-model app (§7.1) | Windows + the free MATLAB Runtime with the Simulink Compiler add-on |
-| Interactive pipeline dashboard app (§7.2) | Windows + the free MATLAB Runtime with the Simulink Compiler add-on |
-| Compiled quality gate (also bundled above) | The free MATLAB Runtime |
+| Component | Where | Needs |
+|---|---|---|
+| Standalone PHC station | Zip, distributed outside git | Windows + the free MATLAB Runtime; its own site credentials issued by central |
+| District resource-model app (CLI) | In the repo | The free MATLAB Runtime |
+| District resource-model app (interactive, §7.1) | In the repo | Windows + the free MATLAB Runtime with the Simulink Compiler add-on |
+| Interactive pipeline dashboard app (§7.2) | In the repo | Windows + the free MATLAB Runtime with the Simulink Compiler add-on |
+| Central case-chain engine | In the repo | The free MATLAB Runtime |
+| Clinical-rationale PDF report generator | In the repo | The free MATLAB Runtime |
+| Central inference engine (classifier + segmentation) | [GitHub Release](https://github.com/krrishgadekar/SIH_2026/releases/tag/inference-engine-v1) — too large (265 MB) for a normal git push | The free MATLAB Runtime |
+| Compiled quality gate (also bundled in the standalone PHC) | In the repo | The free MATLAB Runtime |
