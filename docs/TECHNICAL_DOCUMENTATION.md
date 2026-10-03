@@ -551,7 +551,7 @@ prove out §12.1's licensing-free target architecture:
 | District resource-allocation model (interactive app, §7.1) | The same model, with KPIs and charts | **Built** |
 | Central case-chain engine | Rule engine, camera check, evidence text | **Built** |
 | Central inference engine | Classifier + all four segmentation models | **Built** |
-| Clinical-rationale PDF report generator | The per-case evidence PDF | Planned |
+| Clinical-rationale PDF report generator | The per-case evidence PDF | **Built** |
 | Weekly SimEvents self-validation | The district model's own cross-check | Planned |
 | Interactive full-pipeline dashboard (§7.2) | The watchable whole-pipeline demo, live controls mid-run | **Built** |
 
