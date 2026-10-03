@@ -1,5 +1,7 @@
 # District Resource Model: standalone app (Simulink Compiler)
 
+> The interactive full-pipeline dashboard has its own standalone app in [`pipeline/`](pipeline/README.md).
+
 The district resource model (PS requirement 5), packaged with **Simulink Compiler** as a Windows app that runs
 **without MATLAB or Simulink**. It needs only the free MATLAB Runtime.
 

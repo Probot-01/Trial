@@ -81,6 +81,7 @@ Python remains on the serving path for preprocessing and the segmentation worker
 | Evidence-report PDF | MATLAB Report Generator (core-MATLAB fallback renderer) | Central | **Live**, generated on demand for any graded case. |
 | District resource model | Simulink + SimEvents | Central (scheduled) | **Built and runnable.** The weekly cross-validation of this model against an independent pure-MATLAB reference implementation is a software self-test, not the source of the daily Resource Recommendations screen — that screen's numbers come from the reference model directly, with the Simulink model validating it periodically (§7). |
 | District resource model, standalone app | Simulink Compiler + MATLAB Compiler | Any Windows PC (free MATLAB Runtime) | **Built.** SimEvents blocks can't generate code, so this app runs a separate, code-generation-capable model proven to reproduce the reference model's results exactly. See §7.1. |
+| Interactive full-pipeline dashboard, standalone app | Simulink Compiler + MATLAB Compiler | Any Windows PC (free MATLAB Runtime) | **Built.** The watchable whole-pipeline demo with live sliders and switches that work mid-run, packaged on a code-generation-capable twin of the SimEvents model. See §7.2. |
 
 ---
 
@@ -363,6 +364,41 @@ and seed it reproduces the reference **exactly**. Every parameter is tunable at 
 
 The SimEvents `.slx` remains the PS deliverable and the weekly validation model.
 
+### 7.2 The interactive pipeline dashboard as a standalone app (Simulink Compiler)
+
+`netraSetuPipeline.slx` is the SimEvents model of the whole pipeline, run as a live dashboard in Simulink. It is also
+packaged as `NetraSetuPipelineDashboard.exe` (`simulink-model/deployable/pipeline/`).
+
+**Stages:** arrivals, capture with retakes, PHC sync queue, network upload, grading with failure and retry, tier
+triage, reviewers with pre-emption, referral.
+
+**Live controls**, changeable while the simulation runs: patients per hour, review speed, network link on/off, grading
+on/off.
+
+**Live displays:** backlogs, outcome counters, load gauges, reviewer lamps, and queue curves over time.
+
+**How it is live in a compiled app.** The controls are root inports of `netraSetuPipelineLive.slx`, fed each step
+through `simulink.compiler.setExternalInputsFcn`. The displays read the model's output through
+`setExternalOutputsFcn`, and `setPostStepFcn` paces the run.
+
+**How the model works.** The engine (`PipelineEngine.m`, a code-generation-capable MATLAB System block) processes
+every event at its exact continuous time. One deliberate improvement over the SimEvents model: an outage stops new
+work from starting, instead of being modelled as an ~11-day service time that strands the case in service.
+
+**Verification** (`validateLivePipelineModel`):
+
+- the model is exact against the engine, in normal and deployment mode;
+- a live network outage builds the PHC backlog 0 → 96 → 0, and a live grading outage builds the grading backlog
+  0 → 91 → 0 with the reviewers idle;
+- a 300 h run is within 1.2% of queueing theory on every check;
+- the compiled exe matches the deployment-mode run exactly.
+
+**Findings about the SimEvents dashboard model** (left unchanged):
+
+- its grading-retry loop **deadlocks**: a failed case re-enters the same full capacity-2 server, and grading stops at
+  13.4 h in the default 16 h run, stranding 128 cases;
+- it generates ~10% more patients than its arrival rate, because of its once-a-second sampled random signal.
+
 ---
 
 ## 8. Resilience and edge-case handling
@@ -517,7 +553,7 @@ prove out §12.1's licensing-free target architecture:
 | Central inference engine | Classifier + all four segmentation models | **Built** |
 | Clinical-rationale PDF report generator | The per-case evidence PDF | Planned |
 | Weekly SimEvents self-validation | The district model's own cross-check | Planned |
-| Interactive full-pipeline dashboard | The watchable `netraSetuPipeline.slx` demo | Planned |
+| Interactive full-pipeline dashboard (§7.2) | The watchable whole-pipeline demo, live controls mid-run | **Built** |
 
 These are build artifacts, not part of the hosted demo's request path; they exist to demonstrate
 that the licensing-free deployment story in §12.1 is real and buildable, not aspirational.
@@ -535,4 +571,5 @@ the result returning to the station, including restarts and working offline.
 |---|---|
 | Standalone PHC station (zip, distributed outside git) | Windows + the free MATLAB Runtime; its own site credentials issued by central |
 | District resource-model app (§7.1) | Windows + the free MATLAB Runtime with the Simulink Compiler add-on |
+| Interactive pipeline dashboard app (§7.2) | Windows + the free MATLAB Runtime with the Simulink Compiler add-on |
 | Compiled quality gate (also bundled above) | The free MATLAB Runtime |

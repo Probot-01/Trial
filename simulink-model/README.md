@@ -16,6 +16,16 @@ simulates `deployable/districtResourceModel.slx`, a code-generation-capable mode
 `referenceQueueingModel.m` **exactly** for the same parameters and seed (verified in MATLAB, in Rapid Accelerator
 deployment mode, and in the compiled exe). Details, verification and build steps: [`deployable/README.md`](deployable/README.md).
 
+The **interactive dashboard** below (`netraSetuPipeline.slx`) also has a standalone counterpart:
+`deployable/pipeline/dist/NetraSetuPipelineDashboard.exe`. Its sliders and switches work while the simulation runs,
+fed through Simulink Compiler's live-input API. It runs `deployable/pipeline/netraSetuPipelineLive.slx` with the same
+stages. Validating it found two issues in the SimEvents dashboard model, which is left unchanged:
+
+- its grading-retry loop deadlocks (grading stops at ~13.4 h in the default 16 h run);
+- it generates ~10% more patients than its arrival rate.
+
+See [`deployable/pipeline/README.md`](deployable/pipeline/README.md).
+
 ## The live model: `netraSetuPipeline.slx`
 
 The whole pipeline, built to be watched and driven while it runs.
