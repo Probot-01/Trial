@@ -615,6 +615,9 @@ All public, with no real patient data (`docs/TECHNICAL_DOCUMENTATION.md` §11):
 
 Found while checking this document against the code. Fix these in the README rather than copying the old text.
 
+> **Update 2026-10-03:** every TECHNICAL_DOCUMENTATION item below has been corrected in that file (§3.1, §4.2, §4.4,
+> §5.2, §6.1, §6.2, §7.1, §9, §10, §12.2–12.3). The README items are still open.
+
 | Old claim | Where | What the code says |
 |---|---|---|
 | "No `.exe` has been compiled; `dist/` is empty" | TECHNICAL_DOCUMENTATION §3.1, §4.2, §10.4 | Built, fixed and committed (`adbdd06`), tested isolated (23/23), shipped in the standalone PHC |

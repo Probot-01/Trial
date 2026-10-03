@@ -79,7 +79,7 @@ Python remains on the serving path for preprocessing and the segmentation worker
 
 | Component | MATLAB product(s) | Where it runs | Status |
 |---|---|---|---|
-| Local quality gate | Image Processing Toolbox; MATLAB Compiler (standalone tier) | PHC desktop | **Live** (`quality-gate-matlab/qualityGateMain.m`, run via `matlab -batch`, default engine) for Image Processing. **Not built** for the MATLAB Compiler tier — `quality-gate-matlab/dist/` is empty; no `.exe` has been compiled (§4.2). |
+| Local quality gate | Image Processing Toolbox; MATLAB Compiler (standalone tier) | PHC desktop | **Live** (`quality-gate-matlab/qualityGateMain.m`, run via `matlab -batch`, default engine). **Compiled tier built** (2026-10-02): `quality-gate-matlab/dist/qualityGate.exe`, committed, runs on the free MATLAB Runtime. Verified from an isolated folder away from the source tree (`testQualityGateDeploy`, 23/23); ships in the standalone PHC (§4.4, §12.3). |
 | Branch A classifier inference (ONNX import) | Deep Learning Toolbox | Central | **Live** (`gradingOrchestrator.js:187` defaults `INFERENCE_BACKEND=matlab`, no `.env` override; `branchAInferMatlab.m` via the persistent MATLAB session). |
 | Segmentation / localization inference | Deep Learning Toolbox | Central | **Live** for all four models (`runMatlabInferenceSession.m`: generic `predict()` on `vessel_unet_v1`, `localization_v1`, `bright_lesion_unet_v1`, and — wired in this same integration pass — `red_lesion_unet_v2`; see this doc's §6.6 and the commit "Wire red_lesion_unet_v2 into MATLAB serving"). |
 | Rule engine (ICDR 4-2-1) | MATLAB (base, no toolbox) | Central | **Live** (`ml-pipeline/grading/ruleEngineGrade.m`, called from `runCasePipeline.m` every graded case; confirmed it both skips quadrant logic and is gated by `foveaUnreliable`). |
@@ -88,6 +88,7 @@ Python remains on the serving path for preprocessing and the segmentation worker
 | Camera-fingerprint calibration | Image Processing Toolbox | Central | **Live** (`ml-pipeline/cameraCalibration/classifyCameraFamily.m`). Its output reaches the tier decision through the camera-probation/mismatch path (`gradingOrchestrator.js`), not a separate direct channel — still a real, live effect on routing, not dead code. |
 | Evidence-report PDF | MATLAB Report Generator (core-MATLAB fallback renderer) | Central | **Live** (`ml-pipeline/explainability/generateReport.m`, generated on demand via `services/caseReport.js`'s `getOrCreateReport()` — exercised directly earlier in this integration pass). Whether the live machine actually has MATLAB Report Generator installed (vs. running the fallback renderer via `ensureReportGeneratorOnPath.m`) was not independently re-checked this pass. |
 | District resource model | Simulink + SimEvents | Central (scheduled) | **Built, not on the live path by default.** `netraSetuPipeline.slx` exists and runs to completion when invoked. But (a) the scheduled weekly cross-validation job is currently **disabled** — confirmed directly from this session's own backend startup log: `[simulinkValidation] disabled (SIMULINK_VALIDATION_ENABLED)`; (b) even when enabled, its role is a periodic cross-validation check against a separate function, `referenceQueueingModel.m` — which is what actually generates the Resource Recommendations screen's live data (`services/resourceRecommendations.js`'s own header comment: *"the .slx stays the PS deliverable and the validation check, not something run per refresh"*). See §7 for the corrected description. |
+| District resource model as a standalone app | **Simulink Compiler** + MATLAB Compiler | Any Windows PC (free MATLAB Runtime) | **Built** (2026-10-03): `simulink-model/deployable/dist/NetraSetuResourceModel.exe`, committed. SimEvents blocks cannot generate code, so the app runs `districtResourceModel.slx`, a code-generation-capable model that reproduces `referenceQueueingModel.m` exactly. See §7.1. |
 
 ---
 
@@ -110,7 +111,7 @@ Python remains on the serving path for preprocessing and the segmentation worker
 
 | Service | Responsibility |
 |---|---|
-| Quality-Gate Engine | **Desktop:** MATLAB (`matlab -batch`) is the live path. A compiled-executable tier is coded into the fallback chain (`buildQualityGateExe.m`) but **no `.exe` has actually been built** (`quality-gate-matlab/dist/` is empty) — it is a designed, not-yet-compiled tier. A pure-JS tier exists and runs only when explicitly enabled (`QUALITY_GATE_ALLOW_FALLBACK`), and provenance records which engine ran. **Mobile:** the same JS implementation as its designed primary path (engine reported as `js-device`), ported once, so both front-ends apply identical rules |
+| Quality-Gate Engine | **Desktop**, tried in this order (`services/qualityGateClient.js`), each result stamped with its engine: <ol><li>the **compiled `qualityGate.exe`** on the free MATLAB Runtime, when `QUALITY_GATE_EXE` is set (built and committed 2026-10-02);</li><li>**MATLAB** via `matlab -batch`;</li><li>the **JS port** (`services/qualityGateFallback.js`), only when MATLAB cannot launch **and** `QUALITY_GATE_ALLOW_FALLBACK=1`. Rewritten 2026-10-02 as a step-by-step port of the MATLAB gate and re-enabled after 0 mismatches against MATLAB on 6 + 52 images (engine `js-fallback`);</li><li>otherwise HTTP 503 `quality_gate_failed`: the image is kept and no verdict is invented.</li></ol>**Mobile:** its own on-device TypeScript port (engine `js-device`), with its own parity test against MATLAB |
 | Local API | Wraps capture + quality gate and reads/writes the local database |
 | Sync Manager | Prioritizes by urgency tier, then age. Sends a lightweight case-summary packet ahead of the full image on thin connectivity. Uploads full images in resumable chunks with hash verification. Every submission carries the local `capture_id` as an idempotency key, so a retry never creates a duplicate case |
 
@@ -120,6 +121,25 @@ Python remains on the serving path for preprocessing and the segmentation worker
 - **Identity:** the exact same collision-safe ID scheme as desktop (PHC code + timestamp + random suffix).
 - **Questionnaires:** both apply in full.
 - **Login:** the mobile app authenticates against the paired PHC PC's technician accounts over an encrypted peer channel, with an honest offline-cache fallback.
+
+### 4.4 Standalone PHC (downloadable, no MATLAB licence)
+
+A complete PHC station packaged as a Windows zip (`NetraSetu-PHC-standalone.zip`, distributed outside git). It
+contains:
+
+- the PHC backend and the built web app;
+- a bundled Node runtime;
+- the **compiled quality gate** (`qualityGate.exe`), which needs only the free MATLAB Runtime R2026a;
+- `Start-PHC.cmd`, `Add-Technician.cmd`, `Check-Setup.cmd`;
+- one `settings.env` for site identity (`PHC_CODE`, `CENTRAL_API_URL`, `PHC_ID`, `PHC_API_KEY`).
+
+Patient data is kept in `data\`, separate from the program, so replacing the program keeps the data.
+
+It was tested end to end against a local central (2026-10-02): registration, capture, compiled gate, sync, MATLAB
+grading at central, and "RESULT READY" back at the station. Restarts, install paths containing spaces, offline
+capture and enforced login were also checked.
+
+**Not yet tested:** a PC that has only the MATLAB Runtime installed and no MATLAB.
 
 ---
 
@@ -139,8 +159,7 @@ Python remains on the serving path for preprocessing and the segmentation worker
 | Screen | Components |
 |---|---|
 | Dashboard | Cases today/week/total, average review time, override rate, average confidence, cases by PHC |
-| System Health | One consolidated view: silent PHCs (one definition and threshold everywhere), stuck grading jobs, MATLAB session health, referable cases unreviewed past a threshold |
-| PHC Health | Every PHC with last sync time, 24-hour volume, pending/failed count, and active/silent status |
+| PHC Health (includes System Health) | Every PHC with last sync time, 24-hour volume, pending/failed count, and active/silent status. On the same screen, the consolidated system-health view (`GET /api/v1/admin/system-health`): silent PHCs (one definition and threshold everywhere), stuck grading jobs, MATLAB session health, and referable cases unreviewed past a threshold. There is no separate System Health route; the case status banner uses the same data |
 | Referral Tracker | referred → contacted → attended / lost. Assigned-worker field. Automatic manual-follow-up state when SMS delivery fails |
 | Resource Recommendations | Staffing/routing guidance from the Simulink resource model |
 
@@ -186,11 +205,43 @@ One contract, `docs/api-contracts.md`, consumed identically by both front-ends. 
 
 ### 6.1 Image quality assessment (local)
 
-Classical computer-vision checks (focus/blur, illumination, contrast, field of view, glare, motion, eyelash occlusion, colour balance, border proportion) with per-camera-family presets. They are implemented once in MATLAB and once as an equivalent JS implementation. The JS version was numerically verified against MATLAB's reference values, to within about 0.005.
+Classical computer vision in `quality-gate-matlab/qualityGateMain.m` and its four `assess*.m` helpers, with
+per-camera presets in `cameraPresets.json` (`default`, `mobile_lens`).
+
+**Seven scores:**
+
+| Score | How it is computed |
+|---|---|
+| focus | Laplacian variance |
+| illumination | Mean grey distance from 100 |
+| field of view, coverage | Largest filled bright region |
+| glare | Saturated centre pixels |
+| motion | Horizontal vs vertical gradient variance |
+| occlusion | Dark pixels inside the retinal disc's convex hull |
+
+**Decision order:** insufficient FOV → glare → motion → low illumination → blur → eyelash occlusion. If none of these
+fires, the image is **borderline** when the mean of focus, illumination and FOV is below 0.7, otherwise **pass**.
+
+**The same gate runs in four forms:**
+
+- **MATLAB**, the reference;
+- the **compiled exe**, which reproduces every MATLAB sub-score to 1e-9;
+- the **desktop JS port**, rewritten 2026-10-02 as a step-by-step port (exact `rgb2gray` weights, N−1 variance,
+  MATLAB's `imclose` border semantics, `bwconvhull` built from pixel-edge midpoints, the same presets). Against
+  MATLAB it had 0 mismatches on 58 images, every decision identical, and a worst score gap of 3.3e-4;
+- the **mobile TypeScript port**.
+
+The thresholds are engineered heuristics and have not been validated against a gradability-labelled dataset (§10).
 
 ### 6.2 Preprocessing (central)
 
-CLAHE, illumination normalization, denoising and a Ben Graham-style circular crop, implemented exactly once (see §3 for why).
+**Ben Graham preprocessing only:** circular retinal crop → resize → Gaussian-subtraction contrast
+(`4·img − 4·blur + 128`). It is implemented exactly once (`preprocessing/ben_graham.py`) and imported by both
+training and serving (see §3 for why).
+
+CLAHE is **not** part of the serving chain. Adding a CLAHE stage that training never used dropped agreement with the
+model's own outputs from 100% to 57.7% (`inference/branchAInfer.py` header). `clahe_enhance.py` remains in the repo
+only as an experiment.
 
 ### 6.3 Camera-fingerprint calibration (central)
 
@@ -288,6 +339,38 @@ A discrete-event simulation built in SimEvents.
 
 Bandwidth and timing parameters are modeled assumptions, not measured field data.
 
+### 7.1 The resource model as a standalone app (Simulink Compiler)
+
+The district resource model is packaged with **Simulink Compiler** as `NetraSetuResourceModel.exe`
+(`simulink-model/deployable/`). It runs on any Windows PC with the free MATLAB Runtime R2026a and needs no MATLAB or
+Simulink licence.
+
+**What it does:**
+
+- **Inputs:** you set patients per year, PHCs, ophthalmologists, tier mix, review times, bandwidth and days.
+- **Results:** KPIs (utilisation, mean and p95 review wait, end-to-end time), the bottleneck with a plain-language
+  recommendation, and queue and utilisation curves over time.
+- **Minimum ophthalmologists:** it searches for the smallest team that holds the p95 review wait under 60 minutes,
+  for routine and camp-mode schedules.
+- **Headless mode:** `--json` takes parameters in and writes results out, for use from the backend.
+
+**Why it runs a different model.** Simulink Compiler deploys through Rapid Accelerator, which needs C code from every
+block, and SimEvents blocks do not support code generation (`SimulinkEventEngine:Engine:CodeGenNotSupported`,
+verified 2026-10-03). So the app simulates `districtResourceModel.slx`: a clock-driven, code-generation-capable MATLAB
+System block (`DistrictScreeningEngine.m`) that implements `referenceQueueingModel.m`'s algorithm, including Tier C
+pre-empting Tier B with resume. It draws its random inputs in the reference model's order, so for the same parameters
+and seed it reproduces the reference **exactly**. Every parameter is tunable at runtime, with no rebuild.
+
+**Verification** (`validateDeployableResourceModel`):
+
+| Mode | Result |
+|---|---|
+| Normal simulation | 5/5 scenarios exact (≤ 1e-14 relative) |
+| Rapid Accelerator deployment mode | 5/5 scenarios exact |
+| The compiled exe | 5/5 scenarios exact, same bottleneck verdicts |
+
+The SimEvents `.slx` remains the PS deliverable and the weekly validation model.
+
 ---
 
 ## 8. Resilience and edge-case handling
@@ -309,9 +392,12 @@ Bandwidth and timing parameters are modeled assumptions, not measured field data
 
 Verified against the running system in the integration pass:
 
-- **Central:** authentication enabled. Session-based login with bcrypt (a wrong password gets a genuine 401). Role-based access control is enforced server-side on every endpoint, including media: 401 without a session, 403 for the wrong role. The UI routes enforce the same roles.
-- **PHC ingestion:** a per-PHC API key is required on every central ingestion call. Keys are provisioned via CLI and never returned by any API.
-- **PHC desktop and mobile:** technician accounts with bcrypt, provisioned via CLI.
+- **Central:** authentication is enabled.
+  - Passwords are hashed with bcryptjs; a wrong password gets a genuine 401.
+  - The session is a signed JWT (HS256) in an **httpOnly** cookie, 12 h by default, `Secure` (`services/authConfig.js`, `services/authTokens.js`).
+  - Role-based access control is enforced server-side on every endpoint, including media: 401 without a session, 403 for the wrong role. The UI routes enforce the same roles.
+- **PHC ingestion:** a per-PHC API key is required on every central ingestion call. Only its hash is stored. Keys are provisioned via CLI, shown once, and never returned by any API.
+- **PHC desktop:** technician accounts hashed with **scrypt** (`phc-local-app/backend/services/passwords.js`), provisioned via CLI. Login is on by default, because the PHC backend listens on the clinic LAN for phone pairing. The mobile app authenticates against the paired PHC PC over a sealed peer channel.
 - **Encryption at rest (central):** AES-256-GCM for stored images, Grad-CAM overlays and report PDFs (`MEDIA_ENCRYPTION_KEY`).
 - **Encryption in transit:** TLS is supported by both backends, and provided by the reverse proxy in deployment (§12).
 - **Audit logging:** every access to patient data is recorded in `access_log`.
@@ -329,7 +415,7 @@ Verified against the running system in the integration pass:
 1. **Decision support, not diagnosis.** This is a screening decision-support system, not an autonomous diagnostic. Every positive is confirmed by an ophthalmologist.
 2. **Domain shift.** Sensitivity is 95.0% in-domain but 75.2% on an unseen camera at the shipped threshold. Local recalibration does not close v2c's gap, because ranking quality is the limit, so unvalidated cameras are always routed to human review.
 3. **Top-grade resolution.** Exact grade-4 recall is 57.4% in-domain. It is made safe by threshold-based referral and CNN-grade-4 → Tier C routing, not by the recall itself.
-4. **MATLAB licensing.** Central inference currently needs a MATLAB license on the serving machine. The fix is packaging with MATLAB Compiler plus the free MATLAB Runtime. This is coded as a fallback tier for the local quality gate (`buildQualityGateExe.m`) but **no executable has actually been compiled yet** (`quality-gate-matlab/dist/` is empty) — the packaging approach is designed and partially built, not delivered, for either the quality gate or central inference (§12).
+4. **MATLAB licensing.** Central inference still needs a MATLAB licence on the serving machine; packaging it with MATLAB Compiler is not done (trial targets only, `ml-pipeline/deploy/`). The PHC side no longer needs one: the quality gate is compiled (`qualityGate.exe`, free MATLAB Runtime) and ships in the standalone PHC (§4.4). The district resource model also ships as a Simulink Compiler app (§7.1).
 5. **Thin red-lesion evidence.** Red-lesion v2 was evaluated on 16 images, the same ones it was tuned on.
 6. **Neovascularization and uncovered lesion types.** Neovascularization failed validation and is not used. Cotton-wool spots, venous beading and IRMA are not detected.
 7. **Rule engine accuracy.** Exact agreement is 60.2% (n = 103).
@@ -379,17 +465,40 @@ Only public research datasets are used anywhere in this system, and no real pati
 
 ### 12.2 Current deployment (online submission demo)
 
-> ⚠ **To be completed after deployment** — fill in each row with what is actually running, and remove this note.
+Defined in `render.yaml` (Render, free tier, Singapore) plus two Vercel projects. Status checked 2026-10-02/03.
 
-| Component | Hosted on | Status / link |
+| Component | Hosted on | Link | Status |
+|---|---|---|---|
+| Central web (ophthalmologist / admin) | Vercel | https://centralsys.vercel.app | Live; built from current `main`; real data (`VITE_DATA_MODE=live`) |
+| PHC web (hosted demo station) | Vercel | https://phcapp.vercel.app | Live; built from current `main`; real data |
+| Central backend (API) | Render (Docker) | https://netrasetu-central.onrender.com/health | Live. Migrations, demo users and the demo PHC are provisioned at container start |
+| Database | Render PostgreSQL (free) | — | Live |
+| PHC backend | Render (Docker) | https://netrasetu-phc.onrender.com/health | Live. Its capture fix (JS quality gate re-enabled, `87f50ef` + `d540e9e`) is on `main` and **waits for a manual Render redeploy**; until then captures return 503 |
+| ML inference | Render (Docker), `ml-inference-service/` | https://netrasetu-ml-inference.onrender.com/health | Live. Branch A and segmentation on **ONNX Runtime**, with Grad-CAM and MC-dropout computed in closed form, so it fits 512 MB |
+| Mobile app | APK | — | Not published yet; EAS build config is in `phc-local-app/mobile/eas.json` |
+
+**Live grading of new uploads is not verified.** The hosted central has no MATLAB, and `MATLAB_ALLOW_FALLBACK` is
+deliberately left unset. From the code, a newly submitted case is therefore expected to stop at the rule-engine step
+(`runCasePipeline`) instead of being graded by a substitute engine. Cases graded on the full local system are
+unaffected.
+
+**What a judge can do:** log in to the central web with the demo ophthalmologist or admin credentials (handed over
+separately, never in the repo), and use the review queue, case detail, referral tracker, PHC health and resource
+recommendations. The PHC web supports the technician workflow; captures need the PHC redeploy above.
+
+**What differs from production (§12.1):**
+
+- No MATLAB anywhere in the hosted demo. Central calls ML over HTTP (`INFERENCE_BACKEND=remote`), and the PHC uses
+  the JS quality gate.
+- Storage is ephemeral (the PHC SQLite file, central media files).
+- Free-tier services sleep when idle; the first request after a sleep takes about 20–45 s.
+- The session cookie is cross-site (`COOKIE_SAMESITE=none`), because the web apps and APIs are on different domains.
+- Demo data is public-dataset images only.
+
+### 12.3 Downloadable components
+
+| Component | Where | Needs |
 |---|---|---|
-| Central web (ophthalmologist / admin) | Vercel | _link_ |
-| PHC desktop web (hosted demo station) | Vercel | _link_ |
-| Central backend (API) | _host_ | _link to /health_ |
-| Database | _host_ | — |
-| ML inference (MATLAB + Python) | _host / approach_ | _live grading of new uploads: yes / only while … / no_ |
-| Mobile app | APK download | _link_ |
-
-**What a judge can do on the demo:** _(fill in: log in with demo credentials, browse pre-graded cases, review, see referrals and admin views, submit a new case — graded / queued)._
-
-**What differs from production:** _(fill in: e.g., a hosted "demo PHC station" stands in for an on-site PHC; demo data is public-dataset images only; any limit on live grading)._
+| Standalone PHC (§4.4) | `NetraSetu-PHC-standalone.zip` (outside git) | Windows + free MATLAB Runtime R2026a; a `PHC_ID` / `PHC_API_KEY` issued by central (PHC002's is pending) |
+| District resource model app (§7.1) | `simulink-model/deployable/dist/NetraSetuResourceModel.exe` (in the repo) | Windows + free MATLAB Runtime R2026a with the Simulink Compiler add-on |
+| Compiled quality gate | `phc-local-app/backend/quality-gate-matlab/dist/qualityGate.exe` (in the repo) | free MATLAB Runtime R2026a |
