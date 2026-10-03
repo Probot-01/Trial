@@ -1,0 +1,3 @@
+Path	Symbol	Reason
+NetraSetuRes\DistrictResourceApp.m	bdIsLoaded	undeployable
+NetraSetuRes\DistrictResourceApp.m	load_system	undeployable

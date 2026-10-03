@@ -121,6 +121,11 @@ ehthumbs.db
 
 # ── Build / dist ──────────────────────────────────────────────────────────────
 dist/
+# Exception: the Simulink Compiler resource-model app is shipped from the repo
+# (exe + MATLAB Compiler's build reports: runtime requirements, readme).
+!simulink-model/deployable/dist/
+!simulink-model/deployable/dist/*.log
+!simulink-model/deployable/dist/requiredMCRProducts.txt
 build/
 .next/
 out/
