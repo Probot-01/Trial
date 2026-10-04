@@ -278,7 +278,31 @@ _Screenshots to be added._
 
 ## Research and references
 
-_To be added — research notes and references collected during the project's initial planning._
+Full register, with status (fetched / logged / canonical / estimate) for every entry, internal
+evidence file paths, and a log of claims corrected or dropped along the way:
+**[`docs/NetraSetu — Research & References Register.md`](docs/NetraSetu%20%E2%80%94%20Research%20%26%20References%20Register.md)**.
+The core sources:
+
+**Clinical evidence and benchmarks**
+- Abràmoff et al., IDx-DR pivotal trial, *npj Digital Medicine* 2018 — 87.2% sensitivity / 90.7% specificity, 900 patients, 10 sites ([doi.org/10.1038/s41746-018-0040-6](https://doi.org/10.1038/s41746-018-0040-6))
+- Medios AI / Remidio SMART study (India), PMC7039584 — 93.0% sensitivity / 92.5% specificity, n=900 ([pmc.ncbi.nlm.nih.gov/articles/PMC7039584](https://pmc.ncbi.nlm.nih.gov/articles/PMC7039584/))
+- Wilkinson et al., International Clinical DR and DME Severity Scales, *Ophthalmology* 2003 — defines the 5-level ICDR scale this system's grades and rule engine follow ([pubmed.ncbi.nlm.nih.gov/13129861](https://pubmed.ncbi.nlm.nih.gov/13129861/))
+- Lu et al., comparative accuracy of handheld/smartphone fundus cameras, *PLOS Digital Health* 2022 — mobile-lens feasibility reference ([journals.plos.org/digitalhealth](https://journals.plos.org/digitalhealth/article?id=10.1371%2Fjournal.pdig.0000131))
+
+**Health-system, policy and economics**
+- Purohit et al., cost-effectiveness of DR screening at Indian PHCs, *PharmacoEconomics Open* 2025 — $354/QALY for AI-supported screening ([pmc.ncbi.nlm.nih.gov/articles/PMC12209073](https://pmc.ncbi.nlm.nih.gov/articles/PMC12209073))
+- IDF Diabetes Atlas, 11th ed. (2024 data), India — ~90 million adults with diabetes ([diabetesatlas.org](https://diabetesatlas.org/data-by-location/country/india/))
+- AIIMS Delhi national ophthalmic workforce survey (Vashist et al.), Oct 2025 — 20,944 ophthalmologists, ~15 per million people
+- National Blindness and Visual Impairment Survey 2015–19 — ~6.2M blind, ~55M visually impaired nationally ([ncbi.nlm.nih.gov/pmc/articles/PMC8725073](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8725073/))
+- Ayushman Bharat — DR screening added to the PHC/HWC eye-care package, April 2022
+
+**Datasets** — APTOS 2019, EyePACS (curated subset), IDRiD, CHASE_DB1, DRIVE, Messidor-2. Exact role of each in training/evaluation: see `docs/TECHNICAL_DOCUMENTATION.md` §11.
+
+**Method references** (standard techniques this system implements) — U-Net (Ronneberger et al. 2015), EfficientNet-B0 (Tan & Le 2019), temperature scaling (Guo et al. 2017), MC Dropout (Gal & Ghahramani 2016), conformal prediction (Vovk, Gammerman & Shafer 2005; Angelopoulos & Bates 2021), class-conditional conformal prediction (Vovk 2012), Grad-CAM / Grad-CAM++ (Selvaraju et al. 2017; Chattopadhay et al. 2018), Ben Graham preprocessing (Graham, Kaggle DR competition 2015), Frangi vesselness (Frangi et al., MICCAI 1998), quadratic-weighted kappa (Cohen 1968).
+
+**MathWorks references** — the Medical Imaging Toolbox's own multilabel DR fundus classification example (validated reference architecture for this system's MATLAB-native path), and MathWorks' own writeup of how Team TwinX won SIH 2025.
+
+**Existing solutions landscape** — IDx-DR/LumineticsCore and EyeArt (clinic-based, strongly validated); Remidio Medios AI and Forus Health (India-built portable devices, the closest real-world precedent to this system's deployment model).
 
 ---
 
