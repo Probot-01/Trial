@@ -27,7 +27,7 @@ seconds instead of screening everyone.
 | PHC local API | https://netrasetu-phc.onrender.com/health |
 | Android app (APK, direct install, no Play Store) | [Download](https://expo.dev/artifacts/eas/AXeqZ3jshQkh7qTIsaXkO3nUBWXyqH9XnyRv1di0jYo.apk) |
 | Demo video | _to be added_ |
-| Google Drive (shareable PDFs: technical documentation, ML benchmarks, MATLAB-application deliverables) | _to be added_ |
+| Google Drive (shareable PDFs: technical documentation, ML benchmarks, MATLAB-application deliverables) | [Open](https://drive.google.com/drive/folders/1e--esRoyi59QNlBE0cQxvH51eg6y62Pv) |
 
 **Demo technician login (hosted PHC station):** username `demo`, password `Fundus-Comet-52` — a
 fixed demo-only account, intentionally public for judge access.
@@ -380,7 +380,52 @@ evidence-rendering tooling, not of anything a judge's live case goes through.
 
 ## Prototype
 
-_Screenshots to be added._
+Click any screenshot for full resolution — GitHub's inline preview doesn't support zoom.
+
+**Landing and role selection**
+
+<p>
+  <a href="docs/prototype/00-Intro/01-splash.png"><img src="docs/prototype/00-Intro/01-splash.png" width="260" alt="NetraSetu splash screen"></a>
+  <a href="docs/prototype/00-Intro/02-eye-anatomy.png"><img src="docs/prototype/00-Intro/02-eye-anatomy.png" width="260" alt="Eye anatomy explainer animation"></a>
+  <a href="docs/prototype/00-Intro/03-role-selection.png"><img src="docs/prototype/00-Intro/03-role-selection.png" width="260" alt="Central web role selection: ophthalmologist or district worker"></a>
+</p>
+
+**PHC technician** (`phc-local-app`) — registers the patient, captures the retina photo, and
+clears the local quality gate before anything is sent anywhere:
+
+<p>
+  <a href="docs/prototype/01-PHC%20Technician/01-patient-registration.png"><img src="docs/prototype/01-PHC%20Technician/01-patient-registration.png" width="400" alt="PHC technician: new patient registration form"></a>
+  <a href="docs/prototype/01-PHC%20Technician/02-capture-and-quality-gate.png"><img src="docs/prototype/01-PHC%20Technician/02-capture-and-quality-gate.png" width="400" alt="PHC technician: image capture and local quality gate"></a>
+</p>
+
+**Ophthalmologist** (`central-system/frontend`) — reviews the AI grade against the rule engine,
+the Grad-CAM evidence and lesion counts, and confirms or overrides before a referral fires:
+
+<p>
+  <a href="docs/prototype/02-Ophthalmologist/01-case-list.png"><img src="docs/prototype/02-Ophthalmologist/01-case-list.png" width="400" alt="Ophthalmologist: case list"></a>
+  <a href="docs/prototype/02-Ophthalmologist/02-gradcam-and-lesion-evidence.png"><img src="docs/prototype/02-Ophthalmologist/02-gradcam-and-lesion-evidence.png" width="400" alt="Ophthalmologist: Grad-CAM and lesion evidence"></a>
+  <a href="docs/prototype/02-Ophthalmologist/03-ai-confidence-and-context.png"><img src="docs/prototype/02-Ophthalmologist/03-ai-confidence-and-context.png" width="400" alt="Ophthalmologist: AI confidence, uncertainty and patient context"></a>
+  <a href="docs/prototype/02-Ophthalmologist/04-confirm-or-override.png"><img src="docs/prototype/02-Ophthalmologist/04-confirm-or-override.png" width="400" alt="Ophthalmologist: confirm or override decision"></a>
+</p>
+
+A confirmed referral reaches the patient directly by SMS:
+
+<p>
+  <a href="docs/prototype/02-Ophthalmologist/05-patient-sms-notification.jpeg"><img src="docs/prototype/02-Ophthalmologist/05-patient-sms-notification.jpeg" width="260" alt="Patient referral SMS notification"></a>
+</p>
+
+**District admin** (`central-system/frontend`) — the district-wide view: screening volume,
+DR grade distribution, the referral tracker, PHC uptime, and MATLAB-Simulink-backed resource
+planning:
+
+<p>
+  <a href="docs/prototype/03-District%20Admin/01-overview.png"><img src="docs/prototype/03-District%20Admin/01-overview.png" width="400" alt="District admin: overview"></a>
+  <a href="docs/prototype/03-District%20Admin/02-dashboard-kpis.png"><img src="docs/prototype/03-District%20Admin/02-dashboard-kpis.png" width="400" alt="District admin: dashboard KPIs"></a>
+  <a href="docs/prototype/03-District%20Admin/03-dashboard-dr-grade-distribution.png"><img src="docs/prototype/03-District%20Admin/03-dashboard-dr-grade-distribution.png" width="400" alt="District admin: DR grade distribution"></a>
+  <a href="docs/prototype/03-District%20Admin/04-referral-tracker.png"><img src="docs/prototype/03-District%20Admin/04-referral-tracker.png" width="400" alt="District admin: referral tracker"></a>
+  <a href="docs/prototype/03-District%20Admin/05-phc-health.png"><img src="docs/prototype/03-District%20Admin/05-phc-health.png" width="400" alt="District admin: PHC health"></a>
+  <a href="docs/prototype/03-District%20Admin/06-resource-allocation.png"><img src="docs/prototype/03-District%20Admin/06-resource-allocation.png" width="400" alt="District admin: Simulink-backed resource allocation"></a>
+</p>
 
 ---
 
