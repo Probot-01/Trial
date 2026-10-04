@@ -48,7 +48,7 @@ front-ends, and the persistent MATLAB session.
 |---|---|---|
 | **Node.js** | 18+ (22 LTS tested) | npm comes with it |
 | **Docker** | Docker Desktop / Engine with Compose v2 | Runs Postgres only |
-| **MATLAB** | R2026a (tested: Update 5) | Required for the default engine (`INFERENCE_BACKEND=matlab`). Core toolboxes: Deep Learning, Image Processing, Statistics and Machine Learning, Medical Imaging. Also used, in offline calibration/experiment/evidence-rendering scripts only (never in the live request path): Computer Vision, Parallel Computing, Global Optimization — see "MATLAB toolboxes and standalone applications" below for exactly where each one is used. Optional: Simulink + SimEvents (resource model), MATLAB Compiler / Simulink Compiler (standalone executables), MATLAB Report Generator (evidence PDF; a core-MATLAB fallback renderer exists). `matlab` must be on `PATH`, or set `MATLAB_EXECUTABLE` |
+| **MATLAB** | R2026a (tested: Update 5) | Required for the default engine (`INFERENCE_BACKEND=matlab`). Core toolboxes: Deep Learning, Image Processing, Statistics and Machine Learning, Medical Imaging. Also used, in offline calibration/experiment/evidence-rendering scripts only (never in the live request path): Computer Vision, Parallel Computing, Global Optimization — see "Standalone MATLAB applications and toolboxes" below for exactly where each one is used. Optional: Simulink + SimEvents (resource model), MATLAB Compiler / Simulink Compiler (standalone executables), MATLAB Report Generator (evidence PDF; a core-MATLAB fallback renderer exists). `matlab` must be on `PATH`, or set `MATLAB_EXECUTABLE` |
 | **Python** | 3.11 (conda env `dr_screening`) | Preprocessing and the segmentation worker: `pip install -r central-system/backend/ml-pipeline/requirements.txt`. If a bare `python` isn't on your `PATH` (it silently defaults to that), set `PYTHON_EXECUTABLE` in `central-system/backend/.env` to this env's `python.exe` directly |
 
 There is no Redis: the grading queue runs in-process in the central backend.
@@ -317,10 +317,8 @@ natively inside MATLAB (persistent session, or the free MATLAB Runtime via compi
 executables). This is the configuration the Simulink models validate and the one intended for a
 real PHC rollout.
 
-Seven standalone applications prove this out, all built and all listed with full detail in
-`docs/TECHNICAL_DOCUMENTATION.md` §12.2–12.3. Six ship directly in this repo; the inference engine
-(classifier + all four segmentation models, 265MB) is too large for a normal git push and is
-instead a **[GitHub Release](https://github.com/krrishgadekar/SIH_2026/releases/tag/inference-engine-v1)**.
+Seven standalone applications prove this out — exact paths, build scripts and toolbox
+requirements for every one are in "Standalone MATLAB applications and toolboxes" below.
 
 **Hosted / online deployment — "can a judge reach this system from anywhere, instantly, with no
 local setup?"** Render's and Vercel's free tiers have no MATLAB available at all, so this
@@ -332,6 +330,50 @@ as the intended production architecture.
 
 Both modes are real, both are tested, and the system is explicit — case by case, in its own
 output — about which one produced any given result.
+
+---
+
+## Standalone MATLAB applications and toolboxes
+
+**The seven standalone applications**, each compiled with MATLAB Compiler or Simulink Compiler so
+it runs on a machine with no MATLAB license — only the free MATLAB Runtime. Six ship directly in
+this repo at the paths below; the inference engine (classifier + all four segmentation models,
+265MB) is too large for a normal git push and is instead a
+**[GitHub Release](https://github.com/krrishgadekar/SIH_2026/releases/tag/inference-engine-v1)**.
+
+| # | Application | Path in this repo | Built by | Requires at runtime |
+|---|---|---|---|---|
+| 1 | PHC quality gate | `phc-local-app/backend/quality-gate-matlab/dist/qualityGate.exe` | `buildQualityGateExe.m` | MATLAB Compiler Runtime |
+| 2 | District resource model (compiled from the real Simulink model) | `simulink-model/deployable/dist/NetraSetuResourceModel.exe` | `simulink-model/deployable/buildResourceModelApp.m` | Simulink Compiler Runtime |
+| 3 | District resource model (plain-MATLAB CLI reimplementation of the same queueing logic, no Simulink Compiler needed) | `simulink-model/resourceModelApp/dist/resourceModel.exe` | `simulink-model/resourceModelApp/buildResourceModelExe.m` | MATLAB Compiler Runtime |
+| 4 | Case-chain engine | `central-system/backend/ml-pipeline/deploy/dist/netraSetuCaseMain.exe` | `central-system/backend/ml-pipeline/deploy/buildCaseChain.m` | MATLAB Compiler Runtime (+ Deep Learning, Image Processing, Statistics and Machine Learning add-ons) |
+| 5 | Clinical-rationale report generator | `central-system/backend/ml-pipeline/explainability/reportGeneratorApp/dist/reportGenerator.exe` | `.../reportGeneratorApp/buildReportGeneratorExe.m` | MATLAB Compiler Runtime |
+| 6 | Interactive full-pipeline dashboard | `simulink-model/deployable/pipeline/dist/NetraSetuPipelineDashboard.exe` | `simulink-model/deployable/pipeline/buildPipelineDashboardApp.m` | Simulink Compiler Runtime |
+| 7 | Inference engine (classifier + 4 segmentation models) | not in git (265MB) — [GitHub Release](https://github.com/krrishgadekar/SIH_2026/releases/tag/inference-engine-v1) | same `buildCaseChain.m`, inference target | MATLAB Compiler Runtime (+ same add-ons as #4) |
+
+Rows 2 and 3 are genuinely two different applications, not a duplicate: one is Simulink Compiler's
+build of the actual `.slx` model, the other a plain-MATLAB-Compiler reimplementation of the same
+queueing logic, kept independently buildable with no Simulink Compiler license at all.
+
+**Every MATLAB toolbox this project uses, and exactly where:**
+
+| Toolbox / product | Used in | What for |
+|---|---|---|
+| Deep Learning Toolbox | Case-chain and inference engine (`ml-pipeline/deploy`) | Runs the ONNX-imported DR classifier natively in MATLAB |
+| Image Processing Toolbox | Preprocessing, quality gate, report generator, case-chain/inference engine | Image I/O, cropping, resizing, basic filtering |
+| Statistics and Machine Learning Toolbox | Case-chain and inference engine | Calibration and conformal-prediction statistics behind the confidence tiers |
+| Medical Imaging Toolbox | `ml-pipeline/preprocessing/readFundusImage.m` | Reads DICOM images a clinical-grade fundus camera exports (Ophthalmic Photography format), and pulls the camera manufacturer/model and eye laterality out of the file's own metadata. Deliberately kept out of the compiled quality-gate bundle (licensing/bundle-size tradeoff), so the PHC desktop app still uses plain image reading |
+| Computer Vision Toolbox | `ml-pipeline/explainability/generateEvidenceReport.m`, `ml-pipeline/verifyPhase4.m` | Annotating lesion boxes/shapes onto the evidence images shown in a case's clinical rationale |
+| Parallel Computing Toolbox | Offline calibration and experiment scripts — `ml-pipeline/grading/optimizeRuleThresholds.m`, `ml-pipeline/explainability/batchGenerateReports.m`, `ml-pipeline/experiments/runTask92.m`, `quality-gate-matlab/calibrateQualityThresholds.m`, `simulink-model/monteCarloQueueing.m`, `simulink-model/sweepDistrictScenarios.m` | Parallelizing threshold sweeps and batch report generation during development — never in the live request path |
+| Global Optimization Toolbox | `ml-pipeline/grading/optimizeRuleThresholds.m` | Searching the rule-engine's threshold space during calibration, before the chosen thresholds are frozen into the deployed rule engine |
+| Simulink + SimEvents | `simulink-model/` | The two discrete-event models above (district queueing, full pipeline) |
+| Simulink Compiler | Apps #2 and #6 above | Compiling the Simulink models themselves into standalone executables |
+| MATLAB Compiler | Apps #1, #3, #4, #5, #7 above | Compiling plain-MATLAB entry points into standalone executables |
+| MATLAB Report Generator | Clinical-rationale PDF generation | Evidence PDF layout; a core-MATLAB fallback renderer exists if this toolbox isn't available |
+
+Computer Vision, Parallel Computing and Global Optimization never run in the live request
+path — they're real, verified-in-code dependencies of the offline calibration and
+evidence-rendering tooling, not of anything a judge's live case goes through.
 
 ---
 
