@@ -408,10 +408,13 @@ the Grad-CAM evidence and lesion counts, and confirms or overrides before a refe
   <a href="docs/prototype/02-Ophthalmologist/04-confirm-or-override.png"><img src="docs/prototype/02-Ophthalmologist/04-confirm-or-override.png" width="400" alt="Ophthalmologist: confirm or override decision"></a>
 </p>
 
-A confirmed referral reaches the patient directly by SMS:
+Confirming or overriding renders the downloadable clinical-rationale PDF (MATLAB Report
+Generator, with a core-MATLAB fallback renderer), and a confirmed referral reaches the patient
+directly by SMS:
 
 <p>
-  <a href="docs/prototype/02-Ophthalmologist/05-patient-sms-notification.jpeg"><img src="docs/prototype/02-Ophthalmologist/05-patient-sms-notification.jpeg" width="260" alt="Patient referral SMS notification"></a>
+  <a href="docs/prototype/02-Ophthalmologist/05-clinical-rationale-report.jpeg"><img src="docs/prototype/02-Ophthalmologist/05-clinical-rationale-report.jpeg" width="400" alt="Clinical-rationale PDF report: fundus photo, Grad-CAM, AI grade"></a>
+  <a href="docs/prototype/02-Ophthalmologist/06-patient-sms-notification.jpeg"><img src="docs/prototype/02-Ophthalmologist/06-patient-sms-notification.jpeg" width="260" alt="Patient referral SMS notification"></a>
 </p>
 
 **District admin** (`central-system/frontend`) — the district-wide view: screening volume,
