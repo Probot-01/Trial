@@ -260,10 +260,7 @@ def main():
             print(f"  IoU (Jaccard)        {m['iou']:.4f}")
             print(f"  Accuracy             {m['accuracy']:.4f}")
 
-        # Mean-of-per-image Dice alongside the pooled figure. They are
-        # different statistics: pooling weights an image by its vessel count,
-        # so one densely-annotated image can carry the aggregate. Published
-        # DRIVE tables vary in which they quote.
+    
         dices = [m["f1"] for _n, m in per_image]
         senss = [m["sensitivity"] for _n, m in per_image]
         print(f"\n  per-image mean Dice  {np.mean(dices):.4f} "

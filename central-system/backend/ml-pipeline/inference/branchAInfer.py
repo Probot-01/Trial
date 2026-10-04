@@ -14,17 +14,7 @@ sys.path.insert(0, ML_ROOT)
 MODEL_DIR = os.path.join(ML_ROOT, "models")
 EXPECTED_CALIB_METHOD = "ordinal_mode_interval_stratified_v3"
 
-# ── BRANCH_A_MODEL_VERSION switch (v2a integration, GATE 4) ─────────────────
-# Style matches INFERENCE_BACKEND (gradingOrchestrator.js): an env var read
-# once at import time, default stays the currently-deployed model. Set by
-# whatever spawns this process (or the shell, for direct/manual runs) --
-# nothing in this file or gradingOrchestrator.js needs to "know" about it
-# beyond process.env inheritance, the same way INFERENCE_BACKEND already
-# reaches this process without this file naming it.
-#
-# modelPaths.CHECKPOINTS role + this version's own calibration FILENAME
-# (never calibration_v1.json) are looked up from this table so every
-# version-dependent path in this file comes from ONE place.
+
 BRANCH_A_MODEL_VERSIONS = {
     "branchA_v1":  {"role": "classifier", "calib_filename": "calibration_v1.json"},
     "branchA_v2a": {"role": "classifier_v2a", "calib_filename": "calibration_branchA_v2a.json"},
@@ -32,42 +22,17 @@ BRANCH_A_MODEL_VERSIONS = {
     "branchA_v2c": {"role": "classifier_v2c", "calib_filename": "calibration_branchA_v2c.json"},
 }
 
-# v2-family tags: dual-head checkpoint (5-class + binary referable), 5-class
-# head only via export_to_onnx.build_v2a_5class_model (already generic --
-# it only reads fields off whatever ckpt dict it's handed, never the
-# filename). GENERALIZE (v2b integration): load_model() below used to check
-# `== "branchA_v2a"` specifically; it now checks membership in this tuple so
-# branchA_v2b reuses the exact same wrapper without a second copy. A later
-# tag (branchA_v2c) needs one new line in BRANCH_A_MODEL_VERSIONS above and
-# one here -- nothing else in this file changes.
 V2_FAMILY_VERSIONS = ("branchA_v2a", "branchA_v2b", "branchA_v2c")
 
-# DEFAULT CHANGE (v2c integration, 2026-09-21): branchA_v2c passed every
-# gate (ONNX/MATLAB parity, revised cross-fit guards, calibrated end-to-end
-# agreement with MATLAB) and is now the deployed default, replacing
-# branchA_v1. ROLLBACK: set BRANCH_A_MODEL_VERSION=branchA_v1 in the
-# environment (or spawning process) to restore the previous model with no
-# code change -- every v1 code path in this file is untouched and still
-# fully supported.
+
 BRANCH_A_MODEL_VERSION = os.environ.get("BRANCH_A_MODEL_VERSION", "branchA_v2c")
 if BRANCH_A_MODEL_VERSION not in BRANCH_A_MODEL_VERSIONS:
     raise ValueError(
         f"BRANCH_A_MODEL_VERSION={BRANCH_A_MODEL_VERSION!r} is not one of "
         f"{sorted(BRANCH_A_MODEL_VERSIONS)}.")
 
-# NEVER calibration_v1.json for a non-v1 version: this is a different FILE,
-# not a shared file with a version field checked after the fact, so a v2a
-# run cannot find v1's calibration even by accident (see load_calibration()'s
-# own modelVersion guard for the second, explicit line of defence).
 CALIB_PATH = os.path.join(MODEL_DIR, BRANCH_A_MODEL_VERSIONS[BRANCH_A_MODEL_VERSION]["calib_filename"])
 
-# The checkpoint is resolved by FILENAME, not by a fixed path. The weights are
-# not in git and the folder layout under models/ is not stable -- see
-# modelPaths.py. A hardcoded path here broke once already when a teammate's
-# commit removed the file.
-
-# Cached across calls within one process. Loading EfficientNet-B0 and its
-# weights costs a second or so; a long-lived worker should pay that once.
 _MODEL = None
 _CKPT = None
 _CALIB = None
@@ -218,20 +183,7 @@ def load_model():
     ckpt = load_checkpoint()
 
     if BRANCH_A_MODEL_VERSION in V2_FAMILY_VERSIONS:
-        # Every v2-family checkpoint (branchA_v2a, branchA_v2b, ...) is a
-        # DUAL-head checkpoint (5-class + binary referable). This
-        # integration ships the 5-class grade only -- the binary head's
-        # conformal/deployment story is undecided (see the v2a integration
-        # brief). Reuse training/export_to_onnx.py's
-        # DRClassifierV2Export/build_v2a_5class_model rather than defining a
-        # second wrapper here: that is the SAME class GATE 1's ONNX export
-        # uses, so the Python live path and the exported graph are provably
-        # built from identical logic, not two hand-kept-in-sync copies. The
-        # function's name is a historical artifact of v2a being first --
-        # its body only ever reads fields off the ckpt dict it's handed, so
-        # it is already generic across the whole v2-family (GENERALIZE, v2b
-        # integration: this branch used to check `== "branchA_v2a"`
-        # specifically).
+    
         sys.path.insert(0, os.path.join(ML_ROOT, "training"))
         from export_to_onnx import build_v2a_5class_model
         model = build_v2a_5class_model(
@@ -256,9 +208,7 @@ def load_model():
                              ckpt["num_features"], ckpt["drop_rate"])
         model.load_state_dict(ckpt["model_state_dict"], strict=True)
 
-    # eval() is not cosmetic: drop_rate is 0.3, and in train mode every call
-    # would sample a different dropout mask and return a different grade for
-    # the same photograph.
+  
     model.eval()
 
     _MODEL, _CKPT = model, ckpt

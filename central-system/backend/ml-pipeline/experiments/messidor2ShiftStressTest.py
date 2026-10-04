@@ -355,9 +355,6 @@ def run_part_a(manifest, logits5, indomain):
            "format_breakdown": format_report, "resolution_breakdown": resolution_report}
 
 
-# ===========================================================================
-# PART B: C5v3 POLICY UNDER SHIFT
-# ===========================================================================
 def evaluate_ordinal_fast(probs, labels, qhat_per_class):
     """Vectorised equivalent of cps.assign_tier_ordinal + cps.evaluate_ordinal_config
     for row_scores_v3 specifically - same formula, same algorithm (mode always

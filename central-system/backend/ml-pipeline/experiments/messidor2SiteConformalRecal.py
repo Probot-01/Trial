@@ -35,11 +35,6 @@ def out(s=""):
     OUT_LINES.append(str(s))
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# The production fitting procedure, on an arbitrary (logits, labels) subset.
-# Bit-for-bit the same three calls conformalCrossFitValidation.py's own
-# cross-fit uses inside each of its 50 folds.
-# ═══════════════════════════════════════════════════════════════════════════
 def fit_production_calib(logits, labels):
     T = ccv.fit_temperature(logits, labels)
     probs = _softmax(logits / T, axis=1)
@@ -126,9 +121,7 @@ def run_for_tag(tag):
     out(f"Half B (odd patient_id, REPORT): {len(idxB)} images, "
        f"{len(np.unique(patient_ids[idxB]))} patients")
 
-    # ---- verify the vectorised replica once against the real assign_tier(),
-    # using the shipped calibration (same check messidor2ShiftStressTest.py's
-    # own Part B already performs) -------------------------------------------
+
     shipped_calib, shipped_path = mst.load_shipped_calibration(tag)
     T0 = float(shipped_calib["temperature"])
     probs0 = _softmax(logits5 / T0, axis=1)

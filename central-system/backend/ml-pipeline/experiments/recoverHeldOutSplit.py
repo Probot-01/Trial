@@ -65,14 +65,7 @@ def check_files_resolvable(split, sample_n=10):
         aptos_ids = [i for i in d["ids"] if not i.startswith("idrid")][:sample_n]
         unresolvable += len(aptos_ids)
         for i in idrid_ids:
-            # id shape: 'idrid__idrid_<train|test>_IDRiD_NNN'. The train/test
-            # tag reflects IDRiD's OWN original CSV split, which does not
-            # reliably match this repo's local 'a. Training Set' /
-            # 'b. Testing Set' folders (confirmed: IDRiD_033/044/067 are
-            # tagged 'idrid_train' but live locally under 'b. Testing Set').
-            # Search both rather than trust the tag -- same "resolve by
-            # filename, not assumed path" rule this codebase applies to model
-            # checkpoints elsewhere (MODEL_INTERFACE_REFERENCE.md).
+           
             tail = i.split("__", 1)[1]
             fname = "IDRiD_" + tail.split("IDRiD_")[-1] + ".jpg"
             checked += 1

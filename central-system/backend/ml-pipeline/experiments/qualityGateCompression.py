@@ -62,9 +62,7 @@ def build_pairs(outdir, limit):
             continue
         bgr = cv2.imread(path, cv2.IMREAD_COLOR)
         base = os.path.splitext(os.path.basename(path))[0]
-        # Both variants are written at quality 95. The DEGRADATION happened in
-        # jpeg(), which encodes at 10 and decodes; re-saving at 95 preserves
-        # those artefacts without adding a second generation of its own.
+      
         cv2.imwrite(os.path.join(outdir, base + "_A_clean.jpg"), bgr,
                     [int(cv2.IMWRITE_JPEG_QUALITY), 95])
         cv2.imwrite(os.path.join(outdir, base + "_B_jpeg10.jpg"), jpeg(bgr, 1.0),
@@ -97,13 +95,9 @@ def main():
     print(f"built {n} clean/compressed pairs in {args.outdir}")
 
     csv_path = os.path.join(args.outdir, "gate.csv")
-    # NOT a leading-underscore name. MATLAB script filenames must be valid
-    # identifiers, and run('_runGate.m') fails with "Invalid text character" --
-    # an error about the file's NAME that reads as an error about its contents.
+
     script = os.path.join(args.outdir, "runQualityGate.m")
-    # Unix newlines and no leading blank line: MATLAB rejects a script whose
-    # first line is a bare CR with "Invalid text character", which reads like
-    # an encoding problem and is not one.
+  
     with open(script, "w", encoding="ascii", newline="\n") as fh:
         fh.write(MATLAB_SCRIPT.strip().format(
             gate=GATE_DIR.replace("\\", "/"),
@@ -111,8 +105,6 @@ def main():
             csv=csv_path.replace("\\", "/"),
             camera=args.camera))
 
-    # One MATLAB session for all images: startup costs ~9 s and would otherwise
-    # be paid per image.
     subprocess.run(["matlab", "-batch", f"run('{script}')".replace("\\", "/")],
                    check=True)
 

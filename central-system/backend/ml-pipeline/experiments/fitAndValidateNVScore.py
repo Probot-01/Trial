@@ -147,11 +147,7 @@ def main():
     test_df = df[df["dataset"] == "idrid_test"].reset_index(drop=True)
     mess_df = df[df["dataset"] == "messidor2"].reset_index(drop=True)
 
-    # scoreNVBatch.m's CSV doesn't carry patient_id (MATLAB never saw it) -
-    # merge it back in from the manifest for the Messidor-2 patient-level
-    # bootstrap. Matched by image_id == Path(image_path).stem; every row
-    # must match or the join is silently wrong, so this is asserted, not
-    # just hoped for.
+    
     manifest_path = Path(__file__).resolve().parent.parent / "datasets" / "Messidor-2" / "eval_manifest.csv"
     manifest = pd.read_csv(manifest_path)
     manifest["imageId"] = manifest["image_path"].apply(lambda p: Path(p).stem)

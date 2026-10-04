@@ -1,22 +1,8 @@
 'use strict';
 
-/**
- * loadEnv.js -- one place that decides where this service's config comes from.
- *
- *   require('./loadEnv');   // before anything reads process.env
- *
- * Order, first non-empty value wins:
- *   1. the real environment (shell, CI, docker)
- *   2. central-system/backend/.env          this service's own file
- *   3. <repo root>/.env                     the older shared file, still read so
- *                                           an existing checkout keeps working
- *
- * Explicit paths, never a bare .config(): that resolves against the process
- * cwd, so starting the server from anywhere but this directory would silently
- * load nothing -- taking DATABASE_URL and MATLAB_EXECUTABLE with it.
- */
 
-const fs   = require('fs');
+
+const fs = require('fs');
 const path = require('path');
 
 let dotenv;
