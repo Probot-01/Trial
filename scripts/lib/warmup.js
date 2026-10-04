@@ -30,6 +30,11 @@ const segSession = require(path.join(backend, 'services', 'segSessionClient'));
     const a = await matlabSession.call({ tensorPath: tensor, gradcamPath: '' }, { timeoutMs: 180000, prefix: 'warm' });
     console.log(`classifier answered (grade ${a.drGradeCnn !== undefined ? a.drGradeCnn : a.dr_grade_cnn})`);
   } finally { fs.rmSync(tensor, { force: true }); }
-  await segSession.call({ image, outdir: '' }, { timeoutMs: 240000, prefix: 'seg' });
-  console.log('segmentation worker answered');
+  const segBackend = (process.env.SEG_INFERENCE_BACKEND || 'matlab').toLowerCase();
+  if (segBackend === 'python') {
+    await segSession.call({ image, outdir: '' }, { timeoutMs: 240000, prefix: 'seg' });
+    console.log('segmentation worker answered');
+  } else {
+    console.log(`segmentation runs through MATLAB (SEG_INFERENCE_BACKEND=${segBackend}); python seg worker not warmed`);
+  }
 })().catch((e) => { console.error(e.message); process.exit(1); });

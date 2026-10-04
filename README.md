@@ -48,8 +48,8 @@ front-ends, and the persistent MATLAB session.
 |---|---|---|
 | **Node.js** | 18+ (22 LTS tested) | npm comes with it |
 | **Docker** | Docker Desktop / Engine with Compose v2 | Runs Postgres only |
-| **MATLAB** | R2026a (tested: Update 5) | Required for the default engine (`INFERENCE_BACKEND=matlab`). Toolboxes: Deep Learning, Image Processing, Statistics and Machine Learning, Medical Imaging. Optional: Simulink + SimEvents (resource model), MATLAB Compiler (standalone executables), MATLAB Report Generator (evidence PDF; a core-MATLAB fallback renderer exists). `matlab` must be on `PATH`, or set `MATLAB_EXECUTABLE` |
-| **Python** | 3.11 (conda env `dr_screening`) | Preprocessing and the segmentation worker: `pip install -r central-system/backend/ml-pipeline/requirements.txt` |
+| **MATLAB** | R2026a (tested: Update 5) | Required for the default engine (`INFERENCE_BACKEND=matlab`). Core toolboxes: Deep Learning, Image Processing, Statistics and Machine Learning, Medical Imaging. Also used, in offline calibration/experiment/evidence-rendering scripts only (never in the live request path): Computer Vision, Parallel Computing, Global Optimization — see "MATLAB toolboxes and standalone applications" below for exactly where each one is used. Optional: Simulink + SimEvents (resource model), MATLAB Compiler / Simulink Compiler (standalone executables), MATLAB Report Generator (evidence PDF; a core-MATLAB fallback renderer exists). `matlab` must be on `PATH`, or set `MATLAB_EXECUTABLE` |
+| **Python** | 3.11 (conda env `dr_screening`) | Preprocessing and the segmentation worker: `pip install -r central-system/backend/ml-pipeline/requirements.txt`. If a bare `python` isn't on your `PATH` (it silently defaults to that), set `PYTHON_EXECUTABLE` in `central-system/backend/.env` to this env's `python.exe` directly |
 
 There is no Redis: the grading queue runs in-process in the central backend.
 
@@ -107,6 +107,95 @@ cd phc-local-app/mobile    && npx expo start                # Expo Go, same LAN 
 
 ---
 
+## Headline ML results
+
+Full numbers, populations, intervals, reproduction paths and caveats:
+**[`docs/ML_BENCHMARKS.md`](docs/ML_BENCHMARKS.md)**. Everything below is measured on real data by
+code already in this repository — nothing projected or estimated.
+
+**DR severity classifier (deployed model: EfficientNet-B0 @ 512×512, ordinal-aware loss):**
+
+| Metric | Population | Result | SIH target |
+|---|---|---|---|
+| Quadratic-weighted kappa | Held-out test, n = 628 | **0.884** | — |
+| Referable-DR sensitivity, argmax grade | Held-out test, n = 628 | 92.7% | > 90% ✅ |
+| Referable-DR specificity, argmax grade | Held-out test, n = 628 | 92.4% | > 85% ✅ |
+| Referable-DR sensitivity, live referral threshold | 50-fold cross-fit, n = 1,161 | **95.0%** [92.8, 96.6] | > 90% ✅ |
+| Referable-DR specificity, live referral threshold | 50-fold cross-fit, n = 1,161 | **91.0%** [88.6, 93.0] | > 85% ✅ |
+| Grade-4 (proliferative DR) exact recall | Held-out test, n = 628 | 57.4% (31/54) | |
+
+Grade-4 exact recall is the one deliberately conservative number here — and it's still a safe
+system, because referral fires on calibrated P(grade ≥ 2), not on hitting the exact top grade; a
+proliferative case graded 3 instead of 4 is still referred.
+
+**Safety of the auto-clear tier** — class-conditional conformal calibration, cross-fit on the same
+n = 1,161 population:
+
+| Guard | Threshold | Result |
+|---|---|---|
+| Referable-case coverage, lower confidence bound | ≥ 93% | **94.2%** ✅ |
+| False auto-clear rate, referable cases | ≤ 5% | **0.0%** ✅ |
+| False auto-clear rate, grade ≥ 3 cases | ≤ 2% | **0.0%** ✅ |
+| Grade-4 cases auto-cleared, across 1,000 fold assignments | — | **0** |
+| Tier distribution (pooled) | — | A 38.4% · B 43.8% · C 17.8% |
+
+**External validation on a camera the model has never seen** (Messidor-2, Topcon camera,
+odd-half held-out, n = 872 — never touched until one final audited run):
+
+| Metric | In-domain | Unseen camera (Messidor-2) |
+|---|---|---|
+| AUC of P(grade ≥ 2) | 0.979 | **0.924** [0.900, 0.945] |
+| Referable sensitivity at the shipped threshold | 95.0% | **75.2%** [68.6, 81.4] |
+| False auto-clear, true referable | 0.0% | 2.3% (5/218) |
+| False auto-clear, true grade ≥ 3 | 0.0% | **0.0%** (0/45) |
+
+Sensitivity dropping on an unseen camera is the expected behavior of any vision model under domain
+shift — the product's answer is structural: **a camera or site that hasn't been locally validated
+can never reach the auto-clear tier**, regardless of what the model says. This is the reason the
+camera-validation gate exists, not a blind spot found by accident.
+
+**Deployed, end-to-end pipeline smoke test** (official IDRiD test split, n = 103, overlaps the
+calibration pool so read it as integration proof, not a fourth accuracy claim): QWK 0.841,
+referable sensitivity **100%** (64/64), grade-4 recall **13/13**, 0 Tier-A cases referable.
+
+**Segmentation and lesion models:**
+
+| Model | Test data | Result |
+|---|---|---|
+| Vessel segmentation | CHASE_DB1 held-out (n = 6) | Dice **0.777** |
+| Same model, no retraining | DRIVE, unseen dataset (n = 20) | Dice 0.619 |
+| Optic disc / fovea localization | IDRiD held-out (n = 77) | **98.7% / 96.1%** within one disc radius |
+| Hard-exudate segmentation | IDRiD held-out | Dice 0.583 per-image / 0.733 pixel-pooled |
+| Microaneurysm + haemorrhage segmentation | IDRiD (n = 16) | Merged Dice 0.599 |
+
+Cotton-wool spots and neovascularization are explicitly **not wired into any decision** — measured,
+found not to hold up, and reported as "unmeasured" rather than a false zero. Full reasoning in
+`docs/ML_BENCHMARKS.md` §5.
+
+**Rule engine** (explicit ICDR "4-2-1" criteria, plain auditable code — no learned weights):
+60.2% exact agreement with ground truth on IDRiD's official test set. Its value isn't beating the
+CNN — agreement strengthens a case's confidence tier, and **disagreement unconditionally forces
+mandatory review**, with the final grade set by the ophthalmologist either way.
+
+**Engineering integrity — the numbers behind "it actually runs, consistently":**
+
+| Check | Result |
+|---|---|
+| PyTorch ↔ ONNX ↔ MATLAB tensor parity, all 9 model artifacts | Max difference 1×10⁻⁶–4×10⁻⁵ |
+| Classifier, Python vs. MATLAB inference, real IDRiD images | Grade and tier agree **10/10** |
+| Full-pipeline soak test — every IDRiD image through capture → quality gate → sync → grading | **447/447 graded, 0 failed, 0 timed out** |
+| End-to-end central grading latency (warm MATLAB, dev laptop) | p50 10.9s / p95 22.2s |
+| Local quality-gate latency (desktop MATLAB) | p50 0.49s / p95 3.2s |
+| Automated tests | Conformal 90/90 · fovea gate 12/12 · PHC backend 41/41 · mobile 28 |
+
+**Scope, stated on purpose:** in-domain vs. unseen-camera sensitivity (95.0% → 75.2%), grade-4
+exact-recall is a known next-round target, microaneurysm/haemorrhage evidence is early (16-image
+tune set), neovascularization and cotton-wool spots are measured and gated off rather than
+shipped unproven, and every result above is on public datasets — no real-patient or prospective
+data this round. Full detail: `docs/ML_BENCHMARKS.md` §8.
+
+---
+
 ## Honest status — what works, what doesn't, and why
 
 We'd rather a judge read this than discover it live.
@@ -133,36 +222,6 @@ Full status detail: `docs/TECHNICAL_DOCUMENTATION.md`.
 
 ---
 
-## Headline ML results
-
-Full numbers, populations, intervals and caveats: **[`docs/ML_BENCHMARKS.md`](docs/ML_BENCHMARKS.md)**.
-
-**DR severity classifier (deployed):**
-
-| Metric | Population | Result | SIH target |
-|---|---|---|---|
-| Quadratic-weighted kappa | Held-out test, n = 628 | **0.884** | — |
-| Referable-DR sensitivity, live threshold | 50-fold cross-fit, n = 1,161 | **95.0%** [92.8, 96.6] | > 90% ✅ |
-| Referable-DR specificity, live threshold | 50-fold cross-fit, n = 1,161 | **91.0%** [88.6, 93.0] | > 85% ✅ |
-
-**Safety of the auto-clear tier** (no grade-4 case has ever auto-cleared without review, across
-1,000 fold assignments) and **external validation on a camera the model has never seen**
-(Messidor-2, n = 872: sensitivity drops to 75.2%, which is why unvalidated cameras are
-capped at mandatory human review) are both in the benchmarks doc in full, with the reasoning for
-why that's a safety feature, not a hidden flaw.
-
-**Segmentation:** vessel Dice 0.777, hard-exudate Dice 0.583/0.733, red-lesion (MA+haemorrhage)
-Dice 0.599, optic-disc localization within one disc radius 98.7% of the time.
-
-**Full technical documentation** (system design, every component explained, implementation
-status, and the dual-deployment architecture in depth) lives in
-**[`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md)** and, as a shareable PDF
-alongside the ML benchmarks and MATLAB-application deliverables, at:
-
-📁 **Google Drive:** _[link to be added]_
-
----
-
 ## Simulink models
 
 Two SimEvents discrete-event models (`simulink-model/`), built entirely from script
@@ -170,15 +229,21 @@ Two SimEvents discrete-event models (`simulink-model/`), built entirely from scr
 assumptions and demo its queueing behavior under load.
 
 <p>
-  <img src="docs/ppt-audit/assets/districtScreeningSimEvents_thumbnail.png" width="420" alt="District-scale SimEvents queueing model: PHC arrivals, tier triage, preemptive reviewer pool">
+  <a href="docs/ppt-audit/assets/districtScreeningSimEvents_full.png">
+    <img src="docs/ppt-audit/assets/districtScreeningSimEvents_full.png" width="420" alt="District-scale SimEvents queueing model: PHC arrivals, tier triage, preemptive reviewer pool">
+  </a>
   <br><em>District queueing model — PHC arrivals → tier triage (Tier A auto-clears) → a
-  two-ophthalmologist review pool where Tier C preempts Tier B.</em>
+  two-ophthalmologist review pool where Tier C preempts Tier B. Click the image for full
+  resolution — GitHub's inline preview doesn't support zoom.</em>
 </p>
 
 <p>
-  <img src="docs/ppt-audit/assets/netraSetuPipeline_thumbnail.png" width="420" alt="Full watchable pipeline model with live sliders for arrival rate, review speed, network and grading availability">
+  <a href="docs/ppt-audit/assets/netraSetuPipeline_full.png">
+    <img src="docs/ppt-audit/assets/netraSetuPipeline_full.png" width="420" alt="Full watchable pipeline model with live sliders for arrival rate, review speed, network and grading availability">
+  </a>
   <br><em>Full-pipeline model — the entire capture→referral flow as a live, watchable simulation
-  with sliders for patient load, review speed, and network/grading outages.</em>
+  with sliders for patient load, review speed, and network/grading outages. Click the image for
+  full resolution.</em>
 </p>
 
 This district model is also checked weekly, automatically, against an independent pure-MATLAB
@@ -359,7 +424,6 @@ as a silent fallback when a real request fails — that's a system-wide, non-neg
 | [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) | System design, every component explained, dual-deployment architecture, implementation status |
 | [`docs/ML_BENCHMARKS.md`](docs/ML_BENCHMARKS.md) | Every ML metric, with population, n, interval and caveats |
 | [`docs/api-contracts.md`](docs/api-contracts.md) | Request/response shapes; the source of truth over any other doc |
-| [`docs/system-design-v4.md`](docs/system-design-v4.md) | Original locked design document and rationale |
 | [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md) | Scene-by-scene demo walkthrough |
 | [`docs/RELEASE.md`](docs/RELEASE.md) | Served model versions and checksums |
 
