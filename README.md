@@ -27,6 +27,7 @@ seconds instead of screening everyone.
 | PHC local API | https://netrasetu-phc.onrender.com/health |
 | Android app (APK, direct install, no Play Store) | [Download](https://expo.dev/artifacts/eas/AXeqZ3jshQkh7qTIsaXkO3nUBWXyqH9XnyRv1di0jYo.apk) |
 | Demo video | _to be added_ |
+| Google Drive (shareable PDFs: technical documentation, ML benchmarks, MATLAB-application deliverables) | _to be added_ |
 
 **Demo technician login (hosted PHC station):** username `demo`, password `Fundus-Comet-52` — a
 fixed demo-only account, intentionally public for judge access.
