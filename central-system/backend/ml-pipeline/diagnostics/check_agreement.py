@@ -1,29 +1,4 @@
-"""
-check_agreement.py  -  DIAGNOSTIC ONLY (throwaway, not production)
 
-How often does a lesion-count RULE ENGINE grade agree with the CNN classifier
-grade, on real IDRiD validation images?
-
-Pipeline per image:
-  * branchA_v1.pt            -> classifier DR grade (argmax)
-  * localization_v1.pt       -> optic-disc centre + fovea centre (defines the
-                                quadrant axis; cross-checked against IDRiD GT)
-  * red_lesion_unet_v1.pt    -> red lesions (MA OR HE); blob count per quadrant
-  * bright_lesion_unet_v1.pt -> bright lesions (exudates); blob count per quadrant
-
-Rule engine (verbatim from the request; nv_suspicion_score defaults to 0 because
-none of these four models produce an NV score):
-
-  if nv_suspicion_score > 0.6:                          grade = 4
-  elif hemorrhage count > 20 in ALL 4 quadrants:        grade = 3
-  elif sum(red) > 0 and (sum(bright) > 0 or sum(red) > 5): grade = 2
-  elif sum(red) > 0:                                    grade = 1
-  else:                                                 grade = 0
-
-Images: 12-15 IDRiD images drawn from branchA's own validation split.
-
-Run:  python diagnostics/check_agreement.py
-"""
 import sys
 from pathlib import Path
 

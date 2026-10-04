@@ -1,53 +1,29 @@
 'use strict';
 
-/**
- * seed-demo.js -- the minimum a fresh local database needs to be usable.
- *
- *   node scripts/seed-demo.js                  seed if not already seeded
- *   node scripts/seed-demo.js --force          re-issue both passwords and both PHC keys
- *   node scripts/seed-demo.js --write-phc-env  also put PHC001's id/key into
- *                                              phc-local-app/backend/.env
- *
- * Creates:
- *   users      ophthalmologist@demo.netrasetu.local   (ophthalmologist)
- *              admin@demo.netrasetu.local             (district_admin)
- *   phc_sites  PHC Kharadi  (PHC_CODE PHC001)
- *              PHC Wagholi  (PHC_CODE PHC002)
- *
- * and deliberately NO cases. A case has to arrive the real way -- capture on a
- * PHC, quality gate, sync, grading -- or the system is being demonstrated on
- * data it never produced.
- *
- * SECRETS ARE PRINTED ONCE. Passwords are bcrypt-hashed and PHC keys SHA-256
- * hashed before they reach the database; neither can be shown again. Passwords
- * come from DEMO_OPHTHALMOLOGIST_PASSWORD / DEMO_ADMIN_PASSWORD when set, and
- * are otherwise generated at random. Re-running is a no-op that says so; use
- * --force to issue new credentials (the old ones stop working).
- *
- * The names are clearly demo accounts on the reserved .local TLD. No patient
- * data of any kind is written.
- *
- * Env: the central backend's DATABASE_URL (or PG*), via its loadEnv.js.
- */
+
 
 const crypto = require('crypto');
-const fs     = require('fs');
-const path   = require('path');
+const fs = require('fs');
+const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const backendDir = path.join(ROOT, 'central-system', 'backend');
 
-const pool   = require(path.join(backendDir, 'db', 'pgClient'));       // also loads the backend's .env
+const pool = require(path.join(backendDir, 'db', 'pgClient'));       // also loads the backend's .env
 const bcrypt = require(require.resolve('bcryptjs', { paths: [backendDir] }));
 const { hashApiKey } = require(path.join(backendDir, 'services', 'authTokens'));
 
 const BCRYPT_COST = 12;   // same as scripts/seedDemoUsers.js
 
 const USERS = [
-  { email: 'ophthalmologist@demo.netrasetu.local', name: 'Dr. Demo Ophthalmologist',
-    role: 'ophthalmologist', passwordEnv: 'DEMO_OPHTHALMOLOGIST_PASSWORD' },
-  { email: 'admin@demo.netrasetu.local', name: 'Demo District Admin',
-    role: 'district_admin', passwordEnv: 'DEMO_ADMIN_PASSWORD' },
+  {
+    email: 'ophthalmologist@demo.netrasetu.local', name: 'Dr. Demo Ophthalmologist',
+    role: 'ophthalmologist', passwordEnv: 'DEMO_OPHTHALMOLOGIST_PASSWORD'
+  },
+  {
+    email: 'admin@demo.netrasetu.local', name: 'Demo District Admin',
+    role: 'district_admin', passwordEnv: 'DEMO_ADMIN_PASSWORD'
+  },
 ];
 
 const SITES = [
@@ -55,7 +31,7 @@ const SITES = [
   { name: 'PHC Wagholi', code: 'PHC002' },
 ];
 
-const FORCE     = process.argv.includes('--force');
+const FORCE = process.argv.includes('--force');
 const WRITE_ENV = process.argv.includes('--write-phc-env');
 
 const randomPassword = () => crypto.randomBytes(12).toString('base64url');
@@ -70,10 +46,6 @@ async function alreadySeeded(client) {
   return u.n === USERS.length && s.n === SITES.length;
 }
 
-/**
- * Set KEY=value lines in a dotenv file, replacing existing ones in place and
- * appending the rest. Creates the file from its .env.example if it is missing.
- */
 function upsertEnv(file, values) {
   if (!fs.existsSync(file) && fs.existsSync(`${file}.example`)) fs.copyFileSync(`${file}.example`, file);
   let text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
@@ -121,9 +93,9 @@ async function run() {
         'SELECT phc_id FROM phc_sites WHERE name = $1 ORDER BY phc_id LIMIT 1', [s.name]);
       const { rows: [site] } = existing
         ? await client.query('UPDATE phc_sites SET api_key_hash = $2, phc_code = $3 WHERE phc_id = $1 RETURNING phc_id',
-            [existing.phc_id, keyHash, s.code])
+          [existing.phc_id, keyHash, s.code])
         : await client.query('INSERT INTO phc_sites (name, api_key_hash, phc_code) VALUES ($1, $2, $3) RETURNING phc_id',
-            [s.name, keyHash, s.code]);
+          [s.name, keyHash, s.code]);
       issuedSites.push({ ...s, phcId: site.phc_id, key });
     }
 
@@ -154,7 +126,7 @@ async function run() {
     }
     console.log(`${line}\n`);
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => { });
     console.error('[seed-demo] FAILED:', err.message);
     if (/relation .* does not exist/.test(err.message)) {
       console.error('[seed-demo] Run the migrations first: node scripts/setupCentralDb.js');

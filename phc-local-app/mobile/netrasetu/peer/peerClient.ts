@@ -1,8 +1,4 @@
-/**
- * Sealed calls to the paired PHC PC (phc-local-app/backend/routes/peer.js).
- * Request and response bodies are AES-256-GCM envelopes; the headers carry
- * only the device id, a timestamp and a single-use nonce.
- */
+
 import * as Crypto from 'expo-crypto';
 import { getPairing, Pairing, savePairing } from './pairing';
 import { keyFromB64, openJson, requestAad, responseAad, seal, Envelope } from './peerCrypto';
@@ -48,10 +44,7 @@ async function once(p: Pairing, url: string, path: string, body: object, timeout
   throw new PeerError(raw?.error ?? `http_${res.status}`, raw?.message ?? `PC returned ${res.status}`, res.status);
 }
 
-/**
- * One sealed call, trying the last good address first, then every address in
- * the pairing (the PC may have moved between Wi-Fi and the phone's hotspot).
- */
+
 export async function peerCall<T>(path: string, body: object = {}, opts: { timeoutMs?: number } = {}): Promise<T> {
   const p = await getPairing();
   if (!p) throw new PeerError('not_paired', 'This phone is not paired with a PHC PC.');

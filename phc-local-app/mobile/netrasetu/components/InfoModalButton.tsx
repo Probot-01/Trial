@@ -1,9 +1,4 @@
-/**
- * The small circular "i" next to a screen title, and the modal it opens.
- * React Native port of the two web frontends' InfoModalButton (same idea,
- * RN's Modal instead of a fixed-position overlay div) -- so a technician on
- * the phone gets the same explain-this-screen affordance as the desktop app.
- */
+
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { makeStyles, useTheme } from '../theme/ThemeContext';

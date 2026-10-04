@@ -1,60 +1,22 @@
 'use strict';
 
-/**
- * simulinkValidation.js -- the scheduled SimEvents validation run (backend plan
- * §G.2, second half).
- *
- * §G.2 offers two ways to feed the dashboard, and the project took option (b):
- * `referenceQueueingModel('recommend')` runs daily and produces the numbers
- * (resourceRecommendations.js), because it takes seconds and needs no Simulink
- * at request time. The other half of that option is the part that makes it
- * honest -- "with the full Simulink model run less frequently as the validation
- * check against it" -- and until now that check only ever ran when somebody
- * typed `runDistrictScreeningModel` by hand.
- *
- * So this runs the `.slx` weekly and records whether the two models still
- * agree.
- *
- * WHY IT MATTERS THAT IT IS SCHEDULED: what the admin dashboard shows comes
- * from the reference model. Its right to be believed comes entirely from having
- * agreed with the Simulink deliverable. A validation that ran once, in
- * September, on parameters nobody has touched since, is not evidence about the
- * model being served today -- it is a memory of one. When the two drift apart
- * this raises a `simulink_model_diverged` alert on System Health, so the
- * recommendation stops being trusted at the moment it stops being validated,
- * rather than at the moment someone thinks to re-check.
- *
- * WHAT IS COMPARED, and the tolerances, live in runDistrictScreeningModel.m
- * next to the metrics themselves -- not here. A tolerance stated in two places
- * is one that gets relaxed in only one of them. Upload figures are deliberately
- * not compared: the two models queue uploads differently by construction.
- *
- * WHEN: SIMULINK_VALIDATION_CRON, default Sunday 03:00 server time. Weekly, not
- * daily: the run takes minutes and loads Simulink, and the thing it is checking
- * changes only when someone edits a model.
- *
- * WHERE THE RESULT GOES: `simulink-model/out/last-validation.json`, which is
- * what §G.2 asks for ("writes a result file the API can read"), served by
- * GET /api/v1/admin/simulink-validation. A file and not a table: this is one
- * current fact about the models, not per-case history, and it must stay
- * readable when the database is the thing that is broken.
- */
 
-const fs   = require('fs');
+
+const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 
 const { raiseAlert, resolveAlert } = require('./systemAlerts');
 
-const SIMULINK_DIR  = path.resolve(__dirname, '..', '..', '..', 'simulink-model');
+const SIMULINK_DIR = path.resolve(__dirname, '..', '..', '..', 'simulink-model');
 const INFERENCE_DIR = path.resolve(__dirname, '..', 'ml-pipeline', 'inference');
-const OUT_DIR       = path.join(SIMULINK_DIR, 'out');
-const RESULT_PATH   = process.env.SIMULINK_VALIDATION_PATH
+const OUT_DIR = path.join(SIMULINK_DIR, 'out');
+const RESULT_PATH = process.env.SIMULINK_VALIDATION_PATH
   || path.join(OUT_DIR, 'last-validation.json');
 
 const MATLAB_EXE = process.env.MATLAB_EXECUTABLE || 'matlab';
 const TIMEOUT_MS = Number(process.env.SIMULINK_VALIDATION_TIMEOUT_MS) || 20 * 60_000;
-const CRON       = process.env.SIMULINK_VALIDATION_CRON || '0 3 * * 0';
+const CRON = process.env.SIMULINK_VALIDATION_CRON || '0 3 * * 0';
 const ALERT_KIND = 'simulink_model_diverged';
 
 let running = null;   // the in-flight run, shared by concurrent callers
@@ -122,15 +84,11 @@ async function doRun() {
       reference: r.reference,
       params: r.params,
       simSeconds: r.simSeconds,
-      // Said in the payload and not only in a doc: every parameter in this
-      // model is an assumption, and a dashboard that shows these numbers
-      // without that caveat is overstating them (design doc §16).
+
       note: 'All parameters are modelled assumptions, not measured field data.',
     };
   } catch (err) {
-    // A run that could not happen is NOT agreement, and must not be recorded as
-    // one. It is also not divergence -- nothing was compared -- so it gets its
-    // own status and its own alert text.
+
     result = {
       ranAt: startedAt.toISOString(),
       status: 'error',
@@ -185,7 +143,7 @@ function start() {
       + 'cron expression -- the weekly validation is NOT scheduled.');
     return;
   }
-  task = cron.schedule(CRON, () => { refresh().catch(() => {}); });
+  task = cron.schedule(CRON, () => { refresh().catch(() => { }); });
   console.log(`[simulinkValidation] weekly SimEvents validation scheduled (${CRON}).`);
 }
 

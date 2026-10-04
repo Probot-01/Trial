@@ -1,14 +1,6 @@
 'use strict';
 
-/**
- * requireRole.js -- role check, used AFTER requireAuth (backend plan §A.6).
- *
- *   requireRole('district_admin')
- *   requireRole('ophthalmologist', 'district_admin')   // either role allowed
- *
- * 401 when there is no user at all, 403 when the user has the wrong role. A
- * no-op while AUTH_ENABLED=false, like requireAuth itself.
- */
+
 
 const cfg = require('../services/authConfig');
 

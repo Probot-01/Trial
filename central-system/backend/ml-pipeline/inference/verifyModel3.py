@@ -1,59 +1,3 @@
-"""
-verifyModel3.py
-===============
-Prove that our M3 (optic disc / fovea localization) preprocessing reproduces
-the model's own published predictions.
-
-    python verifyModel3.py
-
-── WHY THIS EXISTS ─────────────────────────────────────────────────────────
-M3 is the only checkpoint that documents NOTHING about itself. It carries no
-in_channels, no normalization, no preprocessing string and no channel meanings
--- confirmed by reading the file. Everything about how to feed it was
-reverse-engineered, so "it looks about right" is not enough: a localization
-error does not stay local. The optic-disc/fovea axis defines the quadrant
-mapping, quadrant counts are what the ICDR rule engine grades on, and a rotated
-axis silently changes the grade rather than failing.
-
-So the recipe is proven the same way Branch A's was: reproduce the model's own
-published outputs (models/Model3/localization_test_predictions.csv) from the
-raw images. Agreement is the evidence. This project has twice been saved by
-that control -- it caught MATLAB's PyTorch importer computing wrong numbers
-from a structurally correct import, and it caught a CLAHE stage that training
-never used.
-
-── WHAT IT ESTABLISHED ─────────────────────────────────────────────────────
-The recipe is: plain squished resize to 512x512 with **INTER_AREA**, BGR->RGB,
-ImageNet normalization, argmax per channel, ch0 = optic disc, ch1 = fovea,
-coordinates in 512-space mapped back by (xW/512, xH/512).
-
-INTERPOLATION IS NOT A DETAIL HERE, which is the point worth keeping:
-
-    INTER_AREA      98.7% exact   (77/78)
-    INTER_LINEAR    28.2% exact
-    INTER_CUBIC     26.9% exact
-    INTER_LANCZOS4  25.6% exact
-    INTER_NEAREST   12.8% exact
-
-INTER_LINEAR is OpenCV's default and the obvious thing to write. It agrees with
-the model on barely a quarter of images. Nothing in the checkpoint says
-otherwise, and a pipeline built on it would have looked entirely reasonable.
-
-── THE IMAGE-RESOLUTION TRAP ───────────────────────────────────────────────
-IDRiD's localization Training and Testing folders reuse filenames: all 103
-testing filenames also exist in the training folder. Tanuj's split draws from
-BOTH (63 train, 14 test here), and the CSV records only a bare `image_id`, so
-the id alone does not identify an image.
-
-Reading the wrong folder first is not a loud failure -- it silently grades a
-different patient's eye. Measured, it looked like a preprocessing problem:
-mean OD error 26 px and a bimodal error distribution. The same collision
-already produced one wrong committed conclusion on this project.
-
-So each id is resolved by checking WHICH folder's ground truth reproduces the
-CSV's own od_true columns under the 512 mapping. That is unambiguous: it
-resolved 77 of 78 rows with zero ties.
-"""
 
 import csv
 import os
@@ -109,8 +53,7 @@ def resolve_images(rows):
                 continue
             h, w = img.shape[:2]
             gx, gy = gt[img_id]
-            # The CSV's own od_true is the GT under the 512 squish mapping, so
-            # matching it identifies the folder without any guesswork.
+
             if abs(gx * INPUT_SIZE / w - tx) < 0.01 and abs(gy * INPUT_SIZE / h - ty) < 0.01:
                 hits.append((split, path))
         if len(hits) == 1:
@@ -192,9 +135,7 @@ def main():
     print(f"ours vs GT        : OD mean {np.mean(d_gt_mine):.2f} px")
     print(f"published vs GT   : OD mean {np.mean(d_gt_his):.2f} px")
 
-    # The bar is agreement with the model's own outputs, not accuracy. A recipe
-    # that is accurate but different is still a different recipe, and the
-    # difference would show up later as an unexplained grade change.
+
     ok = pct >= 95.0
     print("\nVERDICT:", "recipe REPRODUCES the model" if ok
           else "recipe does NOT reproduce the model -- do not ship it")

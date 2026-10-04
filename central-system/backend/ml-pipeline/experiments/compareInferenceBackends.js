@@ -1,20 +1,4 @@
-/**
- * compareInferenceBackends.js
- *
- * Item 5: run the same 10 IDRiD images used in training/parityCheck.m through
- * the REAL gradingOrchestrator.js MATLAB path end-to-end (readFundusImage-
- * equivalent -> preprocessForBranchA -> net -> temperature -> conformal tier),
- * and compare against the REAL Python path, calling both through the exact
- * exported functions processCase() uses.
- *
- * This is a DIFFERENT, stricter check than training/parityCheck.m: that
- * script fed both frameworks the SAME precomputed, correctly-normalized
- * tensor, so it only tested the ONNX import (network weights). This script
- * lets MATLAB do its OWN preprocessing (preprocessModel1.m, a port with a
- * documented ~2.98 grey-level / SSIM 0.981 residual vs the Python reference),
- * so any drop in agreement here versus parityCheck.m's ~2e-6 is that residual
- * doing exactly what it was measured to do -- not a new bug.
- */
+
 const path = require('path');
 const {
   runBranchAInference,

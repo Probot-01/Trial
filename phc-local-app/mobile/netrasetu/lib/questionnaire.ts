@@ -33,14 +33,6 @@ function numOrNull(v: string, min: number, max: number): number | null {
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
 
-/**
- * The contract payload. Two conversions worth knowing about:
- *   - a patient not (yet) known to be diabetic is sent as 'lt1': the contract's
- *     yearsSinceDiagnosis is a required enum, and "under a year" is the honest
- *     bucket for a newly detected or unknown history.
- *   - hba1c is null unless a number was actually entered. The triage urgency
- *     score is computed only when it is real; a default would fabricate one.
- */
 export function toQuestionnairePayload(q: PatientQuestionnaire, language: string): QuestionnairePayload {
   return {
     riskFactors: {
@@ -56,12 +48,6 @@ export function toQuestionnairePayload(q: PatientQuestionnaire, language: string
   };
 }
 
-/**
- * Sync priority tier (design doc §4.2: urgency first, then age). Lower syncs
- * first. Nothing here is a grade -- it only orders the upload queue so a case
- * with red-flag symptoms or an ungradable image is not stuck behind a routine
- * one when the link comes back.
- */
 export function priorityTier(q: QuestionnairePayload, meta: CaptureMetadataPayload, quality: QualityResult | null, bestEffort: boolean): number {
   const redFlag = q.symptoms.suddenVisionChange || q.symptoms.eyePain;
   if (redFlag || bestEffort) return 0;

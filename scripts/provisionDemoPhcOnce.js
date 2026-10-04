@@ -1,23 +1,6 @@
 'use strict';
 
-/**
- * provisionDemoPhcOnce.js -- idempotent, log-visible twin of
- * `provisionPhcKey.js --create`, for a deployment with no shell access.
- *
- * The online-demo Render deployment has no Shell/Jobs on the free tier, so
- * the normal one-off `npm run provision-phc-key -- --create "<name>"`
- * can't be run interactively. This runs instead from
- * central-system/backend/Dockerfile's own CMD chain, on every container
- * start, but only acts ONCE for the deployment's lifetime: it checks for a
- * PHC site named DEMO_PHC_NAME first, and does nothing if one already
- * exists -- a cold-start restart (the free tier's normal behaviour after
- * inactivity) must never create a second "NetraSetu Demo PHC" row.
- *
- * The new key is printed to stdout (ordinary Render logs, which ARE
- * reachable without Shell) exactly once, the same way provisionPhcKey.js
- * already does for an interactive run -- it is never stored and can never
- * be shown again after this.
- */
+
 
 const path = require('path');
 const crypto = require('crypto');

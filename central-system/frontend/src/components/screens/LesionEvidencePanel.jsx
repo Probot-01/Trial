@@ -1,34 +1,8 @@
 import React from 'react';
 
-/**
- * Lesion evidence: what the segmentation models actually produce, and nothing
- * padded around it.
- *
- * The pipeline has TWO lesion detectors, so this shows two families:
- *   RED lesions    (M5)  -- one total, with the microaneurysm / haemorrhage
- *                           split shown ONLY when the red-lesion model reports
- *                           it (M5 v2 does; v1 does not -- then just the total).
- *   BRIGHT lesions (M4)  -- hard exudates.
- * There is no cotton-wool-spot (soft exudate) detector, so there is no box for
- * it: a permanently empty "N/A" tile reads as a finding that was looked for and
- * not measured. `lesionCounts.softExudates` stays in the API for wire
- * compatibility and is always null (api-contracts.md, 2026-09-26).
- *
- * `lesionCounts: null` means segmentation did not run -- said so, never shown
- * as zeros.
- */
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const QUADS = ['SUP-TEMP', 'INF-TEMP', 'SUP-NASAL', 'INF-NASAL'];
 
-// generateEvidenceReport.m (backend) appends Branch B's under-grading/
-// calibration caveat as its own final sentence when one applies
-// (evidence.limitation), after the clinical finding and criterion sentences.
-// It is not carried as a separate field over the API (evidenceSummaryText is
-// one string), so this is a display-only split, not a re-derivation of the
-// grade: a methodology footnote about a threshold being provisional or
-// unmeasured is a fact about the SYSTEM, not about the patient's eye, and
-// reads as equally-weighted clinical evidence when it is not visually
-// distinguished from the finding above it.
 const CAVEAT_MARKERS = [
   'PROVISIONAL', 'never been measured', 'should be refitted', 'was fitted on',
   'This grade may be an under-call', 'not the literature',
@@ -124,10 +98,7 @@ export const LesionEvidencePanel = ({ caseData }) => {
         </div>
       </div>
 
-      {/* Evidence Summary. The clinical finding is the primary text; a
-          trailing methodology caveat (a threshold being provisional or
-          unmeasured -- a fact about this system, not this eye) is set apart
-          as a footnote rather than read as more clinical evidence. */}
+      { }
       {c.evidenceSummaryText && (() => {
         const { finding, caveat } = splitCaveat(c.evidenceSummaryText);
         return (

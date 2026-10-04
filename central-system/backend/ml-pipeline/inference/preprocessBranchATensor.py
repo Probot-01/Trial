@@ -1,43 +1,4 @@
-"""
-preprocessBranchATensor.py — the ONLY entry point the MATLAB backend uses to
-get Branch A input pixels. Exists so gradingOrchestrator.js's two Branch A
-backends (python, matlab) see IDENTICAL input by construction, not by two
-implementations trying to independently agree.
 
-    python preprocessBranchATensor.py <imagePath> <outputMatPath>
-
-Calls branchAInfer.preprocess() directly -- the EXACT function
-branchAInfer.py's own Python inference path calls for every image. There is
-no second preprocessing implementation here, in this file or anywhere else:
-this file's only job is to call that one function and serialize its result.
-
-WHY THIS FILE EXISTS AT ALL (2026-09-19): MATLAB used to carry its own port
-of the same chain (preprocessModel1.m / preprocessForBranchA.m), kept in
-lockstep with ben_graham.py by hand. That port measured SSIM 0.981 against
-the Python reference -- small in pixel terms, but on a 10-image real-data
-comparison it flipped the predicted grade on 1 image and the conformal tier
-on 2, even though the imported network itself matched Python to 2e-6 given
-identical input (training/parityCheck.m). The fix was not a tighter port; it
-was removing the second implementation. preprocessModel1.m and
-preprocessForBranchA.m's 'model1' recipe are no longer on Branch A's
-critical path -- see docs/model-handoff-guide.md and
-ml-pipeline/inference/branchAInferMatlab.m for the same note.
-
-Output .mat (scipy.io.savemat -- full float precision, not a lossy format):
-  x        (384,384,3,1) single, SSCB layout (H,W,C,N), ImageNet-normalized
-           -- ready for dlarray(x,'SSCB') and predict() with no further
-           transformation.
-  display  (384,384,3) uint8, ben_graham-enhanced RGB -- the SAME pixels `x`
-           was computed from, one step before normalization. This is what
-           MATLAB's gradCam.m overlays the heatmap onto; it must be the
-           enhanced image (what the network actually saw), not
-           branchAInfer.py's own unenhanced `display_base` (that one is for
-           THIS process's own Grad-CAM path only -- see preprocess()'s
-           docstring in branchAInfer.py).
-
-Exit codes: 0 success, 2 bad arguments, 3 preprocessing failed (unreadable
-image, missing checkpoint metadata) -- same convention as branchAInfer.py.
-"""
 import argparse
 import os
 import sys

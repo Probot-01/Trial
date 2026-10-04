@@ -79,20 +79,10 @@ const ConfidenceBar = ({ value }) => {
   );
 };
 
-// A case is "new" for badge purposes for this long after capture — long enough
-// to still be on screen when someone jumps from the PHC app to this queue to
-// find what they just submitted, short enough that it stops meaning anything
-// once the queue has moved on.
+
 const NEW_BADGE_WINDOW_MS = 5 * 60 * 1000;
 
-/**
- * relativeTime(iso, now) -> "just now" | "2 min ago" | "3 hr ago" | ...
- *
- * Takes `now` as a parameter rather than calling Date.now() internally so a
- * ticking `now` state (see the setInterval below) is what actually drives
- * re-renders — otherwise "2 min ago" would freeze at whatever it said when
- * the queue last fetched, even while sitting on screen for the next 10 minutes.
- */
+
 function relativeTime(iso, now) {
   if (!iso) return '';
   const diffMs = now - new Date(iso).getTime();
@@ -107,20 +97,7 @@ function relativeTime(iso, now) {
   return `${diffDay}d ago`;
 }
 
-/**
- * The urgency model's clinical inputs, and how to talk about the ones that
- * were substituted rather than measured.
- *
- * The questionnaire asks for glycemic control as poor/moderate/good, and the
- * model needs an HbA1c, so 'moderate' becomes 7.5. That is reasonable of the
- * model and unreasonable to hide: a score of 79 resting on two such midpoints
- * is a different claim from the same 79 built from three real values, and on
- * a queue row the two used to look identical.
- *
- * `urgencyAssumedInputs` is [] when everything was measured and null when it
- * is not known (no score, or a row from before it was recorded). Those are
- * different, so neither is treated as the other.
- */
+
 const URGENCY_INPUT_LABELS = {
   patientAge: 'age',
   yearsDiabetic: 'years diabetic',
@@ -181,7 +158,7 @@ export const ReviewQueuePage = () => {
         if (parsed.sortListsBy === 'Date') return { key: 'capturedAt', direction: 'desc' };
         if (parsed.sortListsBy === 'PHC') return { key: 'phcName', direction: 'asc' };
       }
-    } catch (e) {}
+    } catch (e) { }
     // DEFAULT = the server's priority order (design doc §5.2): Tier C by
     // uncertainty (branch disagreements are forced into Tier C), then Tier B.
     // It used to default to capture time, which threw that ordering away.
@@ -192,11 +169,7 @@ export const ReviewQueuePage = () => {
   const [now, setNow] = useState(() => Date.now());
   const navigate = useNavigate();
 
-  // Ticks the "X min ago" labels and the NEW badge window forward even when no
-  // new data has arrived from the 5s queue poll — without this, a case's
-  // relative time would freeze at whatever it said on the last fetch that
-  // actually changed the queue array (React only re-renders on a new
-  // reference), which is misleading on a screen someone is watching live.
+
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(tick);
@@ -223,10 +196,7 @@ export const ReviewQueuePage = () => {
         setLoading(false);
       });
     };
-    // Grading happens asynchronously behind a sync (PHC -> central) that can
-    // take up to ~10-30s after a capture, so a one-shot fetch on mount can
-    // easily land before a case is ready and then never update — this page
-    // has to keep checking, not just load once.
+
     fetchQueue();
     const interval = setInterval(fetchQueue, 5000);
     return () => { cancelled = true; clearInterval(interval); };
@@ -528,142 +498,126 @@ export const ReviewQueuePage = () => {
             {sortedQueue.map((item, idx) => {
               const isNew = item.capturedAt && (now - new Date(item.capturedAt).getTime()) < NEW_BADGE_WINDOW_MS;
               return (
-              <tr
-                key={item.caseId}
-                className="clickable"
-                onClick={() => navigate(`/ophth/case/${item.caseId}`)}
-                style={{
-                  ...(item.branchAgreement === false ? { borderLeft: '3px solid var(--c-crimson-dark)' } : {}),
-                  ...(isNew ? { background: 'rgba(46, 160, 67, 0.08)' } : {}),
-                }}
-              >
-                <td className="t-mono" style={{ opacity: 0.4 }}>{item.priorityRank}</td>
-                <td title={new Date(item.capturedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}>
-                  <div className="u-flex u-items-center u-gap-2">
-                    <span className="t-mono" style={{ fontWeight: 700 }}>{relativeTime(item.capturedAt, now)}</span>
-                    {isNew && (
-                      <span
-                        className="badge badge--pass badge--new-pulse"
-                        style={{ fontSize: '10px', padding: '1px 6px' }}
-                      >
-                        NEW
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-h)' }}>
-                    {item.patientName || item.patientReference}
-                  </div>
-                  <div className="t-mono" style={{ fontSize: '11px', opacity: 0.6 }}>
-                    {item.patientName ? item.patientReference : ''}{item.patientName && item.patientAge ? ' • ' : ''}{item.patientAge ? `${item.patientAge}Y` : ''}
-                  </div>
-                </td>
-                <td className="t-mono">{item.phcName}</td>
-                <td className="t-mono" style={{ fontWeight: 700 }}>
-                  {item.conformalTier ? `Tier ${item.conformalTier}` : '—'}
-                </td>
-                <td><SeverityBadge grade={item.drGradeCnn} /></td>
-                <td>
-                  <span className="t-mono" style={{ fontWeight: 700 }}>
-                    {t('central.queue.table.grade', 'Grade')} {item.drGradeCnn}
-                  </span>
-                  <br />
-                  <span className="t-label" style={{ opacity: 0.5 }}>
-                    {drGradeLabels[item.drGradeCnn] || '—'}
-                  </span>
-                </td>
-                <td>
-                  {item.drGradeRuleEngine !== null ? (
-                    <>
-                      <span className="t-mono" style={{ fontWeight: 700 }}>
-                        {t('central.queue.table.grade', 'Grade')} {item.drGradeRuleEngine}
-                      </span>
-                      <br />
-                      <span className="t-label" style={{ opacity: 0.5 }}>
-                        {drGradeLabels[item.drGradeRuleEngine] || '—'}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="t-mono" style={{ opacity: 0.3 }}>{t('central.queue.table.notAvailable', 'NOT YET AVAILABLE')}</span>
-                  )}
-                </td>
-                <td>
-                  {item.branchAgreement === null ? (
-                    item.drGradeRuleEngine === null ? (
-                      <span className="t-mono" style={{ opacity: 0.3 }}>{t('central.queue.table.na', 'N/A')}</span>
-                    ) : (
-                      // Rule engine ran and hit its capped ceiling (RULE_MAX_GRADE=3),
-                      // so its grade is a lower bound, not a value to compare against
-                      // the CNN's -- "N/A" here would say branch B never ran, which is
-                      // false, and would hide a real result from the reviewer.
-                      <span
-                        className="badge badge--warning"
-                        title={`The rule engine's grade (${item.drGradeRuleEngine}) is a lower bound -- it caps at ${item.drGradeRuleEngine}, so it is not directly comparable to the CNN grade. Not an agreement or a disagreement.`}
-                      >
-                        {t('central.queue.table.notComparable', '≥ CEILING')}
-                      </span>
-                    )
-                  ) : item.branchAgreement ? (
-                    <span className="badge badge--pass">{t('central.queue.table.agree', '✓ AGREE')}</span>
-                  ) : (
-                    <span className="badge badge--fail">{t('central.queue.table.disagree', '⚠ DISAGREE')}</span>
-                  )}
-                </td>
-                <td><ConfidenceBar value={item.confidenceScore} /></td>
-                {/* §10.8: who holds this case right now, shown BEFORE it is
-                    opened so a reviewer does not walk into a case they cannot
-                    act on. null = free. */}
-                <td className="t-mono" data-testid="claimed-by-cell">
-                  {item.claimedBy
-                    ? <span className="badge badge--warning" title={item.claimedAt ? `since ${new Date(item.claimedAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}` : undefined}>● {item.claimedBy.name || 'ANOTHER REVIEWER'}</span>
-                    : <span style={{ opacity: 0.35 }}>—</span>}
-                </td>
-                {/* Urgency: ordering hint only. Rendered muted and with the
-                    limitation on hover so it never reads as a clinical score,
-                    and "--" for not-computed so a blank cell is not mistaken
-                    for low urgency. */}
-                <td
-                  className="t-mono"
-                  title={urgencyTitle(item)}
-                  style={{ opacity: item.urgencyScore == null ? 0.35 : 0.85 }}
-                  data-testid="urgency-cell"
+                <tr
+                  key={item.caseId}
+                  className="clickable"
+                  onClick={() => navigate(`/ophth/case/${item.caseId}`)}
+                  style={{
+                    ...(item.branchAgreement === false ? { borderLeft: '3px solid var(--c-crimson-dark)' } : {}),
+                    ...(isNew ? { background: 'rgba(46, 160, 67, 0.08)' } : {}),
+                  }}
                 >
-                  {item.urgencyScore == null ? '--' : (
-                    <>
-                      {/* A leading ~ when any of the model's clinical inputs
-                          was a bucket midpoint rather than a measurement. In
-                          the open, not only on hover, for the same reason the
-                          footnote is: the number reads as evidence unless
-                          something on the row says otherwise. */}
-                      {assumedCount(item) > 0 && (
+                  <td className="t-mono" style={{ opacity: 0.4 }}>{item.priorityRank}</td>
+                  <td title={new Date(item.capturedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}>
+                    <div className="u-flex u-items-center u-gap-2">
+                      <span className="t-mono" style={{ fontWeight: 700 }}>{relativeTime(item.capturedAt, now)}</span>
+                      {isNew && (
                         <span
-                          style={{ fontWeight: 700, marginRight: 1 }}
-                          data-testid="urgency-assumed-marker"
-                          aria-label="partly estimated"
-                        >~</span>
-                      )}
-                      <span style={{ fontWeight: 700 }}>{item.urgencyScore}</span>
-                      {item.urgencyTopFactor && (
-                        <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: 4 }}>
-                          {item.urgencyTopFactor}
+                          className="badge badge--pass badge--new-pulse"
+                          style={{ fontSize: '10px', padding: '1px 6px' }}
+                        >
+                          NEW
                         </span>
                       )}
-                    </>
-                  )}
-                </td>
-              </tr>
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-h)' }}>
+                      {item.patientName || item.patientReference}
+                    </div>
+                    <div className="t-mono" style={{ fontSize: '11px', opacity: 0.6 }}>
+                      {item.patientName ? item.patientReference : ''}{item.patientName && item.patientAge ? ' • ' : ''}{item.patientAge ? `${item.patientAge}Y` : ''}
+                    </div>
+                  </td>
+                  <td className="t-mono">{item.phcName}</td>
+                  <td className="t-mono" style={{ fontWeight: 700 }}>
+                    {item.conformalTier ? `Tier ${item.conformalTier}` : '—'}
+                  </td>
+                  <td><SeverityBadge grade={item.drGradeCnn} /></td>
+                  <td>
+                    <span className="t-mono" style={{ fontWeight: 700 }}>
+                      {t('central.queue.table.grade', 'Grade')} {item.drGradeCnn}
+                    </span>
+                    <br />
+                    <span className="t-label" style={{ opacity: 0.5 }}>
+                      {drGradeLabels[item.drGradeCnn] || '—'}
+                    </span>
+                  </td>
+                  <td>
+                    {item.drGradeRuleEngine !== null ? (
+                      <>
+                        <span className="t-mono" style={{ fontWeight: 700 }}>
+                          {t('central.queue.table.grade', 'Grade')} {item.drGradeRuleEngine}
+                        </span>
+                        <br />
+                        <span className="t-label" style={{ opacity: 0.5 }}>
+                          {drGradeLabels[item.drGradeRuleEngine] || '—'}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="t-mono" style={{ opacity: 0.3 }}>{t('central.queue.table.notAvailable', 'NOT YET AVAILABLE')}</span>
+                    )}
+                  </td>
+                  <td>
+                    {item.branchAgreement === null ? (
+                      item.drGradeRuleEngine === null ? (
+                        <span className="t-mono" style={{ opacity: 0.3 }}>{t('central.queue.table.na', 'N/A')}</span>
+                      ) : (
+
+                        <span
+                          className="badge badge--warning"
+                          title={`The rule engine's grade (${item.drGradeRuleEngine}) is a lower bound -- it caps at ${item.drGradeRuleEngine}, so it is not directly comparable to the CNN grade. Not an agreement or a disagreement.`}
+                        >
+                          {t('central.queue.table.notComparable', '≥ CEILING')}
+                        </span>
+                      )
+                    ) : item.branchAgreement ? (
+                      <span className="badge badge--pass">{t('central.queue.table.agree', '✓ AGREE')}</span>
+                    ) : (
+                      <span className="badge badge--fail">{t('central.queue.table.disagree', '⚠ DISAGREE')}</span>
+                    )}
+                  </td>
+                  <td><ConfidenceBar value={item.confidenceScore} /></td>
+                  { }
+                  <td className="t-mono" data-testid="claimed-by-cell">
+                    {item.claimedBy
+                      ? <span className="badge badge--warning" title={item.claimedAt ? `since ${new Date(item.claimedAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}` : undefined}>● {item.claimedBy.name || 'ANOTHER REVIEWER'}</span>
+                      : <span style={{ opacity: 0.35 }}>—</span>}
+                  </td>
+                  { }
+                  <td
+                    className="t-mono"
+                    title={urgencyTitle(item)}
+                    style={{ opacity: item.urgencyScore == null ? 0.35 : 0.85 }}
+                    data-testid="urgency-cell"
+                  >
+                    {item.urgencyScore == null ? '--' : (
+                      <>
+                        { }
+                        {assumedCount(item) > 0 && (
+                          <span
+                            style={{ fontWeight: 700, marginRight: 1 }}
+                            data-testid="urgency-assumed-marker"
+                            aria-label="partly estimated"
+                          >~</span>
+                        )}
+                        <span style={{ fontWeight: 700 }}>{item.urgencyScore}</span>
+                        {item.urgencyTopFactor && (
+                          <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: 4 }}>
+                            {item.urgencyTopFactor}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </td>
+                </tr>
               );
             })}
           </tbody>
         </table>
       </div>
 
-      {/* The caveat the * points at. Stated here, in the open, rather than
-          only in a tooltip: a 1-100 number in a clinical queue reads as
-          evidence unless something says otherwise, and this one is a
-          re-expression of an assumption -- the model behind it is trained on
-          synthetic data and has never been validated against an outcome. */}
+      { }
       <div
         className="u-p-3"
         style={{ fontSize: '11px', opacity: 0.65, borderTop: 'var(--border)' }}

@@ -1,11 +1,4 @@
-/**
- * Desktop <-> phone offline sync, end to end: the phone's real TypeScript
- * (peer/*, db/*, auth/offlineCredentials.ts, @noble crypto) against a real
- * PHC local backend process (phc-local-app/backend/server.js) on a throwaway
- * database. The "power cut" is the backend process being killed.
- *
- *   npm run test:peer
- */
+
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -87,11 +80,15 @@ before(async () => {
 });
 after(async () => { await stopPc(); });
 
-const Q = { knownDiabetic: true, yearsSinceDiagnosis: 'gt10', glycemicControl: 'poor', bloodPressure: 'high', pregnancy: 'not_applicable', hba1c: '9.1',
-  symptoms: { blurredVision: true, floaters: false, suddenVisionChange: false, eyePain: false } };
+const Q = {
+  knownDiabetic: true, yearsSinceDiagnosis: 'gt10', glycemicControl: 'poor', bloodPressure: 'high', pregnancy: 'not_applicable', hba1c: '9.1',
+  symptoms: { blurredVision: true, floaters: false, suddenVisionChange: false, eyePain: false }
+};
 const META = { cameraDeviceReported: 'mobile_lens', pupilStatus: 'dilated', lightingEnvironment: 'low_light', observedIssues: ['none_noticed'], workerUsabilityRating: 'clear', eyeLaterality: 'right' };
-const PASS = { status: 'pass', reason: null, compositeScore: 0.9, preset: 'mobile_lens', analysedAt: '1002x867',
-  scores: { focusScore: 0.8, illuminationScore: 0.95, fovScore: 1, coveragePercent: 0.86, glareScore: 0, motionScore: 0.18, occlusionScore: 0.01 } };
+const PASS = {
+  status: 'pass', reason: null, compositeScore: 0.9, preset: 'mobile_lens', analysedAt: '1002x867',
+  scores: { focusScore: 0.8, illuminationScore: 0.95, fovScore: 1, coveragePercent: 0.86, glareScore: 0, motionScore: 0.18, occlusionScore: 0.01 }
+};
 
 async function phoneCase(name, image = '1_quality_pass.jpg') {
   const p = await patients.createPatient({ name, age: 57, contactNumber: '+919555555555', consentGivenAt: new Date().toISOString(), demographics: { patientType: 'new' }, questionnaire: Q });
@@ -152,8 +149,10 @@ let deskPatientId, deskCaptureId, deskImageSha;
 
 test('1. while both are on: work done on the desktop is already on the phone', async () => {
   const token = (await (await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'asha', password: 'field-pass-1' }) })).json()).token;
-  const pt = await (await fetch(`${base}/patients`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-    body: JSON.stringify({ name: 'Desk Registered', age: 63, contactNumber: '+919666666666', consentGivenAt: new Date().toISOString() }) })).json();
+  const pt = await (await fetch(`${base}/patients`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name: 'Desk Registered', age: 63, contactNumber: '+919666666666', consentGivenAt: new Date().toISOString() })
+  })).json();
   deskPatientId = pt.patientId;
   // A desktop capture that passed the gate (inserted as captureHandler would, image in storage).
   deskCaptureId = `PHC001-${Date.now().toString(36)}-desk0001`;
@@ -278,7 +277,9 @@ test('7. no network at all: phone -> PC by encrypted bundle file (USB), then PC 
 });
 
 test('8. a bundle made for another phone cannot be opened here', async () => {
-  const other = { kind: 'netrasetu-bundle', v: 1, fromDevice: pairing.pcDeviceId, toDevice: 'ph-someoneelse', createdAt: new Date().toISOString(),
-    envelope: backendCrypto.seal(backendCrypto.keyFromB64(pairing.key), { records: [], images: {} }, 'x') };
+  const other = {
+    kind: 'netrasetu-bundle', v: 1, fromDevice: pairing.pcDeviceId, toDevice: 'ph-someoneelse', createdAt: new Date().toISOString(),
+    envelope: backendCrypto.seal(backendCrypto.keyFromB64(pairing.key), { records: [], images: {} }, 'x')
+  };
   await assert.rejects(replicate.importBundle(other), (e) => e.code === 'bundle_wrong_recipient');
 });

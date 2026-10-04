@@ -1,17 +1,6 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * Technician accounts on this PHC PC (design doc §11.1).
- *
- *   npm run technician -- add <username> "<Full Name>" [--admin] [--password <pw>]
- *   npm run technician -- reset <username> [--password <pw>]
- *   npm run technician -- deactivate <username>
- *   npm run technician -- list
- *
- * Without --password a random one is generated and printed once. Passwords
- * are stored only as scrypt hashes (services/passwords.js).
- */
 require('../loadEnv');
 const crypto = require('crypto');
 const db = require('../db/localDb');

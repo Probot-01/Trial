@@ -1,49 +1,4 @@
-"""
-eval_m1_classifier.py
-=====================
-Diagnostic evaluation of M1 (Branch A DR grade classifier), PyTorch.
 
-    python eval_m1_classifier.py [--set heldout|idrid-heldout|idrid-all]
-                                 [--json OUT.json]
-
-Confusion matrix, quadratic weighted kappa, per-grade recall, referable
-sensitivity/specificity, and the directional error analysis -- which way the
-model is wrong, not just how often.
-
--- THREE SETS, AND ONLY TWO OF THEM MEAN ANYTHING --------------------------
-M1's train_grade_counts totals 2,924 images; IDRiD's grading set is 516. The
-model was trained on a pooled APTOS + IDRiD corpus, and its held-out ids
-(models/Model1/branchA_v1_test_ids.npy) are 550 APTOS + 78 IDRiD. So 361 of
-IDRiD's 516 grading images were TRAINING DATA for this model.
-
-  heldout        the model's own 628-image test split, scored from its
-                 published logits. The honest number. No images needed --
-                 branchA_v1_test_logits.npy already holds them.
-  idrid-heldout  the 78 IDRiD images inside that split, re-run from pixels.
-                 Doubles as a reproduction check of the preprocessing chain.
-  idrid-all      every IDRiD grading image on disk. CONTAMINATED, ~70%
-                 training data. Printed only because "how does it look on
-                 IDRiD" is the question that gets asked; it is labelled on
-                 every line so it cannot be quoted as accuracy.
-
--- WHY DIRECTIONAL ERROR, NOT JUST QWK -------------------------------------
-QWK collapses the whole matrix to one number and hides direction. For a
-screening model the two directions are not equivalent: over-grading a healthy
-eye costs an unnecessary referral, under-grading grade 4 (proliferative DR)
-misses sight-threatening disease that needs treatment now. A model can hold a
-respectable kappa while systematically under-calling its most urgent class,
-because grade 4 is the rarest and contributes fewest terms.
-
-So this reports, per true grade, the mean SIGNED error and the share of
-errors that are under- vs over-grades, and it reports referable recall
-(grade >= 2) separately from raw accuracy.
-
--- THE PREPROCESSING IS IMPORTED ------------------------------------------
-branchAInfer.preprocess and load_model are called directly. branchAInfer's
-own docstring records that adding a CLAHE stage training never used dropped
-agreement with the model's published outputs from 100% to 57.7%, so a second
-copy of the chain here would be a way to measure a different model.
-"""
 
 import argparse
 import csv

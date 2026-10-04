@@ -1,60 +1,4 @@
-"""
-verifySegModels.py
-==================
-Prove the M2 / M4 / M5 recipes against each model's own published output.
 
-    python verifySegModels.py [vessel|red|bright]
-
-M3 has its own script (verifyModel3.py) because its verification target is a
-predictions CSV rather than masks or Dice.
-
-── WHY THIS IS NOT OPTIONAL ────────────────────────────────────────────────
-A segmentation model fed slightly wrong input does not fail. It returns a mask
-that looks like plausible anatomy and is wrong, and the error then flows into
-quadrant counts, which is what the ICDR rule engine grades on. There is no
-stage after this that would catch it.
-
-The M3 verification already showed how large the effect is: switching only the
-resize interpolation moved agreement from 28.2% to 98.7%, and nothing in the
-checkpoint records which to use.
-
-── WHAT THIS ESTABLISHED ───────────────────────────────────────────────────
-M2 (vessel), against the 6 published CHASE prediction masks:
-
-    INTER_LINEAR   100.000% exact pixels, Dice 1.0000   <- correct
-    INTER_LANCZOS4  99.820%              Dice 0.9844
-    INTER_CUBIC     99.798%              Dice 0.9825
-    INTER_AREA      99.756%              Dice 0.9787
-    INTER_NEAREST   98.516%              Dice 0.8714
-
-THE TWO MODELS DISAGREE. M3 needs INTER_AREA; M2 needs INTER_LINEAR. Neither
-checkpoint records it, so interpolation cannot be set once globally -- it has
-to be established per model, against that model's own output. That is the
-single most transferable finding here.
-
-Note also how forgiving the near-misses look: INTER_AREA still scores 99.756%
-pixel agreement. A verification that accepted "about right" would have passed
-the wrong setting.
-
-M5 (red lesion), against per_image_val_dice_at_best for its 16 val images:
-every image reproduces to 4 decimal places, mean 0.5351 vs published 0.5353.
-That confirms the whole chain -- ben_graham 512, RGB, (x/255-0.5)/0.5, and
-ground truth cropped by the retinal box then NEAREST-resized.
-
-M4 (bright lesion) is PARTIALLY verified, and the gap is stated rather than
-glossed. Its summary records only split SIZES (43 train, 11 val), not which
-images, so its published Dice cannot be reproduced. What can be settled is the
-normalization decoy, and it is: across all 81 segmentation images,
-
-    (x-0.5)/0.5   Dice 0.5486        <- correct
-    ImageNet      Dice 0.3856
-    ratio         1.42x   (Tanuj reported 1.48x on his own split)
-
-The checkpoint's encoder_weights='imagenet' describes only how the encoder was
-initialised. Reading it as the input normalization costs ~30% of Dice, and --
-the reason it matters -- 0.3856 still produces a mask that looks like exudates.
-It degrades quietly rather than failing.
-"""
 
 import glob
 import json
@@ -170,9 +114,7 @@ def lesion_dice(model, img_id, mean, std, subdirs):
     x = (rgb.astype(np.float32) / 255.0 - mean) / std
     pred = sigmoid(infer(model, x.transpose(2, 0, 1)[None, ...])) > 0.5
 
-    # Ground truth follows the image through the SAME crop, then NEAREST so a
-    # binary mask stays binary. Interpolating it would resample lesion edges
-    # into fractional values and change the very areas being scored.
+
     x0, y0, bw, bh = retinal_crop_box(bgr)
     g = cv2.resize(gt[y0:y0 + bh, x0:x0 + bw].astype(np.uint8), (512, 512),
                    interpolation=cv2.INTER_NEAREST) > 0

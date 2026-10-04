@@ -1,35 +1,5 @@
 'use strict';
 
-/**
- * qualityGateFallback.js
- *
- * Pure-Node/JS port of quality-gate-matlab/qualityGateMain.m and its four
- * assess*.m helpers, used ONLY when neither MATLAB nor the compiled
- * QUALITY_GATE_EXE can run on this machine -- in practice the hosted Linux
- * PHC (Render), where there is no MATLAB and the Windows exe cannot run.
- *
- * qualityGateClient.js calls this ONLY when spawning MATLAB fails to launch at
- * all (ENOENT) AND QUALITY_GATE_ALLOW_FALLBACK=1. A real MATLAB error stays a
- * real failure. Every result it returns is stamped engine 'js-fallback',
- * fallback: true, so central and the UI always know which engine judged the
- * image.
- *
- * ── REWRITTEN 2026-10-02 AS A STEP-BY-STEP PORT ─────────────────────────────
- * The previous version was switched off (it threw) because its scores had
- * drifted from MATLAB's: occlusionScore 29x out, illuminationScore 0.826 vs
- * 0.872. The drift was not one bug. The MATLAB metrics had been rewritten
- * (occlusion now uses imclose + bwareaopen + bwconvhull; FOV uses imfill +
- * regionprops) and this file still implemented the older ones, plus:
- *   - variances were population variances; MATLAB's var() divides by N-1
- *   - the glare ROI excluded its last row/column; MATLAB's r1:r2 includes it
- *   - images were EXIF-rotated; MATLAB's imread does not rotate
- *   - the rgb2gray weights were rounded to 4 decimals
- *   - the camera preset was ignored (always 'default')
- * Each function below names the MATLAB line it reproduces. Parity is measured,
- * not assumed: verify_quality_gate_parity.js compares this module against the
- * compiled gate on every test image (tolerance 1e-3 per score, identical
- * status and reason).
- */
 
 const fs = require('fs');
 const path = require('path');
@@ -37,16 +7,12 @@ const sharp = require('sharp');
 
 const PRESETS_PATH = path.join(__dirname, '..', 'quality-gate-matlab', 'cameraPresets.json');
 
-// rgb2gray.m's own coefficients (the exact values it applies, not the
-// rounded 0.2989/0.5870/0.1140 its documentation quotes).
 const RGB2GRAY = [0.298936021293775, 0.587043074451121, 0.114020904255103];
 
-// strel('disk', 7) -- MATLAB's default (N=4) is an octagonal APPROXIMATION of
-// a disk, not a true disk. These are the row half-widths of its 13x13
-// neighbourhood, dumped from MATLAB R2026a (strel('disk',7).Neighborhood).
+
 const DISK7_HALF_WIDTHS = [4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 4];
 
-/** imread + rgb2gray: uint8 grey, no EXIF rotation (imread does not rotate). */
+
 async function loadGrayscale(input) {
   const { data, info } = await sharp(input)
     .removeAlpha()
@@ -61,8 +27,7 @@ async function loadGrayscale(input) {
   } else {
     const [a, b, c] = RGB2GRAY;
     for (let i = 0, j = 0; i < n; i += 1, j += ch) {
-      // uint8 output: round half away from zero, saturate -- Math.round is
-      // identical for the non-negative values this can produce.
+
       const g = a * data[j] + b * data[j + 1] + c * data[j + 2];
       px[i] = g >= 255 ? 255 : Math.round(g);
     }
@@ -70,11 +35,7 @@ async function loadGrayscale(input) {
   return { g: px, W: info.width, H: info.height };
 }
 
-/**
- * var(x(:)), normalised by N-1 like MATLAB -- streamed (Welford) so a filtered
- * image never has to be held in memory. The hosted PHC has 512 MB; three
- * Float64 copies of a 12-megapixel IDRiD image alone were ~290 MB.
- */
+
 class RunningVariance {
   constructor() { this.n = 0; this.mean = 0; this.m2 = 0; }
   push(x) {
@@ -86,11 +47,7 @@ class RunningVariance {
   get value() { return this.n < 2 ? 0 : this.m2 / (this.n - 1); }
 }
 
-/**
- * assessFocus.m:
- *   filtered = imfilter(double(gray), fspecial('laplacian', 0.2), 'replicate');
- *   score = min(1, var(filtered(:)) / 70)
- */
+
 function assessFocus({ g, W, H }) {
   const alpha = 0.2;
   const k1 = alpha / (alpha + 1);
@@ -110,7 +67,7 @@ function assessFocus({ g, W, H }) {
   return { score: Math.min(1, rv.value / 70) };
 }
 
-/** assessIllumination.m: score = max(0, 1 - abs(mean(gray) - 100) / 100) */
+
 function assessIllumination({ g }) {
   let sum = 0;
   for (let i = 0; i < g.length; i++) sum += g[i];
@@ -118,10 +75,7 @@ function assessIllumination({ g }) {
   return { score: Math.max(0, 1 - Math.abs(mu - 100) / 100) };
 }
 
-/**
- * Connected components of a binary mask. conn 4 or 8. Returns
- * { labels: Int32Array (0 = background), areas: [unused, a1, a2, ...] }.
- */
+
 function labelComponents(mask, W, H, conn) {
   const labels = new Int32Array(W * H);
   const areas = [0];
@@ -155,20 +109,13 @@ function labelComponents(mask, W, H, conn) {
   return { labels, areas };
 }
 
-/**
- * assessFOV.m:
- *   bw = imfill(gray > 15, 'holes');          % holes: background not
- *                                             % 4-connected to the border
- *   largest = max([regionprops(bw,'Area').Area]);   % 8-connected
- *   coveragePercent = largest / numel(gray); score = min(1, cov / 0.6)
- */
+
 function assessFOV({ g, W, H }) {
   const n = W * H;
   const bw = new Uint8Array(n);
   for (let i = 0; i < n; i++) bw[i] = g[i] > 15 ? 1 : 0;
 
-  // imfill 'holes', default connectivity 4: background reachable from the
-  // border through 4-connected background stays background; the rest fills.
+
   const outside = new Uint8Array(n);
   const stack = new Int32Array(n);
   let sp = 0;
@@ -193,7 +140,7 @@ function assessFOV({ g, W, H }) {
   return { coveragePercent, score: Math.min(1, coveragePercent / 0.6) };
 }
 
-/** Per-row prefix sums of a binary mask, for O(1) run counts. */
+
 function rowPrefix(mask, W, H) {
   const P = new Int32Array(H * (W + 1));
   for (let y = 0; y < H; y++) {
@@ -204,11 +151,7 @@ function rowPrefix(mask, W, H) {
   return P;
 }
 
-/**
- * Binary dilation (pad 0) or erosion (pad 1 -- imerode treats pixels beyond
- * the border as foreground) by a symmetric structuring element given as row
- * half-widths centred on the middle row.
- */
+
 function morph(mask, W, H, halfWidths, erode) {
   const P = rowPrefix(mask, W, H);
   const r = (halfWidths.length - 1) / 2;
@@ -237,14 +180,7 @@ function morph(mask, W, H, halfWidths, erode) {
   return out;
 }
 
-/**
- * imclose(mask, SE). NOT imerode(imdilate(mask)) on the image itself --
- * measured in MATLAB R2026a on datasets/2.jpg: imclose -> 748508 pixels,
- * imerode(imdilate()) -> 749066. imclose evaluates the closing on a
- * zero-padded plane: the dilation is allowed to grow past the border, and the
- * erosion then sees those grown pixels instead of a border rule. So: pad by
- * the SE radius with zeros, dilate, erode, crop.
- */
+
 function imclose(mask, W, H, halfWidths) {
   const r = (halfWidths.length - 1) / 2;
   const pr = Math.max(r, ...halfWidths);
@@ -276,14 +212,6 @@ function convexHull(points) {
   return lower.concat(upper);
 }
 
-/**
- * bwconvhull(mask) ('union'): regionprops' ConvexHull of all foreground
- * pixels -- built from pixel EDGE MIDPOINTS (r±0.5, c) and (r, c±0.5), as
- * regionprops' PerimeterCornerPixelList does -- rasterised by pixel centre.
- * Only each row's extreme pixels can contribute hull vertices, so only those
- * are fed in. MATLAB rasterises with poly2mask (a compiled builtin); centre-
- * in-polygon is its documented rule, measured equal here within tolerance.
- */
 function convexHullMask(mask, W, H) {
   const points = [];
   for (let y = 0; y < H; y++) {
@@ -336,9 +264,6 @@ function assessGlareMotionOcclusion({ g, W, H }) {
   }
   const glareScore = roi ? sat / roi : 0;
 
-  // Motion: imfilter(grayD, [1 -1], 'replicate') is a CORRELATION with the
-  // kernel origin on its first element -> x(i,j) - x(i,j+1), and 0 in the last
-  // column (replicated neighbour). Same vertically with [1; -1].
   const rvH = new RunningVariance(), rvV = new RunningVariance();
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -351,10 +276,6 @@ function assessGlareMotionOcclusion({ g, W, H }) {
   const denom = Math.max(varH, varV);
   const motionScore = denom < 1e-10 ? 0 : Math.abs(varH - varV) / denom;
 
-  // Occlusion: dark pixels inside the retinal disc, over the disc's area.
-  //   brightMask = imclose(gray > 7, strel('disk', 7));
-  //   brightMask = bwareaopen(brightMask, round(0.01 * numel(gray)));  % 8-conn
-  //   discMask   = bwconvhull(brightMask);
   let bright = new Uint8Array(n);
   for (let i = 0; i < n; i++) bright[i] = g[i] > 7 ? 1 : 0;
   bright = imclose(bright, W, H, DISK7_HALF_WIDTHS);
@@ -385,13 +306,7 @@ function presetFor(cameraDeviceId) {
     ? presets[cameraDeviceId] : presets.default;
 }
 
-/**
- * runQualityGateFallback(input, cameraDeviceId)
- *
- * input: an image path or Buffer. Returns the same shape
- * qualityGateClient.parseGateOutput produces from MATLAB's JSON:
- * { status, reason, scores, compositeScore }.
- */
+
 async function runQualityGateFallback(input, cameraDeviceId = 'unknown') {
   const img = await loadGrayscale(input);
   const preset = presetFor(cameraDeviceId);

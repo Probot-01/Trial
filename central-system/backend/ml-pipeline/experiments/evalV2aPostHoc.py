@@ -1,37 +1,4 @@
-"""
-evalV2aPostHoc.py
-==================
-Post-hoc evaluation of the branchA_v2a Kaggle run, from the saved arrays
-only (no retraining, no GPU needed -- everything here is numpy/sklearn on
-logits already sitting in models/Model1/v2a/).
 
-    CUDA_VISIBLE_DEVICES= python experiments/evalV2aPostHoc.py
-
-Writes diagnostics/out/v2a_posthoc_report.json and .txt.
-
-── WHY THIS EXISTS ──────────────────────────────────────────────────────────
-train_classifier_kaggle_v2.ipynb's binary-threshold lock cell had a real bug
-(fixed separately, same change-set): it picked the LOWEST threshold that
-cleared the sensitivity target instead of the HIGHEST, because `ok = tpr >=
-target` is True from the first crossing to the end of a DECREASING-threshold
-ROC curve, and `np.where(ok)[0][-1]` grabs the far/low end, not the near/high
-end. models/Model1/v2a/branchA_v2a_metrics.json is the fossil record of that
-bug: "val_at_lock": {"sensitivity": 1.0, "specificity": 0.0} and
-binary_head_spec of 0.0-0.028 across every test slice -- a binary head that
-has learned to call almost everything referable is indistinguishable, by
-that metric alone, from a head that hasn't learned anything at all. This
-script recomputes the lock correctly and asks whether the head actually
-carries signal once evaluated at a sane operating point, and how it compares
-to just summing the already-trained 5-class head's softmax over grades 2-4.
-
-── DISCIPLINE ────────────────────────────────────────────────────────────────
-Every threshold used below is chosen on VAL and applied to TEST, never the
-reverse. TEST is read only to report the already-chosen operating point's
-performance. This is checked structurally, not just promised: every
-`roc_curve`/`argmax`/threshold-search call in this file takes a `val_*`
-array, and every place TEST is used, it is only ever indexed by a threshold
-or index computed earlier from VAL.
-"""
 
 import json
 import os

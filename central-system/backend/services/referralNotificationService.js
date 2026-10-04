@@ -1,67 +1,21 @@
 'use strict';
 
-/**
- * referralNotificationService.js  (Task 3.6)
- *
- *   handleConfirmedReferral(caseId, opts) -> { referralId, sms: {...} }
- *
- * Called from the review route immediately after an ophthalmologist's decision
- * is recorded, and ONLY when the resulting grade is referable (>= 2).
- *
- * ── The safety rule this service exists to enforce ──────────────────────────
- * The AI never tells a patient they have a disease (design doc §1.5). Every
- * "probably has DR" outcome is confirmed by an ophthalmologist before it
- * becomes an SMS. So this function must never be reachable from the grading
- * pipeline — only from a recorded human decision. It takes a caseId and checks
- * for that decision itself rather than trusting the caller.
- *
- * ── What the message may and may not say ────────────────────────────────────
- * A referral notice, not a diagnosis (design doc §3.6). The patient is told
- * that their screening needs a follow-up and where to go. The message does NOT
- * name a condition, give a grade, or restate anything in clinical language:
- *
- *   - This is a screening pathway, not a diagnostic one (§16). A grade from
- *     this system is a referral recommendation, and wording it as a finding
- *     would overclaim what the system is allowed to say.
- *   - An SMS is unencrypted and lands on a phone others may read. Naming a
- *     medical condition in it is a privacy problem independent of accuracy.
- *   - The patient cannot ask an SMS a follow-up question. A diagnosis with no
- *     one to ask is frightening rather than useful; an instruction is actionable.
- *
- * ── Behaviour without Twilio credentials ────────────────────────────────────
- * The referral row is still created — that is the clinical record and the admin
- * follow-up worklist, and it must not depend on a third party being reachable.
- * The SMS is skipped and recorded with status 'not_configured'. It is NEVER
- * recorded as sent. A notification row that falsely claims a patient was told
- * to seek care is worse than no row at all: it makes a missed referral
- * invisible to the very tracker built to catch missed referrals.
- */
 
 const pool = require('../db/pgClient');
 
-const TWILIO_SID   = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_FROM  = process.env.TWILIO_FROM;
-// Public https URL of POST /api/v1/notifications/sms-status, when this backend
-// is reachable from the internet. Optional; see the send call below.
+const TWILIO_FROM = process.env.TWILIO_FROM;
+
 const STATUS_CALLBACK_URL = process.env.TWILIO_STATUS_CALLBACK_URL || '';
 
-// Set SMS_DRY_RUN=1 to exercise the whole path without sending anything, even
-// with real credentials present. Useful for demos and for load-testing the
-// review flow without messaging real people.
+
 const DRY_RUN = process.env.SMS_DRY_RUN === '1';
 
 let twilioClient = null;
 let twilioInitError = null;
 
-/**
- * getTwilioClient()
- *
- * Lazily constructed, never at module load. Requiring this file must not throw
- * or exit merely because credentials are absent — the central server has to
- * boot and serve every other endpoint on a machine that has no Twilio account,
- * which is the normal state during development.
- */
+
 function getTwilioClient() {
   if (twilioClient || twilioInitError) return twilioClient;
   if (!isConfigured()) return null;
@@ -78,17 +32,7 @@ function isConfigured() {
   return !!(TWILIO_SID && TWILIO_TOKEN && TWILIO_FROM);
 }
 
-/**
- * Message templates, by the language recorded on the questionnaire.
- *
- * Deliberately free of any condition name, grade or clinical term — see the
- * header. {phc} and {clinic} are substituted; everything else is fixed text.
- *
- * > TRANSLATION NOT YET REVIEWED. The Hindi below is a working draft and MUST
- * > be checked by a fluent speaker before any real send. A health instruction
- * > that reads awkwardly is ignored, and one that reads wrongly is dangerous —
- * > this is the one string in the system a non-speaker should not sign off on.
- */
+
 const TEMPLATES = {
   en: 'Your recent eye screening at {phc} needs a follow-up check with an eye '
     + 'doctor. Please visit {clinic} as soon as you can. Bring this message with you.',
@@ -144,16 +88,7 @@ async function handleConfirmedReferral(caseId, opts = {}) {
       'No ophthalmologist review recorded for this case.');
   }
 
-  // Which grade actually stands after review?
-  //
-  // On 'confirm' the model's grade stands. On 'override' the ophthalmologist
-  // disagreed — but api-contracts.md's review payload has NO field for their
-  // corrected grade, so the system genuinely does not know what the grade
-  // became. correctedGrade is accepted as an additive field for that; without
-  // it an override cannot be acted on, and NOT sending is the safe failure.
-  // Sending a referral the reviewer may have just ruled out is worse than
-  // sending nothing, because the admin tracker still shows the case as needing
-  // follow-up either way.
+
   let effectiveGrade;
   if (row.decision === 'confirm') {
     effectiveGrade = row.dr_grade_cnn;
@@ -167,8 +102,10 @@ async function handleConfirmedReferral(caseId, opts = {}) {
 
   if (!(effectiveGrade >= 2)) {
     // Non-referable: case closes, no SMS (design doc §8.1 step 8).
-    return { referralId: null, alreadyReferred: false,
-             sms: { status: 'not_referable', sent: false } };
+    return {
+      referralId: null, alreadyReferred: false,
+      sms: { status: 'not_referable', sent: false }
+    };
   }
 
   // ── Referral row ──────────────────────────────────────────────────────────
@@ -183,84 +120,79 @@ async function handleConfirmedReferral(caseId, opts = {}) {
   const alreadyReferred = ref.rows.length === 0;
   const referralId = alreadyReferred
     ? (await pool.query('SELECT referral_id FROM referrals WHERE case_id = $1', [caseId]))
-        .rows[0].referral_id
+      .rows[0].referral_id
     : ref.rows[0].referral_id;
 
   if (alreadyReferred) {
     // Already handled by an earlier review. Do not re-send.
-    return { referralId, alreadyReferred: true,
-             sms: { status: 'already_sent', sent: false } };
+    return {
+      referralId, alreadyReferred: true,
+      sms: { status: 'already_sent', sent: false }
+    };
   }
 
   // ── SMS ───────────────────────────────────────────────────────────────────
   const language = (row.questionnaire_data && row.questionnaire_data.language) || 'en';
-  const body     = buildMessage({ language, phcName: row.phc_name });
-  const to       = row.contact_number;
+  const body = buildMessage({ language, phcName: row.phc_name });
+  const to = row.contact_number;
 
   if (!to) {
     // §10.5: nothing can be sent, so this needs a person, now -- not at
     // whatever point someone notices the tracker.
     await flipToManualFollowUp(referralId, 'no contact number on record');
-    return { referralId, alreadyReferred: false,
-             sms: await record(caseId, row, 'no_contact_number', null,
-                               'Patient has no contact number on record.') };
+    return {
+      referralId, alreadyReferred: false,
+      sms: await record(caseId, row, 'no_contact_number', null,
+        'Patient has no contact number on record.')
+    };
   }
 
   if (DRY_RUN || !isConfigured()) {
     const why = DRY_RUN ? 'dry_run' : 'not_configured';
     console.log(`[referral] SMS ${why} — would send to ${maskNumber(to)}:\n  ${body}`);
-    // §10.5: the patient was NOT told, so somebody has to phone them. With no
-    // SMS provider configured that is true of EVERY referral, and leaving it
-    // in 'referred' made it look like an ordinary one the patient had been
-    // messaged about. dry_run is a developer's opt-in to "log, don't send" and
-    // keeps its old behaviour.
+
     if (why === 'not_configured') {
       await flipToManualFollowUp(referralId, 'SMS provider not configured');
     }
-    return { referralId, alreadyReferred: false,
-             sms: await record(caseId, row, why, null, null, body) };
+    return {
+      referralId, alreadyReferred: false,
+      sms: await record(caseId, row, why, null, null, body)
+    };
   }
 
   const client = getTwilioClient();
   if (!client) {
     await flipToManualFollowUp(referralId, 'SMS client unavailable');
-    return { referralId, alreadyReferred: false,
-             sms: await record(caseId, row, 'client_unavailable', null,
-                               twilioInitError ? twilioInitError.message : 'unknown') };
+    return {
+      referralId, alreadyReferred: false,
+      sms: await record(caseId, row, 'client_unavailable', null,
+        twilioInitError ? twilioInitError.message : 'unknown')
+    };
   }
 
   try {
-    // statusCallback: acceptance by the API is not delivery. Without this URL
-    // an undeliverable message is never reported and §10.5 cannot fire for the
-    // most common real failure (wrong or unreachable number). It needs a
-    // publicly reachable backend, so it is optional and simply absent on a
-    // laptop demo -- in which case only immediate failures flip the referral.
+
     const msg = await client.messages.create({
       body, from: TWILIO_FROM, to,
       ...(STATUS_CALLBACK_URL ? { statusCallback: STATUS_CALLBACK_URL } : {}),
     });
     console.log(`[referral] SMS sent to ${maskNumber(to)} (${msg.sid})`);
-    return { referralId, alreadyReferred: false,
-             sms: await record(caseId, row, 'sent', msg.sid, null, body) };
+    return {
+      referralId, alreadyReferred: false,
+      sms: await record(caseId, row, 'sent', msg.sid, null, body)
+    };
   } catch (err) {
-    // The referral row stands. A failed SMS must not roll back the clinical
-    // record — the patient still needs following up, and the admin tracker is
-    // now the mechanism that catches it.
+
     console.error(`[referral] SMS FAILED for case ${caseId}: ${err.message}`);
     await flipToManualFollowUp(referralId, 'SMS send failed');
-    return { referralId, alreadyReferred: false,
-             sms: await record(caseId, row, 'failed', null, err.message, body) };
+    return {
+      referralId, alreadyReferred: false,
+      sms: await record(caseId, row, 'failed', null, err.message, body)
+    };
   }
 }
 
-/**
- * flipToManualFollowUp(referralId, why)
- *
- * Design doc §10.5. The patient was NOT told, so somebody has to phone them.
- * Only ever applied to a referral still sitting in 'referred': once a worker
- * has moved it on (contacted / attended / lost), a late delivery report must
- * not drag it backwards.
- */
+
 async function flipToManualFollowUp(referralId, why) {
   if (!referralId) return false;
   try {
@@ -278,14 +210,7 @@ async function flipToManualFollowUp(referralId, why) {
   }
 }
 
-/**
- * handleDeliveryReport(providerMessageId, deliveryStatus, errorDetail)
- *
- * Twilio's status callback (routes/notifications.js). A message can be accepted
- * by the API and still never arrive -- wrong number, unreachable handset,
- * carrier rejection -- and that outcome only shows up here, minutes later.
- * 'undelivered' and 'failed' are terminal failures; everything else is progress.
- */
+
 async function handleDeliveryReport(providerMessageId, deliveryStatus, errorDetail) {
   const status = String(deliveryStatus || '').toLowerCase();
   const terminalFailure = status === 'undelivered' || status === 'failed';
@@ -308,24 +233,27 @@ async function handleDeliveryReport(providerMessageId, deliveryStatus, errorDeta
   return { matched: true, flipped, caseId: rows[0].case_id };
 }
 
-/** Record what actually happened. status is never 'sent' unless it was sent. */
 async function record(caseId, row, status, providerId, errorDetail, body) {
   await pool.query(`
     INSERT INTO notifications
       (patient_id, case_id, channel, message_type, status, provider_message_id, error_detail)
     VALUES ($1, $2, 'sms', 'positive', $3, $4, $5)
   `, [row.patient_id, caseId, status, providerId || null, errorDetail || null]);
-  return { status, sent: status === 'sent', providerMessageId: providerId || null,
-           errorDetail: errorDetail || null, body: body || null };
+  return {
+    status, sent: status === 'sent', providerMessageId: providerId || null,
+    errorDetail: errorDetail || null, body: body || null
+  };
 }
 
 async function skip(caseId, row, status, message) {
   console.warn(`[referral] case ${caseId}: ${message}`);
-  return { referralId: null, alreadyReferred: false,
-           sms: { status, sent: false, errorDetail: message } };
+  return {
+    referralId: null, alreadyReferred: false,
+    sms: { status, sent: false, errorDetail: message }
+  };
 }
 
-/** Never log a full phone number. */
+
 function maskNumber(n) {
   const s = String(n);
   return s.length <= 4 ? '****' : `${s.slice(0, 3)}****${s.slice(-3)}`;

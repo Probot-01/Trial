@@ -1,54 +1,4 @@
-"""
-evalIdridOnnx.py
-================
-Clinical metrics for the ONNX export of M3 (optic disc / fovea localization),
-against IDRiD's C. Localization ground truth.
 
-    python evalIdridOnnx.py [--set heldout|all|train|test]
-
-Reports Mean Euclidean Distance Error for both landmarks, in original pixels
-and in the model's 512 space, plus the within-radius success rates the
-localization literature quotes.
-
--- WHICH IMAGES MAY HONESTLY BE SCORED ------------------------------------
-IDRiD's localization set is 516 images, and M3 was trained on most of them.
-Scoring all 516 and calling the result accuracy would be reporting training
-error. models/Model3/localization_test_predictions.csv records the 78 images
-the model itself held out, so that is the default set and the only number
-here that estimates generalization.
-
---set all is offered because "how does it do on everything we have" is a
-reasonable question, but it is labelled CONTAMINATED wherever it prints. The
-two must never be quoted interchangeably.
-
--- THE FILENAME COLLISION -------------------------------------------------
-IDRiD's Training and Testing folders both number from IDRiD_001, so an id
-alone does not identify an image: 'IDRiD_001' names two different patients'
-eyes. verifyModel3.py documents this trap and records that reading the wrong
-folder looked like a preprocessing problem (mean OD error 26 px, bimodal)
-rather than a loud failure, and that it already produced one wrong committed
-conclusion on this project.
-
-So ids from the held-out CSV are resolved through verifyModel3.resolve_images,
-which disambiguates by checking which folder's ground truth reproduces the
-CSV's own od_true columns -- imported, not reimplemented. The --set all path
-does not need it: iterating a folder directly means the folder is known, and
-each folder is paired with its OWN markup CSV.
-
--- THE PREPROCESSING IS THE PROVEN ONE ------------------------------------
-INTER_AREA squish to 512, BGR->RGB, ImageNet norm, ch0 = disc, ch1 = fovea.
-verifyModel3.py established that INTER_AREA reproduces the model on 77/78
-images where OpenCV's default INTER_LINEAR manages 28.2%, so this calls
-segInfer's path rather than writing a fourth copy of it.
-
--- WHAT COUNTS AS A HIT ---------------------------------------------------
-Raw mean distance is dominated by a few gross failures, so the within-radius
-rates matter more for a screening pipeline: what fraction of images put the
-landmark close enough for the downstream quadrant axis to be right. Thresholds
-are expressed as fractions of the optic disc radius R, the convention in the
-localization literature, with R taken as 0.0655 x image width (IDRiD's optic
-disc is ~540 px across on a 4288 px wide image).
-"""
 
 import argparse
 import csv
@@ -70,11 +20,6 @@ INPUT_SIZE = segInfer.INPUT_SIZE
 LOC = verifyModel3.LOC
 PRED_CSV = verifyModel3.PRED_CSV
 
-# Optic disc radius as a fraction of image width. IDRiD's disc is ~540 px
-# across on 4288 px wide images, so R ~ 270 px ~ 0.0655 * W. Used only for the
-# within-R success rates; the millimetre truth varies per eye and no
-# per-image disc diameter is annotated, so this is a stated convention rather
-# than a measurement.
 OD_RADIUS_FRAC = 0.0655
 
 GT_DIRS = {
@@ -229,9 +174,7 @@ def main():
         print(f"\n  COMBINED mean Euclidean error over both landmarks: "
               f"{np.mean(both):.2f} px (n={len(both)})")
 
-    # The checkpoint records its own best validation error; printing it beside
-    # ours is the check that matters. A large gap means the recipe or the
-    # export drifted from what training measured, not that the model is bad.
+
     ck_err = 5.646450042724609      # ckpt['best_val_pixel_error'], 512-space
     if out:
         mean512 = np.mean([v["mean512"] for v in out.values()])
@@ -239,10 +182,6 @@ def main():
               f"{ck_err:.2f} px (512-space)")
         print(f"  ours, same space, mean over both landmarks : {mean512:.2f} px")
 
-    # Named, not just counted. The mean on this set is outlier-dominated -- a
-    # handful of gross misses carry it well above the median -- so which
-    # images fail is more actionable than the spread, and a landmark past ~1R
-    # is a different failure from one a few pixels off.
     for lm, label in (("od", "optic disc"), ("fovea", "fovea")):
         if worst[lm]:
             worst[lm].sort(reverse=True)

@@ -1,37 +1,13 @@
 import React, { useMemo } from 'react';
 
-/**
- * EyeHeroSVG — the eye that anchors the district Overview.
- *
- * Drawn as an anatomical illustration on paper: a graded sclera that warms
- * into both canthi, episcleral vessels, a caruncle, an iris built from stromal
- * fibres, crypts and a collarette, a soft-edged pupil, corneal speculars and a
- * tear meniscus along the lower lid.
- *
- * The scroll tells one story: a healthy eye, examined, dilated, and then read
- * as a fundus in which the signs of diabetic retinopathy appear in the order a
- * grader meets them — microaneurysms, dot-blot haemorrhages, hard exudates,
- * cotton-wool spots, and finally new vessels at the disc.
- *
- * Life that has nothing to do with scrolling — the blink, the saccades, the
- * pupil's response to light, the drift of the specular — is CSS animation, so
- * it costs no React renders. Gaze comes in as --gaze-x / --gaze-y, written by
- * the scroll engine each frame.
- *
- * Props:
- *   progress         0–1 overall scroll progress
- *   chapter          current chapter index (0–4)
- *   chapterProgress  0–1 progress within the current chapter
- */
+
 export const EyeHeroSVG = ({ progress = 0, chapter = 0, chapterProgress = 0 }) => {
   const CX = 320;
   const CY = 212;
   const IRIS_R = 80;
   const LIMBUS_R = 84;
 
-  // A human pupil only changes size. It constricts as the examination tightens,
-  // then dilates wide for the retinal view — the way a fundus camera sees it
-  // once the drops have taken.
+
   const pupilR = track(progress, [[0, 28], [0.24, 20], [0.5, 16], [0.74, 30], [1, 42]]);
 
   const measureOpacity = fade(chapter, chapterProgress, 1) * 0.9;
@@ -109,7 +85,7 @@ export const EyeHeroSVG = ({ progress = 0, chapter = 0, chapterProgress = 0 }) =
         const nx = x + dir * (len / 4);
         const ny = y + (rand() - 0.5) * 26;
         d += ' Q ' + (x + dir * (len / 8)).toFixed(0) + ' ' + (y + (rand() - 0.5) * 20).toFixed(0) +
-             ' ' + nx.toFixed(0) + ' ' + ny.toFixed(0);
+          ' ' + nx.toFixed(0) + ' ' + ny.toFixed(0);
         x = nx;
         y = ny;
       }
@@ -148,10 +124,6 @@ export const EyeHeroSVG = ({ progress = 0, chapter = 0, chapterProgress = 0 }) =
     { from: 100, to: 156, color: '#C42B2B' },
     { from: 176, to: 232, color: '#8A6A3C' },
   ]), []);
-
-  // Static artwork, built once. Handing React the same elements back lets it
-  // skip these subtrees entirely on a scroll step, instead of diffing several
-  // hundred nodes for a change that only moves the pupil.
   const vesselArt = useMemo(() => (
     <g className="eye-hero-svg__vessels" stroke="#C0574A" fill="none" strokeLinecap="round">
       {vessels.map((v, i) => (

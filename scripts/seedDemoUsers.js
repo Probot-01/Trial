@@ -1,31 +1,10 @@
 'use strict';
 
-/**
- * seedDemoUsers.js -- the two demo accounts (backend plan §A.5).
- *
- *   cd central-system/backend && npm run seed-users
- *
- * Creates (or resets) exactly two users, one per role:
- *
- *   ophthalmologist@demo.netrasetu.local   role ophthalmologist
- *   admin@demo.netrasetu.local             role district_admin
- *
- * Emails are on the reserved .local TLD and the names say "Demo", so nobody can
- * mistake these for a real clinician's account. Passwords come from
- * DEMO_OPHTHALMOLOGIST_PASSWORD / DEMO_ADMIN_PASSWORD, falling back to the
- * documented demo values in .env.example. Refuses those fallbacks when
- * NODE_ENV=production.
- *
- * Re-running is safe: an existing demo user keeps its user_id (so its reviews
- * and access-log rows stay attached) and gets its name, role and password reset.
- *
- * Passwords are bcrypt-hashed here, before they reach the database (§A.4).
- */
 
 const path = require('path');
 const backendDir = path.resolve(__dirname, '..', 'central-system', 'backend');
 
-const pool   = require(path.join(backendDir, 'db', 'pgClient'));
+const pool = require(path.join(backendDir, 'db', 'pgClient'));
 const bcrypt = require(require.resolve('bcryptjs', { paths: [backendDir] }));
 
 const BCRYPT_COST = 12;

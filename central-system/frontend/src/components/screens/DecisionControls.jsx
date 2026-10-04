@@ -1,12 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { drGradeLabels, overrideReasonCategories } from '../../api/mockData';
 
-/**
- * What the reviewer is told happened after the review was recorded, from the
- * server's own answer (POST /cases/:id/review -> { referralId, smsStatus }).
- * Never guessed and never worded as "sent" unless the server said `sent`
- * (design doc §8.5, §10.5).
- */
+
 const SMS_TEXT = {
   sent: 'SMS sent to the patient.',
   not_configured: 'SMS was NOT sent: no SMS provider is configured. The referral is in MANUAL FOLLOW-UP — someone must phone the patient.',
@@ -37,14 +32,10 @@ export const DecisionControls = ({ caseData, onSubmit, submitted, claimedBy, pri
 
   const cnn = caseData.drGradeCnn;
   const rule = caseData.drGradeRuleEngine;
-  // §10.9: when the branches disagree there is nothing single to "confirm", so
-  // the only path is an explicit final grade. The server enforces it too
-  // (400 explicit_grade_required); this keeps the UI from offering the dead end.
+
   const disagree = caseData.branchAgreement === false;
   const locked = submitted || submitting || !!claimedBy;
 
-  // On a disagreement the resolution form IS the decision: an override that
-  // carries an explicit grade.
   const effectiveDecision = disagree ? 'override' : decision;
 
   // Live review timer (records the real review duration).
@@ -54,9 +45,6 @@ export const DecisionControls = ({ caseData, onSubmit, submitted, claimedBy, pri
     return () => clearInterval(interval);
   }, [submitted]);
 
-  // What is missing before an override can be sent. An override with no
-  // corrected grade is not "less complete": the server cannot tell whether the
-  // case is still referable and sends no SMS at all.
   const problems = [];
   if (effectiveDecision === 'override') {
     if (overrideGrade === '') problems.push(disagree ? 'Choose the final grade.' : 'Choose the corrected grade.');
@@ -76,27 +64,20 @@ export const DecisionControls = ({ caseData, onSubmit, submitted, claimedBy, pri
       decision: effectiveDecision,
       overrideReasonCategory: effectiveDecision === 'override' ? overrideCategory : null,
       overrideReasonText: effectiveDecision === 'override' && overrideText.trim() ? overrideText.trim() : null,
-      // Without this an override returns smsStatus 'override_without_grade' and
-      // no referral SMS is ever sent (api-contracts.md); on a disagreement the
-      // server refuses the review outright without it.
+
       ...(effectiveDecision === 'override' ? { correctedGrade: Number(overrideGrade) } : {}),
       reviewDurationSeconds: elapsedSeconds,
     };
     try {
       await onSubmit(reviewData);
     } catch (err) {
-      // The review was NOT recorded. Say so and leave the form as it is so
-      // the reviewer can retry; never show it as submitted.
+
       setSubmitError(err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Keyboard shortcuts: C confirm, O override, Enter submit. They obey exactly
-  // the rules the buttons do -- a shortcut must never reach a decision the
-  // screen has disabled. The handler reads the latest state through a ref so
-  // it never acts on a stale closure.
   const latest = useRef({});
   latest.current = { locked, disagree, canSubmit, handleSubmit, decision };
   useEffect(() => {

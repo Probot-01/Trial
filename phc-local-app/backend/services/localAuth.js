@@ -1,23 +1,6 @@
 'use strict';
 
-/**
- * Technician sessions for the PHC local backend (design doc §11.1: "a real
- * authentication endpoint, checked against a stored credential hash, in every
- * application").
- *
- * Opaque bearer tokens (Authorization: Bearer <token>), used by both PHC
- * front-ends: the desktop web app and the phone. Bearer rather than cookie
- * because the phone is not a browser, and a header token is not sent by the
- * browser on its own, so CSRF does not apply. Only the token's SHA-256 is
- * stored.
- *
- * LOCAL_AUTH_ENABLED (default false, like central's AUTH_ENABLED until every
- * front-end sends a token):
- *   false -> requests without a token pass, unattributed; a token that is
- *            present but invalid or expired is still REJECTED, so a broken
- *            client fails loudly now rather than on the day it is enforced;
- *   true  -> every protected route needs a valid session.
- */
+
 const crypto = require('crypto');
 const db = require('../db/localDb');
 const { verifyPassword, DUMMY_HASH } = require('./passwords');

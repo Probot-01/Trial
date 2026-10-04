@@ -10,9 +10,7 @@ if (!process.env.NETRASETU_TEST_ROOT) {
 
 register('./loader.mjs', import.meta.url);
 
-// React Native's FormData accepts a file part as { uri, name, type } and
-// streams the file itself. Node's does not, so the same object is turned into
-// the equivalent Blob here -- the app code under test is unchanged.
+
 const NodeFormData = globalThis.FormData;
 globalThis.FormData = class RNFormData extends NodeFormData {
   append(name, value, filename) {

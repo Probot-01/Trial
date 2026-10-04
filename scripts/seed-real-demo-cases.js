@@ -1,30 +1,6 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * seed-real-demo-cases.js -- give the district-worker dashboards something
- * real to show, without inventing any data.
- *
- * seed-demo.js deliberately creates zero cases ("a case has to arrive the
- * real way -- capture on a PHC, quality gate, sync, grading -- or the system
- * is being demonstrated on data it never produced"). This script honours that:
- * it submits real IDRiD fundus images to central's real device-ingestion
- * endpoint (POST /api/v1/cases, the same route a PHC's sync manager calls),
- * with a real PHC API key, so every case that results went through the actual
- * MATLAB/segmentation grading pipeline -- it is just more VOLUME, across both
- * seeded PHCs, not synthetic rows written into Postgres.
- *
- * Usage:
- *   node scripts/seed-real-demo-cases.js
- *
- * Requires PHC001_API_KEY / PHC002_API_KEY (and their phcIds) -- seed-demo.js
- * only prints these once, so pass the current ones as env vars, or edit the
- * defaults below right after re-running `node scripts/seed-demo.js --force`.
- *
- * Cases are submitted one at a time (the grading queue's own concurrency is
- * 2; this deliberately does not race it) and this script waits for each to
- * finish grading before moving on, so it can report a real grade per case.
- */
 
 const fs = require('fs');
 const path = require('path');
@@ -32,11 +8,7 @@ const path = require('path');
 const BASE = process.env.CENTRAL_BASE || 'http://localhost:5200';
 const GRADING_DIR = path.join(__dirname, '..', 'central-system', 'backend',
   'ml-pipeline', 'datasets', 'idrid', 'grading', 'B. Disease Grading', '1. Original Images');
-// This repo's copy splits "Training Set"/"Testing Set" by image-number range
-// (163-413 vs 001-103ish), not by the Groundtruths CSVs' own train/test split
-// -- several images the training-labels CSV names actually sit in the
-// "Testing Set" folder here. Each entry below records which folder its file
-// is actually in, checked directly against the filesystem.
+
 
 const PHCS = [
   {
@@ -51,10 +23,7 @@ const PHCS = [
   },
 ];
 
-// Three real images per DR grade (docs/../grading/2. Groundtruths CSVs,
-// cross-checked against which folder each file actually exists in), so the
-// queue and dashboards show a realistic severity spread rather than one
-// repeated image.
+
 const IMAGES_BY_GRADE = {
   0: [['IDRiD_163', 'train'], ['IDRiD_164', 'train'], ['IDRiD_165', 'train']],
   1: [['IDRiD_021', 'test'], ['IDRiD_079', 'test'], ['IDRiD_194', 'train']],
@@ -64,9 +33,7 @@ const IMAGES_BY_GRADE = {
 };
 const FOLDER_NAME = { train: 'a. Training Set', test: 'b. Testing Set' };
 
-// Varied, plausible risk factors so urgency scores and referral reasons are
-// not all identical -- still fictional demo patients (no real patient data),
-// same as every other capture this project has used for testing.
+
 const RISK_PROFILES = [
   { age: 45, yearsSinceDiagnosis: 'lt1', hba1c: null, glycemicControl: 'good', bloodPressure: 'normal' },
   { age: 58, yearsSinceDiagnosis: '1to5', hba1c: 7.2, glycemicControl: 'moderate', bloodPressure: 'elevated' },

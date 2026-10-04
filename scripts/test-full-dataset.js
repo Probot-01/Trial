@@ -1,31 +1,6 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * test-full-dataset.js -- submit every real grading image this repo actually
- * has on disk (full_dataset_manifest.json, built from both IDRiD Groundtruths
- * CSVs cross-checked against the two image folders -- 457 of the 516 labeled
- * images are present; 59 are simply not shipped in this repo's copy) through
- * the real POST /api/v1/cases ingestion route, with a real PHC API key, so
- * every result is a real MATLAB/segmentation grading run -- not a sample, not
- * a mock.
- *
- * Goal: find real pipeline bugs (crashes, timeouts, bad output) across the
- * full range of image quality/severity the dataset contains, not to measure
- * clinical accuracy -- the CNN/rule-engine grade is compared to the dataset's
- * ground truth for information only and is never treated as a pass/fail gate
- * (this project's classifier metrics are tracked elsewhere, verified on real
- * held-out runs, not by this script).
- *
- * Usage:
- *   node scripts/test-full-dataset.js
- *
- * Runs with CONCURRENCY simultaneous in-flight cases (matches the grading
- * queue's own server-side concurrency, so this uses full throughput without
- * overloading it) and writes full_dataset_results.jsonl incrementally (one
- * JSON line per case) so a crash partway through does not lose completed work
- * -- re-running resumes by skipping images already present in that file.
- */
 
 const fs = require('fs');
 const path = require('path');

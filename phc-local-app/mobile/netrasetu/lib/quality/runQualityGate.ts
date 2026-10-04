@@ -1,21 +1,4 @@
-/**
- * Runs the on-device quality gate on an image file.
- *
- * The image is normalised by expo-image-manipulator (applies EXIF rotation,
- * reads HEIC) to a lossless PNG and decoded in JS with fast-png, then scored
- * by qualityGate.ts -- the MATLAB port.
- *
- * FULL RESOLUTION, deliberately. Checked against the demo images: analysing a
- * 4288x2848 fundus photo at 1600 px moved the verdict from 'borderline' to
- * 'retake (motion_artifact)', because resampling changes the gradient
- * statistics the gate measures. The MATLAB exe sees the original pixels, so
- * this does too, up to MAX_SIDE; only a larger image is scaled, and the
- * result records the size actually analysed.
- *
- * Any failure here THROWS. The caller shows "quality check could not run"
- * and offers a retry -- it must never turn into a pass or a borderline
- * (design doc §1.22).
- */
+
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { File } from 'expo-file-system';
 import { decode } from 'fast-png';

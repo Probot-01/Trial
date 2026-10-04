@@ -1,37 +1,16 @@
 'use strict';
 
-/**
- * mediaCrypto.js -- AES-256-GCM encryption at rest for stored case media
- * (design doc §11.1 "AES-256 on ... stored images"; docs/SECURITY.md).
- *
- * File format (self-describing, so plaintext and encrypted files can coexist
- * while scripts/encryptMedia.js converts an existing media tree):
- *
- *   "NSMEDIA1" (8 bytes) | IV (12 bytes) | GCM tag (16 bytes) | ciphertext
- *
- * Key: MEDIA_ENCRYPTION_KEY, 32 bytes as 64 hex chars or base64/base64url.
- *   Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
- * Unset -> new files are written in plaintext and the backend says so at boot;
- * reading an ENCRYPTED file without the key fails loudly (never returns
- * ciphertext as if it were an image).
- *
- * Who uses it:
- *   - ingestionService   encrypts the original image as it is written;
- *   - gradingOrchestrator/caseReport hand Python and MATLAB a decrypted temp
- *     copy (withPlaintextCopy), then encryptCaseDir() the outputs they wrote;
- *   - server.js /media and routes/phc.js decrypt on the way out.
- * Model files are never touched: only files under media/ go through here.
- */
+
 
 const crypto = require('crypto');
-const fs     = require('fs');
-const os     = require('os');
-const path   = require('path');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-const MAGIC   = Buffer.from('NSMEDIA1', 'ascii');
-const IV_LEN  = 12;
+const MAGIC = Buffer.from('NSMEDIA1', 'ascii');
+const IV_LEN = 12;
 const TAG_LEN = 16;
-const HEADER  = MAGIC.length + IV_LEN + TAG_LEN;
+const HEADER = MAGIC.length + IV_LEN + TAG_LEN;
 
 function parseKey(raw) {
   if (!raw) return null;
@@ -48,8 +27,6 @@ function parseKey(raw) {
   return key;
 }
 
-// Read lazily so scripts that load .env after requiring this still work, but
-// validated once: a malformed key is a boot failure, not a per-request one.
 let cachedKey;
 function key() {
   if (cachedKey === undefined) cachedKey = parseKey(process.env.MEDIA_ENCRYPTION_KEY);
@@ -81,7 +58,7 @@ function decryptBuffer(buf) {
     err.code = 'media_key_missing';
     throw err;
   }
-  const iv  = buf.subarray(MAGIC.length, MAGIC.length + IV_LEN);
+  const iv = buf.subarray(MAGIC.length, MAGIC.length + IV_LEN);
   const tag = buf.subarray(MAGIC.length + IV_LEN, HEADER);
   const decipher = crypto.createDecipheriv('aes-256-gcm', k, iv);
   decipher.setAuthTag(tag);
@@ -98,13 +75,6 @@ function readFile(filePath) {
   return decryptBuffer(fs.readFileSync(filePath));
 }
 
-/**
- * For SERVING: the plaintext of a file that must be encrypted at rest. A
- * plaintext file here means something wrote media outside mediaCrypto (or
- * before the key existed); it is refused with code media_not_encrypted rather
- * than served, so an unencrypted copy of a patient image never quietly goes
- * out as if everything were fine.
- */
 function readEncryptedFile(filePath) {
   const buf = fs.readFileSync(filePath);
   if (!isEncrypted(buf)) {
@@ -116,10 +86,7 @@ function readEncryptedFile(filePath) {
   return decryptBuffer(buf);
 }
 
-/**
- * Encrypt one file in place (atomic rename). No-op without a key or when the
- * file is already encrypted. Returns true when it changed the file.
- */
+
 function encryptFileInPlace(filePath) {
   if (!enabled()) return false;
   const buf = fs.readFileSync(filePath);
@@ -142,12 +109,7 @@ function encryptDir(dir) {
   return n;
 }
 
-/**
- * Python and MATLAB read images by path and cannot decrypt, so they get a
- * decrypted copy in the OS temp dir for the duration of fn, deleted after.
- * With a plaintext source (no key, or not yet converted) the original path is
- * passed straight through and nothing is written.
- */
+
 async function withPlaintextCopy(filePath, fn) {
   if (!filePath || !fs.existsSync(filePath)) return fn(filePath);
   const buf = fs.readFileSync(filePath);

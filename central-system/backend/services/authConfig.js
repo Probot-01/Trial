@@ -1,42 +1,5 @@
 'use strict';
 
-/**
- * authConfig.js -- every auth-related setting, read and validated in one place.
- *
- * Backend plan §A. Two independent switches, because they gate two different
- * kinds of client and roll out on different schedules:
- *
- *   AUTH_ENABLED=true        browser users (ophthalmologist / district_admin)
- *                            must hold a valid session cookie. Default OFF, so
- *                            the web frontends keep working while their login
- *                            screens are built (§A.8). Login itself works with
- *                            the flag off, so that work can be tested for real.
- *
- *   PHC_AUTH_ENABLED=true    PHC apps must send a valid X-PHC-Api-Key on the
- *                            ingestion routes. Default OFF, because every PHC
- *                            has to be provisioned a key (scripts/
- *                            provisionPhcKey.js) and have it in its local config
- *                            first -- flipping this before then stops all sync.
- *
- * Other settings:
- *   JWT_SECRET               required when AUTH_ENABLED=true (boot fails without
- *                            it). With auth off, a random per-process secret is
- *                            used so login can still be exercised -- sessions
- *                            then die on restart, which is fine for development.
- *   JWT_TTL_HOURS            session lifetime, default 12 (§A.10: 12-24h, no
- *                            refresh tokens).
- *   COOKIE_SECURE            default true. Browsers treat http://localhost as a
- *                            secure context, so Secure cookies still work on a
- *                            local demo; set false only for a plain-http host
- *                            that is not localhost (and then get TLS, §A.14).
- *   COOKIE_SAMESITE          lax (default) | strict | none. Must be `none` when
- *                            the frontend is on a different SITE from this
- *                            backend (e.g. *.vercel.app -> localhost), or the
- *                            browser never sends the cookie. `none` forces
- *                            Secure.
- *   CLAIM_TTL_MINUTES        how long a review claim holds before another
- *                            reviewer may take the case over (§10.8), default 30.
- */
 
 const crypto = require('crypto');
 
@@ -46,7 +9,7 @@ const flag = (name, dflt = false) => {
   return /^(1|true|yes|on)$/i.test(v.trim());
 };
 
-const AUTH_ENABLED     = flag('AUTH_ENABLED');
+const AUTH_ENABLED = flag('AUTH_ENABLED');
 const PHC_AUTH_ENABLED = flag('PHC_AUTH_ENABLED');
 
 let JWT_SECRET = process.env.JWT_SECRET || '';

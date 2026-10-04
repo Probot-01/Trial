@@ -1,40 +1,4 @@
-"""
-exportOnnx.py
-=============
-Export M2 (vessel) and M3 (localization) to ONNX.
 
-    python exportOnnx.py [--outdir DIR] [--opset 14]
-
-Writes <outdir>/vessel_unet_v1.onnx and <outdir>/localization_v1.onnx,
-default outdir models/onnx/. Run verifyOnnx.py afterwards -- an export that
-loads and runs is not the same as an export that computes the same numbers.
-
-── THE ARCHITECTURE IS NOT RESTATED HERE ───────────────────────────────────
-This imports segInfer.load() rather than rebuilding smp.Unet from its own
-copy of the encoder/channel settings. A second copy of _ARCH would be free to
-drift from the one inference actually uses, and the failure is silent in the
-worst way: strict=True catches a wrong encoder, but nothing catches an ONNX
-file exported from a correct-but-different arch than the one serving traffic.
-One definition, imported.
-
-── CHANNEL COUNTS DIFFER BETWEEN THE TWO MODELS ────────────────────────────
-M2 is in_channels=1, NOT 3. It is fed the green channel alone (segInfer's
-vessels() slices bgr[:, :, 1]), aspect-padded to 512 and normalised
-(x/255 - 0.5)/0.5. M3 is in_channels=3, ImageNet-normalised, and emits 2
-heatmap channels (optic disc, fovea).
-
-So the dummy input shape is taken from _ARCH['<role>']['in_channels'], not
-assumed to be 3. Exporting M2 at 3 channels does not fail at export time --
-it fails at the first conv, or worse, succeeds against a wrongly-shaped
-tensor someone fed it to make the error go away.
-
-── BATCH IS DYNAMIC, SPATIAL SIZE IS NOT ───────────────────────────────────
-dynamic_axes frees axis 0 only. Both models are U-Nets whose skip connections
-concatenate encoder and decoder feature maps, and those line up at 512x512;
-letting H/W float in the graph would export shape arithmetic that is only
-exercised at other sizes, which nothing in this pipeline uses. The whole
-pipeline resizes to 512 before inference in every path.
-"""
 
 import argparse
 import os
@@ -64,9 +28,7 @@ def export(role, outdir, opset):
     channels = segInfer._ARCH[role]["in_channels"]
     dummy = torch.randn(1, channels, INPUT_SIZE, INPUT_SIZE)
 
-    # Sanity-check in torch BEFORE exporting. If the arch and the dummy shape
-    # disagree, the error should name that, not surface from inside the
-    # exporter's tracer where it reads as an ONNX problem.
+
     with torch.no_grad():
         out = model(dummy)
 
@@ -80,9 +42,7 @@ def export(role, outdir, opset):
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
         do_constant_folding=True,
-        # The legacy tracer, explicitly. torch 2.9+ defaults dynamo=True, and
-        # the two exporters produce different graphs; pinning it means the
-        # file does not change shape because the torch version moved.
+
         dynamo=False,
     )
     return path, tuple(dummy.shape), tuple(out.shape)
@@ -101,9 +61,7 @@ def main():
         print(f"{role:13s} in={ishape} out={oshape} opset={args.opset} "
               f"-> {path} ({mb:.1f} MB)")
 
-    # Structural check. onnx.checker validates the graph is well-formed; it
-    # says nothing about whether the numbers match, which is verifyOnnx.py's
-    # job and is the only check that actually matters.
+
     import onnx
     for fname in EXPORTS.values():
         onnx.checker.check_model(os.path.join(args.outdir, fname))

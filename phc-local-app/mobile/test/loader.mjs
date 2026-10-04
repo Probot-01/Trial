@@ -1,15 +1,4 @@
-/**
- * Node ESM loader that runs the app's real TypeScript under node:test.
- *
- *   - .ts/.tsx are transpiled with the project's own TypeScript
- *     (transpileModule elides type-only imports, as Metro/Babel does);
- *   - extensionless relative imports resolve to .ts/.tsx/index.ts, as in Metro;
- *   - native Expo / React Native modules resolve to the Node stand-ins in
- *     ./shims (SQLite -> node:sqlite, files -> fs, crypto -> node:crypto).
- *
- * The code under test is not modified or re-implemented: the shims replace
- * only the device APIs underneath it.
- */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';

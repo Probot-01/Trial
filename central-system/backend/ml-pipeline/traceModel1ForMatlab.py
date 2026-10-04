@@ -1,34 +1,4 @@
-"""
-traceModel1ForMatlab.py
-=======================
-Trace Branch A (Model1) so MATLAB's importNetworkFromPyTorch can read it.
 
-    python traceModel1ForMatlab.py [--out <path>]
-
-── WHY THIS STEP IS NEEDED ─────────────────────────────────────────────────
-branchA_v1.pt is a training CHECKPOINT: a dict holding model_state_dict plus
-metadata. importNetworkFromPyTorch cannot read that. It requires a TRACED
-model — the graph itself, recorded by running one example through it, saved
-with torch.jit.save.
-
-So this rebuilds the architecture from the checkpoint's own `arch` string,
-loads the weights, traces it, and writes a file MATLAB can import. It changes
-no weights and trains nothing: torch.jit.trace runs the model forward once to
-record what operations it performs.
-
-── WHY TRACING CAN CHANGE BEHAVIOUR, AND WHY IT DOES NOT HERE ──────────────
-Tracing records the operations executed for ONE input, so any data-dependent
-branching is frozen to whichever path that input took. It also freezes
-train/eval state — which matters here, because this model has dropout
-(drop_rate 0.3). Traced in train mode it would bake in a random mask and
-produce different answers every run.
-
-model.eval() before tracing is therefore not a formality. It is the
-difference between a deterministic classifier and a broken one.
-
-EfficientNet-B0 has no data-dependent control flow, so the trace is faithful
-for every input, not just the example.
-"""
 
 import argparse
 import os
@@ -81,9 +51,8 @@ def main():
 
     torch.jit.save(traced, args.out)
 
-    # Prove the trace matches the eager model before handing it to MATLAB. A
-    # trace that silently diverges would look like a MATLAB import problem
-    # later, several steps away from its cause.
+
+
     with torch.no_grad():
         probe = torch.randn(1, 3, size, size)
         a = model(probe).numpy()

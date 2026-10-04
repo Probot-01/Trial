@@ -1,20 +1,4 @@
-/**
- * Technician session on the phone -- the mobile equivalent of the desktop PHC
- * app's login, now against real accounts.
- *
- * Central has no technician accounts (a PHC device authenticates as its SITE
- * with the PHC API key). Technician accounts live on the PHC PC
- * (phc-local-app/backend, `npm run technician`):
- *
- *   paired + PC reachable  -> log in through the sealed channel (/peer/login);
- *                             cache an offline verifier (offlineCredentials.ts)
- *   PC unreachable         -> verify against that cached verifier
- *   never logged in here   -> refused: the first login needs the PC once
- *
- * Development builds that are NOT paired also accept EXPO_PUBLIC_TECHNICIANS
- * ("user:password:Display Name,..."), or the demo account technician/tech123
- * when that is unset. Release builds never accept a built-in account.
- */
+
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { kvGet, kvSet } from '../db/database';
 import { secretGet, secretSet } from '../lib/secrets';

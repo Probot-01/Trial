@@ -1,9 +1,4 @@
-/**
- * The desktop's RetinalWaveCanvas: a faint retina motif (vessels, optic disc,
- * macula, fixation target) behind the login and registration screens. Static
- * on mobile -- the desktop's mouse-parallax has no touch equivalent worth the
- * battery.
- */
+
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';

@@ -115,11 +115,7 @@ test('local IDs follow the shared format and use the configured site code', () =
   setConfig({ phcCode: before });
 });
 
-/*
- * The 2026-09-24 fix (docs/id-format-spec.md): the 4-char suffix collided at
- * ~1% for a few hundred IDs minted in one millisecond. Now the timestamp is
- * monotonic per process and the suffix is 8 characters.
- */
+
 test('one process never repeats an ID, even minting a million back-to-back', () => {
   const n = 1_000_000;
   const seen = new Set();
@@ -239,8 +235,10 @@ async function withFetch(status, body, fn) {
   setConfig({ centralUrl: 'http://central.test', phcApiKey: 'phc_test' });
   try { return await fn(); } finally { globalThis.fetch = real; setConfig(prev); }
 }
-const FIELDS = { patientId: 'P', captureIdRef: 'C', cameraDeviceId: 'unknown', capturedAt: 'x', consentGivenAt: null, patientName: 'n', patientAge: 1,
-  patientContactNumber: '1', questionnaireData: {}, captureMetadata: {}, qualityScores: null, pendingCount: 1 };
+const FIELDS = {
+  patientId: 'P', captureIdRef: 'C', cameraDeviceId: 'unknown', capturedAt: 'x', consentGivenAt: null, patientName: 'n', patientAge: 1,
+  patientContactNumber: '1', questionnaireData: {}, captureMetadata: {}, qualityScores: null, pendingCount: 1
+};
 
 test('summary: 201 is accepted; 200 + duplicate:true is accepted; a bare 200 is NOT acceptance', async () => {
   assert.equal((await withFetch(201, { caseId: 'c1', status: 'awaiting_image' }, () => central.postSummary(FIELDS))).caseId, 'c1');

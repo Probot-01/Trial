@@ -1,30 +1,4 @@
-"""
-collectLesionCounts.py -- run segInfer over the IDRiD grading set and write the
-per-image lesion counts that grading/optimizeRuleThresholds.m needs.
 
-    python diagnostics/collectLesionCounts.py --split test  --version v2
-    python diagnostics/collectLesionCounts.py --split train --version v2
-
-Writes diagnostics/out/lesion_counts_<version>_<split>.csv with one row per
-image: the ground-truth ICDR grade, the per-quadrant red counts the rule engine
-consumes, the bright total, and (v2 only) the MA/HE split.
-
-── WHY A SEPARATE COLLECTOR ────────────────────────────────────────────────
-diagnostics/recalibrateRuleGate2.py already runs both lesion models over this
-dataset, but it also FITS thresholds and overwrites models/rule_thresholds_red_v2.json
-as a side effect. This script only measures: no fitting, no threshold file, no
-existing output touched. The fitting happens in MATLAB, where the rule engine
-it is fitting actually lives.
-
-── SPLITS ARE IDRiD'S OWN, AND NOT INTERCHANGEABLE ─────────────────────────
-Fit on TRAIN, report on TEST, using IDRiD's official partition -- the same
-discipline recalibrateRuleGate2.py used, so the two are comparable. Note the
-known data gap: this machine has 251 of the official 413 training images
-(IDRiD_001..162 are absent); the test split is complete at 103/103.
-
-Resumable: an existing row for an image is kept and not recomputed, so a run
-interrupted after an hour does not start over.
-"""
 
 import argparse
 import csv

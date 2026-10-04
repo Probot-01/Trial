@@ -1,14 +1,4 @@
-/**
- * Offline login for technicians (design doc §11.1: login checked against a
- * stored credential hash, in every application -- and this one must work in a
- * power cut).
- *
- * Accounts live on the PHC PC (phc-local-app/backend, `npm run technician`).
- * After a successful login through the PC, the phone keeps a PBKDF2-SHA256
- * verifier of that password (random salt, 60k iterations) -- never the
- * password -- so the same technician can log in later with the PC switched off.
- * A wrong password reported by the PC deletes the cached verifier.
- */
+
 import { pbkdf2Async } from '@noble/hashes/pbkdf2.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import * as Crypto from 'expo-crypto';

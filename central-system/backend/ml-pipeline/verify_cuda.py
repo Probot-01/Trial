@@ -1,22 +1,9 @@
-"""
-verify_cuda.py
-==============
-Quick CUDA and GPU verification script for the DR Screening ML environment.
 
-Run after installing all packages:
-    conda run -n dr_screening python verify_cuda.py
-
-Expected output:
-    torch.cuda.is_available() == True
-    torch.cuda.get_device_name(0) shows 'NVIDIA GeForce RTX 4050 Laptop GPU' (or similar)
-"""
 
 import sys
 import platform
 
-# Windows consoles default to cp1252 and choke on the check marks / dashes
-# printed below. Force UTF-8 on stdout/stderr so this script runs to completion
-# regardless of the host console encoding.
+
 for _stream in (sys.stdout, sys.stderr):
     try:
         _stream.reconfigure(encoding="utf-8")

@@ -1,7 +1,4 @@
-/**
- * UI primitives -- mobile versions of the desktop's .btn, .reg-chip,
- * .meta-toggle, .reg-section-header, .reg-field, .input (styles/main.css).
- */
+
 import React, { ReactNode } from 'react';
 import {
   ActivityIndicator, Pressable, StyleProp, Text, TextInput, TextInputProps, TextStyle, View, ViewStyle,

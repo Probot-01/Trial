@@ -1,12 +1,4 @@
--- Up Migration
--- =============================================================================
--- §D.3 (backend plan): a record every time a stranded grading job is
--- re-enqueued, so System Health (§F) can show "case X was auto-recovered N
--- times" instead of a case being retried silently forever.
---
--- source: 'boot'     -- recoverStranded() at server start (a restart left it)
---         'watchdog' -- the periodic sweep (it went missing while running)
--- =============================================================================
+
 CREATE TABLE IF NOT EXISTS grading_recoveries (
   recovery_id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   case_id      UUID NOT NULL REFERENCES cases(case_id) ON DELETE CASCADE,

@@ -1,21 +1,3 @@
-"""
-test_preprocessing.py
-=====================
-Visual sanity-check for ben_graham_preprocess and clahe_enhance.
-
-Run from the ml-pipeline/ directory:
-    python test_preprocessing.py --image <path_to_any_fundus_image.jpg>
-
-If no --image is provided, the script creates a synthetic fundus-like test image
-(green circle on black background) so you can confirm the pipeline runs end-to-end
-even before the real datasets arrive.
-
-Outputs (saved next to the script):
-    test_output_original.png   — The raw input (or synthetic image)
-    test_output_ben_graham.png — After Ben Graham preprocessing
-    test_output_clahe.png      — After CLAHE enhancement
-    test_output_both.png       — Ben Graham followed by CLAHE (the combined pipeline order)
-"""
 
 import argparse
 import sys
@@ -23,7 +5,7 @@ import os
 import numpy as np
 import cv2
 
-# Allow running from any cwd by adding ml-pipeline to sys.path
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
@@ -31,15 +13,10 @@ from preprocessing.ben_graham import ben_graham_preprocess
 from preprocessing.clahe_enhance import clahe_enhance
 
 
-# ------------------------------------------------------------------ #
-# Synthetic fundus image generator (used when no real image provided) #
-# ------------------------------------------------------------------ #
+
 
 def make_synthetic_fundus(size: int = 512) -> np.ndarray:
-    """
-    Create a simple synthetic fundus-like image for pipeline testing.
-    Green disc on black background with subtle radial gradient and noise.
-    """
+    
     img = np.zeros((size, size, 3), dtype=np.uint8)
     cx, cy, r = size // 2, size // 2, int(size * 0.45)
 

@@ -1,46 +1,9 @@
 'use strict';
 
-/**
- * routes/patients.js -- duplicate-patient lookup (backend plan §B.1, design
- * doc §10.3).
- *
- * Mounted at /api/v1/patients.
- *
- *   GET /api/v1/patients/search?name=&age=&phone=
- *     200 [ { patientId, patientReference, name, age, contactNumberMasked,
- *             registeredAt, matchedOn: ['name'|'phone'|'age'], score } ]
- *     400 { error: 'invalid_field' }   neither name nor phone given
- *
- * Called by the PHC apps at registration, before a new patient id is minted,
- * so the technician can confirm "is this the same person?" and reuse the
- * existing id instead of creating a duplicate. The desktop app's local backend
- * serves the SAME query and response shape at GET /patients/search against its
- * own SQLite, so the duplicate check still works offline.
- *
- * ── Matching (deliberately simple, per the plan) ─────────────────────────────
- * A row is a candidate when its NAME or PHONE matches; age alone never makes a
- * candidate (half a district shares any given age) but raises the score:
- *   name   case-insensitive: whole query contained in the name (+3), else any
- *          query word of 3+ letters contained in it (+2) -- catches
- *          "Sunita Devi" vs "Devi Sunita" and a missing surname.
- *   phone  digits only, last 10 compared, so "+91 98xxx" == "98xxx" (+3).
- *   age    within ±1 year (+1) -- registered ages drift by a birthday.
- * Top 20 by score. No trigram/phonetic matching yet; spelling variants like
- * "Sunita"/"Sunitha" only match through the phone or another name word.
- *
- * ── Privacy ──────────────────────────────────────────────────────────────────
- * This searches every patient in the district, so the phone number comes back
- * masked to its last 4 digits: enough for the technician to ask "does your
- * number end in 4821?", not enough to harvest numbers by searching names.
- *
- * Auth: a PHC device key (requirePhcApiKey) -- the callers are PHC apps, not
- * browser users. Device requests have no user, so they are not written to
- * access_log (its user_id is NOT NULL); requirePhcApiKey still stamps the PHC's
- * last_contact_at.
- */
+
 
 const express = require('express');
-const pool    = require('../db/pgClient');
+const pool = require('../db/pgClient');
 const { requirePhcApiKey } = require('../middleware/requirePhcApiKey');
 
 const router = express.Router();
@@ -53,7 +16,7 @@ function maskPhone(phone) {
 }
 
 router.get('/search', requirePhcApiKey, async (req, res, next) => {
-  const name  = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+  const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
   const phone = typeof req.query.phone === 'string' ? req.query.phone.replace(/\D/g, '') : '';
   const ageRaw = req.query.age;
   const age = ageRaw === undefined || ageRaw === '' ? null : Number(ageRaw);
@@ -72,8 +35,7 @@ router.get('/search', requirePhcApiKey, async (req, res, next) => {
     });
   }
 
-  // Words of 3+ letters, escaped for LIKE. Short fragments ("A.", "Ku") would
-  // match most of the table and bury the real candidates.
+
   const likeEscape = (s) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
   const words = name.toLowerCase().split(/\s+/).filter((w) => w.length >= 3).map(likeEscape);
   const phone10 = phone.slice(-10);
@@ -107,12 +69,12 @@ router.get('/search', requirePhcApiKey, async (req, res, next) => {
       if (r.phone_hit) matchedOn.push('phone');
       if (r.age_hit) matchedOn.push('age');
       return {
-        patientId:           r.patient_id,
-        patientReference:    r.patient_reference ?? null,
-        name:                r.name,
-        age:                 r.age,
+        patientId: r.patient_id,
+        patientReference: r.patient_reference ?? null,
+        name: r.name,
+        age: r.age,
         contactNumberMasked: maskPhone(r.contact_number),
-        registeredAt:        r.registered_at.toISOString(),
+        registeredAt: r.registered_at.toISOString(),
         matchedOn,
         score: (r.name_full ? 3 : r.name_word ? 2 : 0) + (r.phone_hit ? 3 : 0) + (r.age_hit ? 1 : 0),
       };

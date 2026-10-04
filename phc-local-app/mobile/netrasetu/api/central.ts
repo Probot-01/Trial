@@ -1,11 +1,4 @@
-/**
- * Central backend client -- docs/api-contracts.md is the source of truth.
- *
- * Every non-2xx body is { error, message }; `error` drives logic, `message`
- * is for display. Every failure becomes a CentralError whose `retryable`
- * tells the sync manager whether to back off and try again (network down,
- * timeout, 5xx) or stop and show it to a person (central rejected the data).
- */
+
 import * as Crypto from 'expo-crypto';
 import { File, Paths } from 'expo-file-system';
 import { getConfig, POLICY } from '../config';
@@ -119,11 +112,7 @@ export interface IngestResponse {
   duplicate?: boolean;
 }
 
-/**
- * "Accepted" is exactly what api-contracts.md says: 201 (created), or 200 with
- * duplicate:true (central already had this capture id), and a case id. Any
- * other 2xx is not acceptance -- the caller must not mark the case synced.
- */
+
 function accepted(r: { status: number; body: IngestResponse | null }, what: string): IngestResponse {
   const b = r.body;
   const ok = (r.status === 201 || (r.status === 200 && b?.duplicate === true)) && typeof b?.caseId === 'string' && b.caseId !== '';

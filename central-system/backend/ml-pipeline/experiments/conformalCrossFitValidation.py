@@ -1,46 +1,4 @@
-"""
-conformalCrossFitValidation.py
-================================
-Cross-fit validation of conformal policy v3 (score v3, referable-stratified
-Mondrian, referable-threshold safety gate) -- CPU-only, reads only saved
-arrays, never retrains, never touches the deployed calibration_*.json files
-(it fits its OWN temporary calibration inside each fold).
 
-    CUDA_VISIBLE_DEVICES= python experiments/conformalCrossFitValidation.py
-
-Writes diagnostics/out/conformal_v3_crossfit_report.{json,txt}.
-
-── WHY CROSS-FIT, AND WHY THIS REUSES PRODUCTION CODE DIRECTLY ─────────────
-calibrateBranchA.m fits the SHIPPED calibration on the full pooled val+test
-(1,161 for v2a) -- more data, a more stable quantile. That number is not,
-by itself, evidence of how the fitting PROCEDURE generalises to unseen
-data: it is one fit, evaluated implicitly on the data it was fit from.
-Cross-fitting (10 repeats x 5-fold, refit INSIDE every fold, evaluate only
-on that fold's held-out fifth) gives 50 independent calibrate/evaluate
-splits instead of one, so every metric below is a mean with a real
-interval, not a single anecdote -- the same reasoning the v2 policy sweep
-(experiments/conformalPolicySweep.py) used to justify pooling over a
-single val-only fit in the first place.
-
-Every fold's per-point metrics use inference/branchAInfer.assign_tier() and
-ordinal_mode_interval_score() DIRECTLY -- the actual shipped functions, not
-a separate reimplementation -- so this validates the real production
-tiering code path, not a parallel copy of it that could silently drift.
-Only the FITTING step (temperature + qhatPerStratum + referableThreshold)
-is replicated here, because conformalCalibrate.m's fitting algorithm has no
-Python equivalent in the production path (Python only ever LOADS a fitted
-calibration, it never fits one) -- that replica was independently validated
-against calibrateBranchA.m/conformalCalibrate.m to agree on qhat to
-essentially machine epsilon and produce IDENTICAL tier/set assignments on
-all 1,161 real pooled v2a cases (see the policy-v3 installation report).
-
-── THE FOUR NAMED PDR CASES: NOT A CROSS-FIT NUMBER ─────────────────────────
-Item 4's request for the 4 argmax-missed true-PDR cases' P(g>=2)/tier/
-rescue status is a per-CASE report, not an aggregate -- it is evaluated
-against the FINAL DEPLOYED calibration_branchA_v2a.json (what a real
-prediction for these patients actually gets today), not a cross-fit fold's
-temporary refit.
-"""
 
 import argparse
 import json
@@ -59,12 +17,7 @@ sys.path.insert(0, ML_ROOT)
 
 from branchAInfer import assign_tier, ordinal_mode_interval_score, STRATUM_OF_CLASS  # noqa: E402
 
-# GENERALIZE (v2b integration): this script used to hardcode branchA_v2a as
-# "the ship candidate" (V2A_DIR, FINAL_CALIB_V2A). --target-version below
-# selects which v2-family tag is evaluated as the candidate; default
-# 'branchA_v2a' preserves the original invocation/output exactly. v1 is
-# ALWAYS run too, as the comparison baseline -- that part is unchanged for
-# every target.
+
 V2_FAMILY_VERSIONS = ("branchA_v2a", "branchA_v2b", "branchA_v2c")
 V1_DIR = os.path.join(ML_ROOT, "models", "Model1")
 OUT_DIR = os.path.join(ML_ROOT, "diagnostics", "out")
@@ -87,25 +40,14 @@ REFERABLE_TARGET_SENS = 0.05
 
 FOUR_PDR_ID_SUFFIXES = ["4bd941611343", "bfdee9be1f1d", "eaa0dfbd5024", "fce93caa4758"]
 
-# ── Guard thresholds (task item 5; REVISED for v2c integration, 2026-09-21) ──
-# GUARD_GRADE4_COVERAGE_LOWER_MIN is RETIRED as an active guard: v2b's own
-# cross-fit run showed v1 -- the currently-deployed, already-shipping model --
-# fails this exact threshold too (lower CI 0.8769 < 0.90), so gating a NEW
-# candidate on a bar the deployed model doesn't clear either was never a
-# meaningful ship/no-ship signal. Grade-4 coverage is still measured and
-# reported "for information" (main() below), just not gated. In its place:
-# GUARD_FALSE_AUTOCLEAR_GE3_UPPER_MAX is NEW and stricter than the existing
-# referable-false-autoclear guard -- a true grade>=3 (severe NPDR/PDR) case
-# routed to Tier A (auto-clear) is a worse miss than a true grade-2 case
-# routed there, so it gets its own, tighter bound.
+
 GUARD_REFERABLE_COVERAGE_LOWER_MIN = 0.93
 GUARD_FALSE_AUTOCLEAR_REFERABLE_UPPER_MAX = 0.05
 GUARD_FALSE_AUTOCLEAR_GE3_UPPER_MAX = 0.02
 GUARD_MEAN_SET_SIZE_MAX = 2.5
 
 
-# ── Temperature fit: bit-for-bit port of calibrateBranchA.m (independently
-#    validated against it already -- see module docstring) ─────────────────
+
 def mean_nll(logits, labels, T):
     s = logits / T
     s = s - s.max(axis=1, keepdims=True)
@@ -459,10 +401,7 @@ def main():
     agg_v1 = run_crossfit(pool_logits_v1, pool_labels_v1, "branchA_v1")
     print_agg(out, agg_v1)
 
-    # ── grade-4 tier distribution (target version, cross-fit pooled across all
-    #    folds where the grade-4 fold-eval sample fell) -- report via a
-    #    dedicated pass since fold_metrics() does not carry per-point tier
-    #    breakdowns for a single grade forward into the aggregate ───────────
+
     out("\n" + "=" * 78)
     out(f"GRADE-4 TIER DISTRIBUTION ({version}, cross-fit: aggregated over all folds)")
     out("=" * 78)
@@ -488,15 +427,6 @@ def main():
         f"{sum(g4_tier_counts.values())} tier assignments over 10 repeats):")
     out(f"  {g4_tier_counts}")
 
-    # ── The four named PDR cases: FINAL deployed calibration, not cross-fit ──
-    # GENERALIZE (v2b integration): FOUR_PDR_ID_SUFFIXES are branchA_v2a's own
-    # specific known-argmax-missed case IDs (found by inspecting v2a's test
-    # predictions) -- they are not a property of the conformal policy or of
-    # any other v2-family model's predictions, so this section only runs for
-    # branchA_v2a (byte-identical output to before this generalization). For
-    # any other target, it is skipped with a note rather than silently
-    # reporting v2a's cases under a different model's name, or guessing which
-    # (if any) cases that model's own argmax rule misses.
     four_cases = []
     if version == "branchA_v2a":
         out("\n" + "=" * 78)
@@ -582,17 +512,7 @@ def main():
     else:
         out("\nAll guards clear.")
 
-    # ── Pooled (NOT cross-fit) referable sens/spec at the FINAL deployed
-    #    calibration's referableThreshold, side-by-side with branchA_v2b ──────
-    # "Pooled" here means: apply the version's own FINAL, already-fitted
-    # calibration_branchA_<version>.json to the SAME pooled val+test data it
-    # was fitted from, and compute sens/spec directly (Wilson CI over that
-    # one pooled evaluation, not averaged across cross-fit folds). This is
-    # explicitly a FOR-INFORMATION, optimistic/circular number (evaluated on
-    # its own fitting data) -- the cross-fit sens/spec above is the
-    # generalization estimate; this one is what "run the shipped file against
-    # the pool it came from" looks like, requested for a side-by-side view
-    # against branchA_v2b's own equivalent number.
+
     out("\n" + "=" * 78)
     out(f"POOLED (not cross-fit) referable sens/spec at referableThreshold -- {version} vs branchA_v2b")
     out("=" * 78)
@@ -650,10 +570,7 @@ def main():
         raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    # GENERALIZE (v2b integration): branchA_v2a keeps its ORIGINAL, unsuffixed
-    # report filenames (byte-identical path to before this generalization);
-    # any other target version gets its own suffixed report so it never
-    # overwrites v2a's.
+ 
     suffix = "" if version == "branchA_v2a" else f"_{version}"
     json_path = os.path.join(OUT_DIR, f"conformal_v3_crossfit_report{suffix}.json")
     txt_path = os.path.join(OUT_DIR, f"conformal_v3_crossfit_report{suffix}.txt")

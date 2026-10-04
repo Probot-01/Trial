@@ -1,23 +1,4 @@
-/**
- * measureInferenceLatency.js
- *
- * Measures per-image latency for the MATLAB Branch A backend vs the Python
- * one, for real, rather than guessing. Calls the REAL exported functions
- * from gradingOrchestrator.js (runBranchAInference / runBranchAInferenceMatlab)
- * -- the exact code path processCase() uses.
- *
- * UPDATED for the persistent-session architecture (Part 2 of the MATLAB-
- * backend latency fix): the python backend is still one cold `python`
- * process per call. The matlab backend is now Python preprocessing (still a
- * fresh process per call -- see preprocessBranchATensor.py) plus a request to
- * the already-running MATLAB session (matlabSession/) -- NOT a `matlab
- * -batch` cold start any more. Start the session first
- * (matlabSession/manageMatlabSession.ps1 start) or every matlab-backend call
- * here will time out.
- *
- * Usage:
- *   node measureInferenceLatency.js [n]     n = number of images (default 5)
- */
+
 const path = require('path');
 const {
   runBranchAInference,

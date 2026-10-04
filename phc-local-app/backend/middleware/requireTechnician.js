@@ -1,10 +1,6 @@
 'use strict';
 
-/**
- * requireTechnician -- guards every patient-data route on the PHC local backend.
- * See services/localAuth.js for the LOCAL_AUTH_ENABLED rollout behaviour.
- * requireTechnician.admin additionally requires the phc_admin role.
- */
+
 const auth = require('../services/localAuth');
 
 function requireTechnician(req, res, next) {

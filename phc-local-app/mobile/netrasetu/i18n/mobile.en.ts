@@ -1,8 +1,4 @@
-/**
- * Mobile-only strings (English). Everything else in the UI either reuses a
- * desktop key or passes its English text as the t() default, so a translator
- * can grep for t(' to find every string.
- */
+
 export const mobileEn = {
   galleryInstructions: [
     'Capture the image on the dedicated fundus camera, exactly as usual.',

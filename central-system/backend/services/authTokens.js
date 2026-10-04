@@ -1,24 +1,10 @@
 'use strict';
 
-/**
- * authTokens.js -- session JWTs and the CSRF token bound to them.
- *
- * The session travels as an httpOnly cookie (§A.1), so page script cannot read
- * or leak it, and <img> requests for fundus / Grad-CAM media carry it
- * automatically -- a Bearer header cannot be attached to an <img>.
- *
- * CSRF (§A.2): a cookie is sent by the browser on ANY request to this origin,
- * including one a hostile page triggers. So every state-changing request must
- * also carry X-CSRF-Token, and it must equal the `csrf` claim INSIDE the signed
- * JWT. The frontend gets that value from the login (or /auth/me) response body;
- * a cross-site attacker can make the browser send the cookie but cannot read
- * the response, so cannot learn the token. Because the token is inside the
- * signed session, nothing needs to be stored server-side.
- */
+
 
 const crypto = require('crypto');
-const jwt    = require('jsonwebtoken');
-const cfg    = require('./authConfig');
+const jwt = require('jsonwebtoken');
+const cfg = require('./authConfig');
 
 function issueSession(user) {
   const csrf = crypto.randomBytes(24).toString('base64url');

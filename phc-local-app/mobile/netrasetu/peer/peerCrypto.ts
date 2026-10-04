@@ -1,11 +1,4 @@
-/**
- * Phone side of the sealed desktop <-> phone channel -- byte-compatible with
- * phc-local-app/backend/services/peerCrypto.js (docs/peer-sync-protocol.md).
- *
- * AES-256-GCM, fresh 96-bit IV per message from the OS CSPRNG, AAD binding
- * each message to device, method, path, time and a single-use nonce.
- * @noble/ciphers is audited pure JS: Hermes has no WebCrypto.
- */
+
 import { gcm } from '@noble/ciphers/aes.js';
 import * as Crypto from 'expo-crypto';
 import { fromBase64, toBase64, utf8 } from './bytes';

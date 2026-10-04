@@ -32,7 +32,7 @@ test('questionnaire: a measured HbA1c is sent, a blank one is null -- never a de
 
 test('questionnaire: an unanswered question is an error naming it -- no silent "moderate"/"unknown"', () => {
   for (const [field, label] of [['glycemicControl', 'glycemic control'], ['bloodPressure', 'blood pressure'],
-    ['yearsSinceDiagnosis', 'years since diagnosis'], ['pregnancy', 'pregnancy']]) {
+  ['yearsSinceDiagnosis', 'years since diagnosis'], ['pregnancy', 'pregnancy']]) {
     const q = { ...Q, [field]: '' };
     assert.throws(() => buildQuestionnairePayload(q), (e) => e instanceof IncompleteAnswers && e.missing.includes(label), field);
   }

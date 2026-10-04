@@ -1,10 +1,4 @@
-/**
- * Moving data by hand when there is no network at all: the export bundle is
- * written to a file and handed to Android's share sheet (USB cable, SD card,
- * Bluetooth, Nearby Share); an incoming bundle is picked from the file system.
- * The file is sealed for the paired PC (peer/replicate.ts buildBundle), so a
- * lost memory card exposes nothing.
- */
+
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { buildBundle, importBundle, Bundle } from './replicate';

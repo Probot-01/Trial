@@ -1,40 +1,6 @@
 'use strict';
 
-/**
- * matlabFallback.js
- *
- * Pure-JS re-implementation of the parts of the MATLAB grading round-trip
- * (gradingOrchestrator.js's buildMatlabExpr) that are plain logic rather than
- * image processing, used ONLY when MATLAB cannot be spawned at all on this
- * machine (no license, no disk space to install it — see the ticket this was
- * written for).
- *
- * Ported faithfully from:
- *   ml-pipeline/grading/ruleEngineGrade.m   -> ruleEngineGrade()
- *   ml-pipeline/grading/branchesAgree.m     -> branchesAgree()
- *   ml-pipeline/explainability/generateEvidenceReport.m -> evidenceSummaryText()
- *     (text-generation half only — the annotated-PNG half needs lesion
- *     coordinates/opticDisc/fovea that the orchestrator never actually passes
- *     it today, so the real MATLAB path also always returns reportPath: ''
- *     for every case currently graded; nothing is lost by not porting it.)
- *
- * NOT ported, deliberately left as the contract's documented "not measured"
- * state, same as the real pipeline would report if that stage failed:
- *   - classifyCameraFamily: needs vignette/colour-ratio pixel analysis against
- *     calibrationProfiles.json. It only ever produces a human-facing WARNING
- *     log (a possible reported-vs-detected camera mismatch) and never affects
- *     grading (see gradingOrchestrator.js's comment on Task 6.3), so this
- *     falls back to 'unknown' / no mismatch — the same as the real function's
- *     own "nothing matched" outcome.
- *   - lesionAttentionConsistency: needs an upsampled Grad-CAM compared against
- *     a lesion mask. Stays null — exactly what the contract already requires
- *     for "this was not measured" (api-contracts.md, lesionAttentionConsistencyScore).
- *   - DICOM metadata (sourceFormat / dicomDeviceModel / imageLaterality):
- *     readFundusImage.m's DICOM tag reading. Ordinary JPEG/PNG captures (which
- *     is everything this demo submits) have no DICOM tags anyway, so this
- *     reports the format from the file extension and leaves the rest null,
- *     matching what readFundusImage.m itself reports for a non-DICOM file.
- */
+
 
 const path = require('path');
 
@@ -50,22 +16,14 @@ const DEFAULTS = {
 
 function sum(arr) { return arr.reduce((a, b) => a + b, 0); }
 
-/**
- * quadrantFlags(opts, name) -> { count, assessed }. Mirrors the MATLAB helper
- * of the same name: a 4-element boolean/0-1 array counts the flagged
- * quadrants, a non-negative integer is accepted as an already-counted value
- * (the original interface), and absent/empty means NOT ASSESSED with count 0.
- *
- * "Not assessed" and "assessed, found nothing" both score 0 and must stay
- * distinguishable — only the second one drops the caveat from the evidence.
- */
+
 function quadrantFlags(opts, name) {
   const v = opts[name];
   if (v === undefined || v === null || (Array.isArray(v) && v.length === 0)) {
     return { count: 0, assessed: false };
   }
   if (Array.isArray(v) && v.length === 4
-      && v.every((q) => q === true || q === false || q === 0 || q === 1)) {
+    && v.every((q) => q === true || q === false || q === 0 || q === 1)) {
     return { count: v.filter(Boolean).length, assessed: true };
   }
   if (Number.isInteger(v) && v >= 0) return { count: v, assessed: true };
@@ -77,13 +35,7 @@ function joinNotes(parts) {
   return parts.filter((p) => p).join(' ');
 }
 
-/**
- * The fovea caveat. Mirrors foveaNote() in ruleEngineGrade.m: segInfer does
- * NOT fall back to the image axes when the gate fires (Tanuj, 2026-09-20) —
- * the counts stay keyed to an axis drawn through a fovea already flagged as
- * untrustworthy, which is why the quadrant-dependent criteria are dropped
- * rather than recomputed.
- */
+
 function foveaNote(cfg) {
   if (!cfg.foveaUnreliable) return '';
   return 'Fovea could not be located reliably, so the quadrant assignment '
@@ -167,8 +119,8 @@ function ruleEngineGrade(red, bright, nvSuspicionScore, opts = {}) {
     evidence.limitation = 'NV suspicion is a vessel-irregularity signal, NOT a '
       + 'validated neovascularization detector.';
   } else if (!cfg.foveaUnreliable
-             && red.some((v) => v >= cfg.grade3QuadMin)
-             && red.every((v) => v >= cfg.grade3QuadMin)) {
+    && red.some((v) => v >= cfg.grade3QuadMin)
+    && red.every((v) => v >= cfg.grade3QuadMin)) {
     // (a) and (b) below are skipped when the fovea is unreliable: both turn on
     // WHICH quadrant a lesion sits in, and that mapping is untrustworthy. (c)
     // asks only "any quadrant", so a scrambled axis does not invalidate it.
@@ -273,30 +225,7 @@ function quadrantBreakdown(counts) {
 function plural(word, n) { return n === 1 ? word : `${word}s`; }
 function capitalise(s) { return s.length ? s[0].toUpperCase() + s.slice(1) : s; }
 
-/**
- * evidenceSummaryText({redByQuadrant, brightByQuadrant, nvSuspicionScore}, ruleOpts)
- *
- * Same three-sentence template as generateEvidenceReport.m: findings, the
- * criterion that fired (Branch B's own words), then its limitation caveat.
- * When counts are absent, returns the exact "segmentation has not been run"
- * sentence the contract documents — matching the real MATLAB path's
- * behaviour when Tasks 4.2/4.3 have not produced counts.
- *
- * ── ruleOpts IS NOT OPTIONAL IN PRACTICE, AND OMITTING IT WAS A BUG ────────
- * This re-runs the rule engine to obtain the criterion and limitation text.
- * Run WITHOUT ruleOpts it is a different rule engine from the one that graded
- * the case: on a fovea-unreliable case the grade deliberately skips criteria
- * (a) all-four-quadrants and (b) venous beading, but this call would apply
- * them and print "Severe NPDR, ETDRS 4-2-1(a) structure: >=3 red lesions in
- * all four quadrants" — citing quadrant reasoning the system had just
- * declared untrustworthy, to justify a grade that never used it.
- *
- * generateEvidenceReport.m has always forwarded ruleOpts to its own
- * ruleEngineGrade call (runCasePipeline.m passes it explicitly). This side
- * did not, so the two paths produced different evidence prose for the same
- * image. verify_fallback_parity.js compared the rule engine's OUTPUT fields
- * and not this text, which is why 720 matching cases never surfaced it.
- */
+
 function evidenceSummaryText(inputs, ruleOpts = {}) {
   const red = inputs?.redByQuadrant;
   const bright = inputs?.brightByQuadrant;
@@ -342,28 +271,13 @@ function evidenceSummaryText(inputs, ruleOpts = {}) {
   return sentences.join(' ');
 }
 
-// ── classifyCameraFamily.m (no-op stub — see file header) ─────────────────
-// cameraExpectedFamily is '' because this stub never runs the cross-check.
-// That is what makes the resulting cases.camera_mismatch NULL ("nobody
-// looked") rather than false ("the camera was verified against its image"),
-// which is the honest answer for a path that does no camera classification.
 function classifyCameraFamily() {
   return { cameraFamily: 'unknown', cameraMismatch: false, cameraExpectedFamily: '' };
 }
 
 // ── readFundusImage.m metadata (non-DICOM path only) ───────────────────────
 function readFundusImageMetaFallback(imagePath) {
-  // ── SAME VOCABULARY AS readFundusImage.m, NOT THE FILE EXTENSION ─────────
-  // This used to return the extension ('jpg', 'png', 'unknown'), while the
-  // MATLAB path reports 'image' for anything non-DICOM and 'dicom' when it
-  // actually parsed one. Both feed cases.source_format, so the column would
-  // have held 'image' or 'jpg' for identical captures depending only on which
-  // engine happened to run -- the same divergence class verify_fallback_parity
-  // exists to catch, in a field it does not cover.
-  //
-  // Always 'image': this fallback has no DICOM reader at all (see the header),
-  // so it must never claim 'dicom'. A .dcm capture reaching here fails earlier
-  // on imread, which is the honest outcome.
+
   const ext = path.extname(imagePath).replace('.', '').toLowerCase() || 'unknown';
   return {
     sourceFormat: 'image',
@@ -373,16 +287,7 @@ function readFundusImageMetaFallback(imagePath) {
   };
 }
 
-/**
- * runMatlabFallback({ imagePath, segResult, branchAGrade })
- *
- * Builds the same `mlResult` shape gradingOrchestrator.js expects back from
- * the MATLAB call (see buildMatlabExpr's `out.*` assignments), using this
- * module's JS ports instead of spawning MATLAB. segResult is Phase 4
- * segmentation's own Python output (segInfer.py) — unaffected by MATLAB being
- * absent, so Branch B genuinely runs on real segmentation counts here, not
- * placeholder data.
- */
+
 function runMatlabFallback({ imagePath, segResult, branchAGrade, ruleOpts = {} }) {
   const meta = readFundusImageMetaFallback(imagePath);
   const cam = classifyCameraFamily();
@@ -395,25 +300,13 @@ function runMatlabFallback({ imagePath, segResult, branchAGrade, ruleOpts = {} }
 
   const redQ = segResult && segResult.redPerQuadrant;
   const brightQ = segResult && segResult.brightPerQuadrant;
-  // ── NV SUSPICION IS REPORTED, NEVER GRADED ON ──────────────────────────
-  // Held at 0 for the rule engine, mirroring runCasePipeline.m -- read the
-  // long note there for the validation result that retired this signal
-  // (AUC 0.286 / 0.379, at or below chance on both test sets).
-  //
-  // It matters that BOTH sides do this. The measured score is what the MATLAB
-  // path once passed; if this path kept passing it, one image could get two
-  // different grades depending only on whether MATLAB was installed -- the
-  // exact divergence verify_fallback_parity.js exists to catch.
+
   const nvScoreMeasured = Number.isFinite(segResult && segResult.nvSuspicionScore)
     ? segResult.nvSuspicionScore : null;
   const nvScore = 0;
 
   if (Array.isArray(redQ) && redQ.length === 4 && Array.isArray(brightQ) && brightQ.length === 4) {
-    // ruleOpts is caseRuleOpts(segResult) from the orchestrator -- the SAME
-    // opts the MATLAB path gets (§H venous beading / IRMA, §I foveaUnreliable).
-    // Without them this path graded a flagged-fovea case on quadrant criteria
-    // the MATLAB path skips, so the two engines could return different grades
-    // for one image depending only on whether MATLAB happened to be installed.
+
     const { grade, evidence } = ruleEngineGrade(redQ, brightQ, nvScore, ruleOpts);
     ruleGrade = grade;
     ruleIsLowerBound = evidence.isLowerBound;
@@ -423,8 +316,7 @@ function runMatlabFallback({ imagePath, segResult, branchAGrade, ruleOpts = {} }
   }
 
   return {
-    // ruleOpts, so the prose describes the SAME rule engine that produced the
-    // grade above -- see evidenceSummaryText's header.
+
     evidenceSummaryText: evidenceSummaryText(evidenceInputs, ruleOpts),
     sourceFormat: meta.sourceFormat,
     dicomDeviceModel: meta.dicomDeviceModel,
@@ -434,10 +326,7 @@ function runMatlabFallback({ imagePath, segResult, branchAGrade, ruleOpts = {} }
     cameraExpectedFamily: cam.cameraExpectedFamily,
     ruleEngineGrade: ruleGrade,
     branchAgreement,
-    // The MEASURED score (null when it could not run), not the 0 the rule
-    // engine was given. Mirrors runCasePipeline.m's out.nvSuspicionScore: the
-    // signal stays visible and auditable, it just decides nothing. Reporting
-    // the gated 0 here would store a fabricated measurement.
+
     nvSuspicionScore: nvScoreMeasured,
     ruleIsLowerBound,
     ruleMaxGrade,

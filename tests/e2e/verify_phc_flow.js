@@ -1,31 +1,7 @@
-#!/usr/bin/env node
+
 'use strict';
 
-/**
- * verify_phc_flow.js -- the PHC capture -> sync -> result flow, end to end, with
- * REAL services and no mocks: real Postgres (docker-compose.dev.yml), real central
- * backend, real PHC local backend, the real MATLAB quality gate, real fixtures
- * (tests/fixtures/, IDRiD).
- *
- *   node tests/e2e/verify_phc_flow.js [--only s1,s2,...] [--grading-wait-min 20] [--keep]
- *
- * Scenarios (each prints the evidence for its checks):
- *   s1  register (consent) -> bad image: retake -> retake -> good image -> questionnaires
- *       -> sync -> central 201 processing -> status polling -> result state.
- *       Checks: global ID rule, PT-XXXXXX reference, forms-before-sync, engine shown,
- *       "synced" = accepted, both questionnaires + eye reach central.
- *   s2  idempotency: the same capture id sent again creates no second case / grading run.
- *   s3  large image (chunked) + connection killed mid-upload -> resume, no chunk re-sent.
- *   s4  offline: central stopped, 3 captures queue with a visible pending state; central
- *       restarted; all 3 sync by themselves, urgency then age, no duplicates.
- *   s5  error states: central refuses (401), quality gate unavailable (+ recovery).
- *
- * It starts and stops its own central (:5000) and PHC (:4000) on a scratch database
- * (dr_screening_e2e) and a temp directory; it never touches dr_screening_central or
- * phc-local-app/backend/db/local.sqlite. Needs Docker Postgres up (npm run db:up),
- * MATLAB on PATH (or MATLAB_EXECUTABLE), and PYTHON_EXECUTABLE for central grading.
- * Exits non-zero if any check fails.
- */
+
 
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
@@ -148,10 +124,7 @@ function phcEnv(extra = {}) {
   };
 }
 
-// ── the fault-injecting proxy PHC -> central ────────────────────────────────
-// Sits between the PHC's sync manager and central. Transparent unless told
-// otherwise, so every scenario runs through it. When central is down, its
-// upstream connect fails and the client's connection is cut, like a dead link.
+
 const proxy = { server: null, killAfterChunks: null, chunkPosts: [], forwardedChunks: 0, killed: 0, reqs: [] };
 function startProxy() {
   proxy.server = http.createServer((req, res) => {
@@ -173,8 +146,6 @@ function startProxy() {
   return new Promise((r) => proxy.server.listen(PROXY_PORT, '127.0.0.1', r));
 }
 
-// The central service reads MEDIA_ENCRYPTION_KEY from its own .env; this process must too,
-// or it cannot decrypt the stored image to compare it.
 function centralMediaCrypto() {
   if (!process.env.MEDIA_ENCRYPTION_KEY) {
     try {
@@ -227,8 +198,10 @@ async function setup() {
   const env = { ...process.env, DATABASE_URL: DB_URL };
   const mig = spawnSync(process.execPath, ['scripts/setupCentralDb.js'], { cwd: ROOT, env, encoding: 'utf8' });
   check('central migrations applied to the scratch database', mig.status === 0 && /tables present/.test(mig.stdout), mig.stdout.slice(-300) + mig.stderr.slice(-300));
-  const seed = spawnSync(process.execPath, ['scripts/seed-demo.js'], { cwd: ROOT, encoding: 'utf8',
-    env: { ...env, DEMO_OPHTHALMOLOGIST_PASSWORD: crypto.randomBytes(9).toString('base64url'), DEMO_ADMIN_PASSWORD: crypto.randomBytes(9).toString('base64url') } });
+  const seed = spawnSync(process.execPath, ['scripts/seed-demo.js'], {
+    cwd: ROOT, encoding: 'utf8',
+    env: { ...env, DEMO_OPHTHALMOLOGIST_PASSWORD: crypto.randomBytes(9).toString('base64url'), DEMO_ADMIN_PASSWORD: crypto.randomBytes(9).toString('base64url') }
+  });
   const id = (seed.stdout.match(/PHC_ID=([0-9a-f-]{36})/) || [])[1];
   const key = (seed.stdout.match(/PHC_API_KEY=(phc_[A-Za-z0-9_-]+)/) || [])[1];
   check('seed created PHC001 with an API key (not printed here)', !!id && !!key);
@@ -399,10 +372,12 @@ async function s3() {
   check('CHECK 3/5: one central case', cc.length === 1);
   check('the whole-file SHA-256 was verified by central (it assembled and ingested)', cc.length === 1);
   const imgPath = (await qc('SELECT image_path FROM cases WHERE capture_id_ref = $1', [S.capBig]))[0]?.image_path;
-  const sameBytes = imgPath && (() => { try {
-    const enc = fs.readFileSync(imgPath); const dec = centralMediaCrypto().decryptBuffer(enc);
-    return crypto.createHash('sha256').update(dec).digest('hex') === crypto.createHash('sha256').update(fs.readFileSync(big)).digest('hex');
-  } catch { return false; } })();
+  const sameBytes = imgPath && (() => {
+    try {
+      const enc = fs.readFileSync(imgPath); const dec = centralMediaCrypto().decryptBuffer(enc);
+      return crypto.createHash('sha256').update(dec).digest('hex') === crypto.createHash('sha256').update(fs.readFileSync(big)).digest('hex');
+    } catch { return false; }
+  })();
   check('the stored image is byte-identical to the file the PHC uploaded', !!sameBytes);
 }
 

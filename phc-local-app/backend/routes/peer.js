@@ -1,24 +1,6 @@
 'use strict';
 
-/**
- * routes/peer.js -- desktop <-> phone replication over the PHC LAN
- * (docs/peer-sync-protocol.md). Mounted at /peer BEFORE the global JSON
- * parser, because image payloads exceed its 100 KB default.
- *
- *   POST /peer/pair         (PC side, technician/admin) register a phone, return its QR payload
- *   GET  /peer/devices      (PC side) list paired phones
- *   POST /peer/devices/:id/revoke
- *
- * Sealed endpoints -- body and response are AES-256-GCM envelopes under the
- * phone's pairing key (services/peerCrypto.js):
- *   POST /peer/hello        -> { serverTime, pcDeviceId, phcCode, phcName }
- *   POST /peer/login        { username, password } -> technician session (password never crosses the LAN in clear)
- *   POST /peer/pull         { cursor } -> { records, cursor, more }
- *   POST /peer/push         { records } -> { applied, skipped }
- *   POST /peer/image/get    { captureId } -> { bytesB64, sha256, ext }
- *   POST /peer/image/put    { captureId, bytesB64, sha256, ext } -> { stored }
- *   POST /peer/bundle       an export bundle carried by hand (USB/SD), same sealing
- */
+
 const os = require('os');
 const express = require('express');
 const db = require('../db/localDb');
@@ -51,14 +33,7 @@ function lanAddresses(port) {
   return out;
 }
 
-// ── Pairing (PC side, not sealed: this is where the key is created) ─────────
 
-/**
- * Pairing hands out a key that reads every patient record, so it is allowed
- * only from the PC itself (the desktop app / CLI at localhost) or, from
- * elsewhere, by a logged-in PHC admin -- never to an anonymous LAN client,
- * even while LOCAL_AUTH_ENABLED is still false.
- */
 function pairingAllowed(req, res, next) {
   const ip = String(req.socket.remoteAddress || '');
   const local = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
@@ -96,13 +71,6 @@ router.post('/devices/:id/revoke', json, requireTechnician.admin, (req, res) => 
   return res.status(204).end();
 });
 
-// ── Sealed channel ──────────────────────────────────────────────────────────
-
-/**
- * Verifies and opens a sealed request, and gives the handler res.sealed(obj)
- * to answer in kind. Rejections are plain JSON (the caller may not share our
- * key -- that is exactly the case being reported).
- */
 function sealed({ checkClock = true } = {}) {
   return (req, res, next) => {
     const deviceId = req.get('x-netra-device');

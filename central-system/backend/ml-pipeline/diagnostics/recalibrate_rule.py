@@ -1,21 +1,4 @@
-"""
-recalibrate_rule.py  -  DIAGNOSTIC ONLY (throwaway, not production)
-
-Calibrates the rule-engine thresholds using data ALREADY collected in
-diagnostics/out/agreement_results.csv (per-image red-lesion quadrant counts,
-bright-lesion counts, classifier grade, GT grade for 14 IDRiD val images).
-No model inference here - pure re-scoring of the saved counts.
-
-Produces:
-  * distribution of sum(red) and min-quadrant red count, grouped by GT grade
-  * proposed replacements for the ">0" grade-1 boundary and the
-    ">20 in all 4 quadrants" grade-3 boundary, justified by those numbers
-  * a hard cap at grade 3 (rule engine never asserts NV / grade 4)
-  * old vs new agreement % against the classifier, same 14 images
-
-NOTE: this is threshold calibration, not the production rule_engine module.
-Run:  python diagnostics/recalibrate_rule.py
-"""
+ 
 import ast
 import csv
 from collections import defaultdict

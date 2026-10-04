@@ -1,27 +1,5 @@
 'use strict';
 
-/**
- * generateDevCert.js -- a self-signed TLS certificate for the demo (backend
- * plan §A.14).
- *
- *   node scripts/generateDevCert.js
- *
- * Writes certs/dev-key.pem and certs/dev-cert.pem at the repo root (git-
- * ignored), valid for localhost and 127.0.0.1 for 365 days, then prints the
- * .env lines that switch the central backend to HTTPS:
- *
- *   TLS_KEY_PATH=certs/dev-key.pem      (resolved from the repo root)
- *   TLS_CERT_PATH=certs/dev-cert.pem
- *
- * Needs `openssl` on PATH (Git for Windows ships one).
- *
- * SELF-SIGNED MEANS UNTRUSTED. Browsers show a warning until the certificate
- * is trusted, and Node clients (the PHC sync manager) reject it unless told
- * to trust it: start the PHC backend with NODE_EXTRA_CA_CERTS pointing at
- * certs/dev-cert.pem. Never disable certificate checking to get around this.
- * A real deployment uses a certificate from a real CA (or a reverse proxy
- * that has one); this is a demo-environment floor, as the plan states.
- */
 
 const fs = require('fs');
 const path = require('path');

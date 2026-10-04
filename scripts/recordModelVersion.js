@@ -1,34 +1,6 @@
 'use strict';
 
-/**
- * recordModelVersion.js
- *
- * Write a trained model's validation metrics into `model_versions`.
- *
- *   node scripts/recordModelVersion.js <versionId> <sensitivity> <specificity> <kappa> [--promote]
- *
- * Example, from calibrateBranchA.m's output:
- *   node scripts/recordModelVersion.js branchA_v1 0.860294 0.938202 0.868803 --promote
- *
- * ── WHY THIS MATTERS MORE THAN IT LOOKS ─────────────────────────────────────
- * These three columns are the continual-learning promotion gate (Task 7.2).
- * continualLearningService.js refuses to promote a retrained model unless it
- * holds up against the live one on sensitivity, specificity AND kappa — but a
- * gate with nothing to compare against is not a gate. Until this row is
- * populated, the safety mechanism is inert while looking installed, which is
- * the worst of both.
- *
- * ── WHY THE NUMBERS ARE PASSED IN RATHER THAN COMPUTED HERE ─────────────────
- * They come from evaluateMetrics.m on the held-out test split. Recomputing
- * them in JavaScript would create a second implementation of the metric maths
- * that can disagree with the first — and the whole point of Task 9.1 was that
- * there is exactly one place those numbers are defined.
- *
- * ── NULL IS A MEANINGFUL VALUE HERE ─────────────────────────────────────────
- * An unmeasurable metric must arrive as NULL, never 0. The gate treats a
- * missing metric as "refuse to promote"; a 0 reads as a measured catastrophe.
- * Passing the string "null" writes SQL NULL.
- */
+
 
 const path = require('path');
 const pool = require(path.resolve(__dirname, '..', 'central-system', 'backend', 'db', 'pgClient'));
@@ -53,8 +25,7 @@ async function main() {
 
   const sensitivity = parseMetric(sensRaw, 'sensitivity');
   const specificity = parseMetric(specRaw, 'specificity');
-  // Kappa can legitimately be negative (worse than chance), so it is not
-  // range-checked the same way — but it must still be a real number.
+
   const kappa = String(kappaRaw).toLowerCase() === 'null' ? null : Number(kappaRaw);
   if (kappa !== null && !Number.isFinite(kappa)) {
     throw new Error(`kappa must be a number or 'null', got '${kappaRaw}'`);
@@ -64,9 +35,6 @@ async function main() {
   try {
     await client.query('BEGIN');
 
-    // Exactly one promoted version is an invariant the service depends on, so
-    // demotion happens in the SAME transaction as promotion. Two rows briefly
-    // marked promoted would be read by anything polling in between.
     if (promote) {
       await client.query(
         'UPDATE model_versions SET promoted = false WHERE version_id <> $1', [versionId]);

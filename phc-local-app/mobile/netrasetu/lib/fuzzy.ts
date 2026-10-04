@@ -1,9 +1,4 @@
-/**
- * Duplicate-patient matching at registration (design doc §10.3): name, age and
- * phone, fuzzy. Same spirit as the local backend's GET /patients/search --
- * a phone-number match is strong, a close name plus a close age is a candidate,
- * and the technician decides; nothing is merged automatically.
- */
+
 
 export function normalizeName(s: string): string {
   return s.toLowerCase().normalize('NFKD').replace(/[^a-zऀ-෿ ]/g, ' ').replace(/\s+/g, ' ').trim();

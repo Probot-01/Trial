@@ -1,31 +1,4 @@
-/**
- * On-device quality gate: a port of phc-local-app/backend/quality-gate-matlab
- * (qualityGateMain.m and its four assess*.m helpers) to plain TypeScript over
- * a greyscale pixel buffer. Pure -- no Expo imports -- so it can be checked
- * against the MATLAB exe from Node.
- *
- * WHY A PORT OF THE MATLAB AND NOT OF qualityGateFallback.js: the desktop's
- * JS fallback was switched off (it now always answers 'retake') because it had
- * drifted from the MATLAB decision chain. This file follows the MATLAB source
- * directly: the same priority order, the same fixed thresholds, the same
- * per-camera presets (cameraPresets.json), and the same MATLAB conventions
- * where they change a number (rgb2gray weights, var() with N-1, imfilter's
- * 'replicate' correlation, 1-based round() ROI bounds).
- *
- * KNOWN DIFFERENCES, stated rather than hidden:
- *   - Images larger than 4600 px on the long side are scaled down first (see
- *     runQualityGate.ts); everything smaller is analysed at full resolution,
- *     like the exe. Downscaling measurably changes decisions, which is why the
- *     cap is high.
- *   - imclose uses a true Euclidean disk; MATLAB's strel('disk', 7) is a
- *     line-decomposition approximation of one.
- *   - The image is decoded by expo-image-manipulator + fast-png, not imread.
- * PARITY is checked against MATLAB itself by verify_mobile_quality_gate_parity.mjs
- * (repo root): 17 images x 2 presets, every decision branch exercised, same
- * status/reason on all; sub-scores within 1e-11, occlusion within 2.4e-3
- * (the disk-shape difference above). Run it after changing either side.
- * Every score is also sent to central as qualityScores.
- */
+
 import type { QualityReason, QualityResult, QualityScores, QualityStatus } from '../../types';
 
 /** quality-gate-matlab/cameraPresets.json, verbatim. Keep in sync. */
@@ -104,22 +77,14 @@ export function assessIllumination({ pixels }: GrayImage): number {
   return Math.max(0, 1 - Math.abs(mu - 100) / 100);
 }
 
-/*
- * Memory note: a 12 MP phone photo is analysed at full resolution (the
- * decision changes when it is downscaled -- see runQualityGate.ts), so
- * every per-pixel buffer here is a Uint8Array or a shared Int32Array stack,
- * never a JS array or a Float64 map.
- */
+
 let stackBuf: Int32Array | null = null;
 function sharedStack(n: number): Int32Array {
   if (!stackBuf || stackBuf.length < n) stackBuf = new Int32Array(n);
   return stackBuf;
 }
 
-/**
- * Flood-fills the 8-connected component of `mask` containing `start`,
- * setting visited[i] = mark on every member. Returns its area.
- */
+
 function flood8(mask: Uint8Array, visited: Uint8Array, W: number, H: number, start: number, mark: number, onlyVisited: number): number {
   const stack = sharedStack(W * H);
   let top = 0;
@@ -149,12 +114,7 @@ function flood8(mask: Uint8Array, visited: Uint8Array, W: number, H: number, sta
   return area;
 }
 
-/**
- * Largest connected-component area of a binary mask (regionprops default:
- * 8-connectivity). With `minArea` it is also bwareaopen: every component
- * smaller than that is cleared from `mask` in place (by a second flood, which
- * is cheap exactly because those components are small).
- */
+
 function components8(mask: Uint8Array, W: number, H: number, minArea?: number): number {
   const n = W * H;
   const visited = new Uint8Array(n); // 0 = unseen, 1 = kept, 2 = removed
@@ -210,13 +170,7 @@ export function assessFOV({ pixels, width: W, height: H }: GrayImage): { score: 
 
 // ── Morphology helpers for the occlusion score ─────────────────────────────
 
-/**
- * Dilation of {mask == target} by a Euclidean disk of radius r: a pixel is in
- * the result when some target pixel lies within distance r. Computed from the
- * per-row horizontal distance to the nearest target pixel (capped at r+1, so
- * it fits a Uint8Array), then a vertical scan over the disk's 2r+1 rows:
- * O(n * r) time and two byte buffers, instead of a float distance map.
- */
+
 function dilateDisk(mask: Uint8Array, W: number, H: number, r: number, target: 0 | 1): Uint8Array {
   const cap = Math.min(255, r + 1);
   const hd = new Uint8Array(W * H);
@@ -260,8 +214,7 @@ function closeDisk(bw: Uint8Array, W: number, H: number, r: number): Uint8Array 
 
 /** bwconvhull(bw): the convex hull of all foreground pixels, rasterised. */
 function convexHullMask(bw: Uint8Array, W: number, H: number): Uint8Array {
-  // Row extremes are enough: the hull of a set equals the hull of each row's
-  // leftmost and rightmost pixel. Pixel corners are used, like regionprops.
+
   const pts: [number, number][] = [];
   for (let y = 0; y < H; y++) {
     let lo = -1;

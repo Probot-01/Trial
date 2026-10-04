@@ -1,54 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * exportTrainingSet.js — build a retraining corpus out of what doctors decided.
- *
- *   node scripts/exportTrainingSet.js --list
- *   node scripts/exportTrainingSet.js --out <dir> [--copy-images] [--all]
- *                                     [--include-unconsented] [--dry-run]
- *
- * Reads `dataset_labels` (written by services/datasetCollector.js as each
- * review is submitted) and writes a manifest, a dataset card, and optionally
- * the images themselves. Exported rows are stamped with the batch id so a
- * training run can be reproduced, and so the next export can pick up only
- * what is new (the default; `--all` re-exports everything).
- *
- * ── THE RULES THIS ENFORCES, AND WHY ────────────────────────────────────────
- *
- * 1. CONSENT IS REQUIRED. A row whose patient had not consented at labelling
- *    time is excluded, and the count of exclusions is printed and written into
- *    the dataset card rather than quietly dropped. `--include-unconsented`
- *    exists for a research dataset where consent is handled out of band; it
- *    prints a warning and stamps the card, because a corpus that cannot say
- *    whether it may be used is a corpus nobody can safely use.
- *
- * 2. ONE LABEL PER CASE — the newest. A case reviewed twice has two rows on
- *    purpose (the audit trail), but two contradictory training examples of one
- *    image is label noise, and the later review is the reviewer's settled view.
- *
- * 3. ONE EXAMPLE PER IMAGE. Deduped by sha256, so the same eye submitted twice
- *    under different case ids does not get double weight. A duplicate whose
- *    two labels DISAGREE is reported, not silently resolved: two doctors
- *    grading the same bytes differently is a finding about the corpus.
- *
- * 4. NO PATIENT IDENTIFIERS LEAVE. The manifest carries case_id, the label and
- *    the image — never name, contact number or patient_id. Exported filenames
- *    are the sha256, not anything traceable to a person by inspection.
- *
- * 5. AN IMAGE WHOSE BYTES CHANGED IS DROPPED. The hash is re-checked at export;
- *    a mismatch means the file is not the one that was graded, and labelling
- *    the wrong photograph is worse than a smaller dataset.
- *
- * ── WHAT THIS CORPUS IS NOT ─────────────────────────────────────────────────
- * It is not a random sample of screening. Tier A cases are auto-cleared and
- * never reach a reviewer, so only Tier B/C — the cases the model was least
- * sure about — are here. Training on it as if it were representative shifts
- * the model toward the hard tail and away from the ordinary negatives that
- * dominate real screening. The dataset card says so, in the corpus itself,
- * because that warning has to travel with the data rather than live in a chat
- * message someone half-remembers.
- */
+
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -56,8 +9,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const pool = require(path.join(ROOT, 'central-system', 'backend', 'db', 'pgClient'));
-// Stored images may be encrypted at rest; hashes and exported copies are of
-// the plaintext image (services/mediaCrypto.js).
+
 const mediaCrypto = require(path.join(ROOT, 'central-system', 'backend', 'services', 'mediaCrypto'));
 
 function arg(name, fallback) {
@@ -133,9 +85,11 @@ async function main() {
     if (seen) {
       // Rule 3: same bytes, already have an example. Report a contradiction.
       if (seen.label_grade !== r.label_grade) {
-        disagreements.push({ sha: r.image_sha256.slice(0, 12),
+        disagreements.push({
+          sha: r.image_sha256.slice(0, 12),
           kept: `${seen.case_id} -> ${seen.label_grade}`,
-          dropped: `${r.case_id} -> ${r.label_grade}` });
+          dropped: `${r.case_id} -> ${r.label_grade}`
+        });
       }
       continue;
     }
@@ -225,8 +179,8 @@ project, and a handful of examples cannot fix a recall problem on that class.
 ## Provenance and safeguards
 
 - Consent: ${includeUnconsented
-    ? '**INCLUDED WITHOUT CONSENT** (`--include-unconsented`). Rows whose patient had not consented at labelling time are present. Do not distribute this corpus.'
-    : 'every example had patient consent recorded at labelling time.'}
+      ? '**INCLUDED WITHOUT CONSENT** (`--include-unconsented`). Rows whose patient had not consented at labelling time are present. Do not distribute this corpus.'
+      : 'every example had patient consent recorded at labelling time.'}
 - Excluded: ${skipped.unconsented} without consent, ${skipped.missingFile} image file missing, ${skipped.hashMismatch} image bytes changed since labelling, ${skipped.noHash} unverifiable, ${skipped.alreadyExported} exported in an earlier batch.
 - Deduplicated by SHA-256. ${disagreements.length} identical image(s) carried conflicting labels; the newest review was kept and the conflict is listed in the export log.
 - No patient identifiers: the manifest carries case ids and labels only${copyImages ? ', and image files are named by content hash' : ''}.

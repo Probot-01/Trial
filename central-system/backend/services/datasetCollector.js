@@ -1,40 +1,6 @@
 'use strict';
 
-/**
- * datasetCollector.js — turn each review into a labelled training example.
- *
- * When an ophthalmologist decides a case, a human has just labelled a real
- * fundus photograph. recordLabel() captures that, inside the same transaction
- * as the review itself: a label written afterwards, best-effort, is a label
- * that silently goes missing whenever the second write fails, and nothing
- * downstream would ever notice a gap in a training corpus.
- *
- * ── WHAT COUNTS AS A LABEL ──────────────────────────────────────────────────
- * Both decisions do.
- *
- *   override  the reviewer says the grade is X. Label = X. This is the signal
- *             `corrections` was already recording.
- *   confirm   the reviewer says the model's grade is right. Label = the model
- *             grade. Just as much a human judgement, and normally the majority
- *             of reviews — a corpus of overrides alone is a corpus of the
- *             model's mistakes, which trains a model that has only ever seen
- *             its own failures.
- *
- * A confirm whose model grade is unknown is NOT recorded. There is no label to
- * record: "the reviewer agreed with something we cannot name" is not data.
- *
- * ── WHAT THIS DELIBERATELY DOES NOT DO ──────────────────────────────────────
- * It does not copy the image anywhere. The bytes already live under
- * media/cases/<caseId>/, and a second copy per review is duplicated patient
- * imagery that must then be secured, backed up and deleted in two places.
- * scripts/exportTrainingSet.js materialises a corpus when someone actually
- * wants one, and stamps the rows it used.
- *
- * It does not decide whether a label may be used for training. It records the
- * consent that existed at labelling time and lets the exporter enforce it —
- * one place to reason about, and the record stays truthful even for rows the
- * export refuses.
- */
+
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -43,23 +9,15 @@ const fs = require('fs');
 function hashFile(filePath) {
   if (!filePath) return null;
   try {
-    // Of the PLAINTEXT image: the hash identifies the photograph, not how it
-    // happens to be stored (media may be encrypted at rest, mediaCrypto.js).
+
     return crypto.createHash('sha256').update(require('./mediaCrypto').readFile(filePath)).digest('hex');
   } catch {
-    // A missing or unreadable image is not a reason to fail the review — the
-    // clinical record matters more than the training row. Null hash means
-    // "unverifiable", and the exporter skips it rather than guessing.
+
     return null;
   }
 }
 
-/**
- * recordLabel(client, { caseId, reviewId, decision, correctedGrade, reviewerId })
- *
- * `client` is the SAME pg client running the review's transaction. Returns the
- * inserted row, or null when there is nothing labellable.
- */
+
 async function recordLabel(client, { caseId, reviewId, decision, correctedGrade, reviewerId }) {
   const { rows } = await client.query(`
     SELECT c.image_path,
@@ -79,9 +37,6 @@ async function recordLabel(client, { caseId, reviewId, decision, correctedGrade,
     ? (Number.isInteger(correctedGrade) ? correctedGrade : null)
     : modelGrade;
 
-  // No grade, no label. An override without correctedGrade is rejected by the
-  // route before it gets here; a confirm on an ungraded case cannot happen
-  // either (409 case_not_graded). This is the belt for both braces.
   if (!Number.isInteger(labelGrade)) return null;
 
   const inserted = await client.query(`

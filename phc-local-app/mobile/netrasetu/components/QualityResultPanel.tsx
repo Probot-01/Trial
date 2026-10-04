@@ -1,16 +1,4 @@
-/**
- * The desktop QualityResultPanel, with real numbers only.
- *
- * The desktop panel falls back to hard-coded metrics (0.94, 0.88, ...) and a
- * fixed "CONTRAST = lowest" tag when no metric exists. That is exactly what
- * design doc §4.1 / §1.22 rule out, so here every figure is one the gate
- * actually computed, and the panel shows the gate's own six sub-scores (the
- * MATLAB gate has no "contrast" measure).
- *
- * After POLICY.maxRetakesBeforeBestEffort failed attempts the technician can
- * mark the capture "best effort -- proceed as ungradable" (§10.2). The
- * desktop's always-visible "override quality gate" is not carried over.
- */
+
 import React from 'react';
 import { Text, View } from 'react-native';
 import { makeStyles, useTheme } from '../theme/ThemeContext';

@@ -1,25 +1,4 @@
-"""
-fitAndValidateNVScore.py
-==========================
-Task items 2+3 (Python half): fits the new 4-component NV-score weights on
-IDRiD-grading-TRAIN ONLY (weak labels: grade 4 = 1, grades 0-3 = 0; 5-fold
-CV for stability, non-negative weights via NNLS, final weights refit on all
-251 train images), then validates the OLD (existing, live) score and the
-NEW (fitted) score - plus an equal-4-way-weights variant for comparison -
-as their OWN metric, "NV-score PDR separation", NEVER as grade-4 recall.
 
-No image from IDRiD test or Messidor-2 influences any weight or
-normalisation range anywhere in this file - every np.min/np.max/NNLS fit
-call is applied to a variable literally named train_* to make that checkable
-by inspection, not just by claim.
-
-Reads: <cache-dir>/nv_raw_components.csv (scoreNVBatch.m's output: one row
-per image, per dataset, with the RAW component values old score already
-computed with default opts).
-
-Usage:
-    python experiments/fitAndValidateNVScore.py --raw-csv <path> --out-dir <path>
-"""
 import argparse
 import json
 from pathlib import Path

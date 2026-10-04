@@ -1,20 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * demo-offline.js -- take THIS checkout's central backend away and bring it back,
- * for the "PHC keeps working offline" scene.
- *
- *   node scripts/demo-offline.js stop      stop the central backend (nothing else)
- *   node scripts/demo-offline.js restore   start it again; returns when /health is green
- *   node scripts/demo-offline.js status    what is up, and what the PHC desktop reports
- *   node scripts/demo-offline.js cycle     stop, wait 3 s, restore (used to rehearse)
- *
- * Only the process listening on this checkout's central port is stopped. The PHC
- * desktop backend, both web apps, Postgres, the MATLAB session and the
- * segmentation worker keep running, so a restore takes seconds, not minutes.
- * Expected screen states for each step: docs/DEMO.md.
- */
+
 
 const stack = require('./lib/demoStack');
 

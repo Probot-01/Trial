@@ -1,57 +1,4 @@
-"""
-evalDriveOnnx.py
-================
-Clinical metrics for the ONNX exports of M2 (vessel) and M3 (localization),
-against the DRIVE dataset.
 
-    python evalDriveOnnx.py [--drive DIR] [--split training] [--thresh 0.5]
-
-Reports aggregated TP/FP/TN/FN with Sensitivity, Specificity, F1/Dice for M2.
-
--- WHICH SPLIT, AND WHY NOT test/ -----------------------------------------
-DRIVE ships vessel ground truth as 1st_manual/. That directory exists under
-training/ and NOT under test/ -- the test split here has only images/ and
-mask/. mask/ is the field-of-view circle (~68% of pixels), not vessels
-(~7.5%), so it cannot stand in as ground truth: scoring against it would
-measure "did you find the lens aperture" and return a number that looks like
-a vessel score.
-
-So the default split is training/. That is sound here for a reason specific
-to this model and would NOT be in general: M2 was trained on CHASE_DB1 (see
-segInfer.vessels), so no DRIVE image was ever in its training set and
-DRIVE/training is fully held out for it. This script prints which split it
-used and how many images carried ground truth, because "20 images scored" and
-"0 images scored, metrics are of the empty set" must never look alike.
-
--- THE FOV MASK IS NOT OPTIONAL -------------------------------------------
-Everything outside the FOV circle is black in the photograph and black in the
-ground truth, so it is a free true negative. It is ~32% of the frame, and
-counting it inflates specificity toward 1.0 no matter how the model behaves
--- a model that predicts "no vessel" everywhere already scores ~0.92
-specificity unrestricted. Every published DRIVE number is computed inside the
-FOV, so that is what this reports as primary; the unrestricted figure is
-printed beside it only to show the size of the effect.
-
--- WHICH COORDINATE SPACE THE COMPARISON HAPPENS IN ------------------------
-Primary metrics are computed in ORIGINAL image space: the prediction is taken
-through segInfer.vessels()'s exact return path -- unpad, then resize to the
-photograph's size -- and compared against the expert tracing at its native
-584x565. That is the mask the pipeline actually emits, so it is the one worth
-scoring.
-
-The 512-space figure is also printed, because downsampling the ground truth
-to 512 is a different measurement, not a cheaper version of the same one:
-thin single-pixel vessels partially vanish under any resampling, which moves
-recall. This file's own numbers show the gap. Reporting one without saying
-which space it came from is how two people compare metrics that were never
-comparable -- the same failure segInfer.py documents for its mask spaces.
-
--- M3 --------------------------------------------------------------------
-DRIVE has no optic-disc or fovea coordinate annotations; it is a vessel
-segmentation benchmark. M3's output is therefore exercised (shape, argmax,
-peak value, and whether the peaks sit inside the FOV) but not scored, and the
-absence of ground truth is stated rather than substituted for.
-"""
 
 import argparse
 import os
@@ -71,16 +18,7 @@ INPUT_SIZE = segInfer.INPUT_SIZE
 
 
 def onnx_path(role):
-    """The .onnx beside the .pt, found by filename.
-
-    Resolved through modelPaths rather than by string-editing the .pt path.
-    resolve() returns models/<whatever folder>/vessel_unet_v1.pt, and swapping
-    the extension on that would point at a file that does not exist -- the
-    exports live in models/onnx/. Searching for the .onnx FILENAME instead
-    uses modelPaths as designed: the filename is the stable identifier, the
-    folder is not, and an absent or duplicated export raises with a message
-    that says so.
-    """
+"
     return modelPaths.resolve_checkpoint(
         modelPaths.CHECKPOINTS[role].replace(".pt", ".onnx"))
 

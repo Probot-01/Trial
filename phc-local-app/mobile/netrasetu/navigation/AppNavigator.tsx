@@ -1,8 +1,4 @@
-/**
- * Routes mirror the desktop PHC app (App.jsx): "/" login, then the
- * technician area with New Patient and Queue in the nav, Capture pushed from
- * registration. The desktop's header nav links become a bottom tab bar.
- */
+
 import React from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';

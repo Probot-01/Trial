@@ -1,14 +1,4 @@
-/**
- * Local database -- expo-sqlite, one row per record (design doc §4.3, §4.4).
- *
- * Mirrors the desktop PHC backend's SQLite schema (patients, captures,
- * questionnaire_responses, capture_metadata_responses, sync_queue) so the two
- * front-ends mean the same thing by the same word. No table holds a serialized
- * copy of the whole queue: under a multi-day outage there can be hundreds of
- * cases, and every read and write here is per record.
- *
- * Migrations are append-only, keyed on PRAGMA user_version.
- */
+
 import * as SQLite from 'expo-sqlite';
 
 const DB_NAME = 'netrasetu.db';
@@ -95,10 +85,7 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS idx_sync_order ON sync_queue(state, priority_tier, enqueued_at);
   `,
-  // v2 (2026-09-24): desktop <-> phone replication (docs/peer-sync-protocol.md).
-  // Same change-feed design as the PC: triggers log every insert/update of a
-  // replicated record; sync_ctx.origin tags rows applied FROM the PC so they
-  // are not pushed straight back to it.
+
   `
   ALTER TABLE patients ADD COLUMN updated_at TEXT;
   ALTER TABLE patients ADD COLUMN origin_device TEXT;
@@ -119,15 +106,15 @@ const MIGRATIONS: string[] = [
   CREATE TABLE IF NOT EXISTS peer_images_sent (capture_id TEXT PRIMARY KEY, sent_at TEXT NOT NULL);
 
   ${['patients:patient_id', 'captures:capture_id', 'questionnaire_responses:response_id',
-     'capture_metadata_responses:response_id', 'sync_queue:capture_id'].map((spec) => {
-    const [tbl, pk] = spec.split(':');
-    return ['INSERT', 'UPDATE'].map((op) => `
+    'capture_metadata_responses:response_id', 'sync_queue:capture_id'].map((spec) => {
+      const [tbl, pk] = spec.split(':');
+      return ['INSERT', 'UPDATE'].map((op) => `
   CREATE TRIGGER IF NOT EXISTS trg_${tbl}_${op.toLowerCase()}_log AFTER ${op} ON ${tbl}
   BEGIN
     INSERT INTO change_log (tbl, pk, origin, at)
     VALUES ('${tbl}', NEW.${pk}, (SELECT origin FROM sync_ctx WHERE id = 1), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
   END;`).join('\n');
-  }).join('\n')}
+    }).join('\n')}
 
   INSERT INTO change_log (tbl, pk, origin, at) SELECT 'patients', patient_id, NULL, registered_at FROM patients;
   INSERT INTO change_log (tbl, pk, origin, at) SELECT 'captures', capture_id, NULL, captured_at FROM captures;
@@ -135,10 +122,7 @@ const MIGRATIONS: string[] = [
   INSERT INTO change_log (tbl, pk, origin, at) SELECT 'capture_metadata_responses', response_id, NULL, recorded_at FROM capture_metadata_responses;
   INSERT INTO change_log (tbl, pk, origin, at) SELECT 'sync_queue', capture_id, NULL, enqueued_at FROM sync_queue;
   `,
-  // v3 (2026-09-27): which engine ran the quality gate (engine provenance).
-  // Captures taken on this phone before this column were gated by the on-device
-  // port, which is the only gate this app has: origin_device is NULL exactly for
-  // those rows (rows received from the PC carry the PC's device id).
+
   `
   ALTER TABLE captures ADD COLUMN quality_engine TEXT;
   UPDATE captures SET quality_engine = '{"engine":"js-device","fallback":false,"detail":"qualityGate.ts, the TypeScript port of qualityGateMain.m, run on the phone"}'

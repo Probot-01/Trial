@@ -1,15 +1,6 @@
 import React, { useState } from 'react';
 
-/**
- * InfoModalButton -- the small circular "i" next to a page title, and the
- * modal it opens. Extracted from ReviewQueuePage.jsx's original inline
- * version (2026-09-30) so every screen's info button looks and behaves the
- * same way, rather than each screen re-implementing its own modal shell.
- *
- * `rows` is an array of { term, text } pairs, rendered as a definition list.
- * Keeping the content as data rather than JSX children means a screen's
- * whole glossary is one readable array, not a tree of styled <div>s.
- */
+
 export const InfoModalButton = ({ title = 'PAGE INFO', rows = [] }) => {
   const [open, setOpen] = useState(false);
   return (

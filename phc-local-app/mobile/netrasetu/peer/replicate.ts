@@ -1,16 +1,4 @@
-/**
- * Phone side of desktop <-> phone replication (docs/peer-sync-protocol.md).
- *
- *   replicateWithPc()  one pass: hello -> push local changes -> pull the PC's
- *   buildBundle()      the same data, sealed into a file (no network at all)
- *   importBundle()     apply a bundle the PC exported for this phone
- *
- * Merge rules are the PC's (phc-local-app/backend/services/peerSync.js):
- *   patient      last writer wins on updatedAt (ties: larger origin id)
- *   capture,     immutable once written: insert if absent
- *   responses
- *   syncState    monotonic -- state and centralStatus only move forward
- */
+
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 import { getDb, kvGet, kvSet, nowIso } from '../db/database';
@@ -55,41 +43,51 @@ export async function ownsUpload(owner: string | null): Promise<boolean> {
 async function toWire(tbl: string, row: any, me: string): Promise<WireRecord | null> {
   switch (tbl) {
     case 'patients':
-      return { kind: 'patient', data: {
-        patientId: row.patient_id, name: row.name, age: row.age, contactNumber: row.contact_number,
-        consentGivenAt: row.consent_given_at, registeredAt: row.registered_at, duplicateOf: row.duplicate_of,
-        demographics: parse(row.demographics_json), questionnaire: parse(row.questionnaire_json),
-        updatedAt: row.updated_at || row.registered_at, originDevice: row.origin_device || me,
-      } };
+      return {
+        kind: 'patient', data: {
+          patientId: row.patient_id, name: row.name, age: row.age, contactNumber: row.contact_number,
+          consentGivenAt: row.consent_given_at, registeredAt: row.registered_at, duplicateOf: row.duplicate_of,
+          demographics: parse(row.demographics_json), questionnaire: parse(row.questionnaire_json),
+          updatedAt: row.updated_at || row.registered_at, originDevice: row.origin_device || me,
+        }
+      };
     case 'captures': {
       const q: QualityResult | null = parse(row.quality_scores_json);
-      return { kind: 'capture', data: {
-        captureId: row.capture_id, patientId: row.patient_id, eye: row.eye, cameraDeviceId: row.camera_device_id,
-        source: row.source, qualityStatus: row.quality_status, qualityReason: row.quality_reason,
-        qualityScores: q ? { ...q.scores, compositeScore: q.compositeScore, preset: q.preset, analysedAt: q.analysedAt } : null,
-        qualityEngine: parse(row.quality_engine),
-        retakeCount: row.retake_count, bestEffort: !!row.best_effort, capturedAt: row.captured_at,
-        imageBytes: row.image_bytes, imageSha256: row.image_sha256, originDevice: row.origin_device || me,
-      } };
+      return {
+        kind: 'capture', data: {
+          captureId: row.capture_id, patientId: row.patient_id, eye: row.eye, cameraDeviceId: row.camera_device_id,
+          source: row.source, qualityStatus: row.quality_status, qualityReason: row.quality_reason,
+          qualityScores: q ? { ...q.scores, compositeScore: q.compositeScore, preset: q.preset, analysedAt: q.analysedAt } : null,
+          qualityEngine: parse(row.quality_engine),
+          retakeCount: row.retake_count, bestEffort: !!row.best_effort, capturedAt: row.captured_at,
+          imageBytes: row.image_bytes, imageSha256: row.image_sha256, originDevice: row.origin_device || me,
+        }
+      };
     }
     case 'questionnaire_responses':
-      return { kind: 'questionnaire', data: {
-        responseId: row.response_id, captureId: row.capture_id, riskFactorFields: parse(row.risk_factor_fields),
-        symptomFields: parse(row.symptom_fields), language: row.language, recordedAt: row.recorded_at,
-      } };
+      return {
+        kind: 'questionnaire', data: {
+          responseId: row.response_id, captureId: row.capture_id, riskFactorFields: parse(row.risk_factor_fields),
+          symptomFields: parse(row.symptom_fields), language: row.language, recordedAt: row.recorded_at,
+        }
+      };
     case 'capture_metadata_responses':
-      return { kind: 'metadata', data: {
-        responseId: row.response_id, captureId: row.capture_id, cameraDeviceReported: row.camera_device_reported,
-        pupilStatus: row.pupil_status, lightingEnvironment: row.lighting_environment,
-        observedIssues: parse(row.observed_issues) ?? [], workerUsabilityRating: row.worker_usability_rating,
-        eyeLaterality: row.eye_laterality, recordedAt: row.recorded_at,
-      } };
+      return {
+        kind: 'metadata', data: {
+          responseId: row.response_id, captureId: row.capture_id, cameraDeviceReported: row.camera_device_reported,
+          pupilStatus: row.pupil_status, lightingEnvironment: row.lighting_environment,
+          observedIssues: parse(row.observed_issues) ?? [], workerUsabilityRating: row.worker_usability_rating,
+          eyeLaterality: row.eye_laterality, recordedAt: row.recorded_at,
+        }
+      };
     case 'sync_queue':
-      return { kind: 'syncState', data: {
-        captureId: row.capture_id, state: row.state === 'failed' ? 'pending' : row.state,
-        centralCaseId: row.central_case_id, centralStatus: row.central_status, priority: row.priority_tier,
-        ownerDevice: row.owner_device || me, updatedAt: row.updated_at,
-      } };
+      return {
+        kind: 'syncState', data: {
+          captureId: row.capture_id, state: row.state === 'failed' ? 'pending' : row.state,
+          centralCaseId: row.central_case_id, centralStatus: row.central_status, priority: row.priority_tier,
+          ownerDevice: row.owner_device || me, updatedAt: row.updated_at,
+        }
+      };
     default:
       return null;
   }
@@ -164,7 +162,7 @@ async function applyOne(tx: Tx, r: WireRecord): Promise<boolean> {
       await tx.runAsync(`INSERT INTO patients (patient_id, name, age, contact_number, consent_given_at, duplicate_of, registered_at,
           demographics_json, questionnaire_json, updated_at, origin_device) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [d.patientId, d.name, d.age, d.contactNumber, d.consentGivenAt, d.duplicateOf ?? null, d.registeredAt,
-         J(d.demographics), J(d.questionnaire), d.updatedAt ?? d.registeredAt, d.originDevice]);
+        J(d.demographics), J(d.questionnaire), d.updatedAt ?? d.registeredAt, d.originDevice]);
       return true;
     }
     case 'capture': {
@@ -175,8 +173,8 @@ async function applyOne(tx: Tx, r: WireRecord): Promise<boolean> {
           quality_reason, quality_scores_json, quality_engine, retake_count, best_effort, captured_at, origin_device, image_sha256)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [d.captureId, d.patientId, d.eye ?? null, d.cameraDeviceId ?? 'unknown', d.source ?? 'desktop', img.uri, img.size,
-         d.qualityStatus, d.qualityReason ?? null, J(qualityFromWire(d)), J(d.qualityEngine), d.retakeCount ?? 0, d.bestEffort ? 1 : 0, d.capturedAt,
-         d.originDevice, d.imageSha256 ?? null]);
+        d.qualityStatus, d.qualityReason ?? null, J(qualityFromWire(d)), J(d.qualityEngine), d.retakeCount ?? 0, d.bestEffort ? 1 : 0, d.capturedAt,
+        d.originDevice, d.imageSha256 ?? null]);
       return true;
     }
     case 'questionnaire': {
@@ -188,7 +186,7 @@ async function applyOne(tx: Tx, r: WireRecord): Promise<boolean> {
       const res = await tx.runAsync(`INSERT OR IGNORE INTO capture_metadata_responses (response_id, capture_id, camera_device_reported, pupil_status,
           lighting_environment, observed_issues, worker_usability_rating, eye_laterality, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [d.responseId, d.captureId, d.cameraDeviceReported ?? null, d.pupilStatus ?? 'unknown', d.lightingEnvironment ?? 'indoor_clinic',
-         J(d.observedIssues ?? []), d.workerUsabilityRating ?? 'not_sure', d.eyeLaterality ?? null, d.recordedAt]);
+        J(d.observedIssues ?? []), d.workerUsabilityRating ?? 'not_sure', d.eyeLaterality ?? null, d.recordedAt]);
       return res.changes > 0;
     }
     case 'syncState': {
@@ -199,7 +197,7 @@ async function applyOne(tx: Tx, r: WireRecord): Promise<boolean> {
         await tx.runAsync(`INSERT INTO sync_queue (capture_id, priority_tier, state, central_case_id, central_status, summary_sent_at, uploaded_at,
             attempts, enqueued_at, updated_at, owner_device) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
           [d.captureId, Number.isInteger(d.priority) ? d.priority : 2, synced ? 'synced' : 'pending', d.centralCaseId ?? null,
-           d.centralStatus ?? null, synced ? now : null, synced ? now : null, now, now, d.ownerDevice ?? null]);
+          d.centralStatus ?? null, synced ? now : null, synced ? now : null, now, now, d.ownerDevice ?? null]);
         return true;
       }
       const curRank = cur.state === 'failed' ? -1 : STATE_RANK[cur.state] ?? 0;
@@ -292,7 +290,7 @@ export async function replicateWithPc(): Promise<ReplicationResult> {
 
   // Push: images first (the PC refuses a capture record without its image).
   let pushCursor = Number((await kvGet('peer_push_cursor')) ?? 0);
-  for (;;) {
+  for (; ;) {
     const page = await localChangesSince(pushCursor, p.pcDeviceId, p.deviceId, PUSH_BATCH);
     for (const r of page.records.filter((x) => x.kind === 'capture')) {
       const sent = await db.getFirstAsync('SELECT 1 FROM peer_images_sent WHERE capture_id = ?', [r.data.captureId]);
@@ -314,7 +312,7 @@ export async function replicateWithPc(): Promise<ReplicationResult> {
 
   // Pull: fetch each new capture's image before applying its record.
   let pullCursor = Number((await kvGet('peer_pull_cursor')) ?? 0);
-  for (;;) {
+  for (; ;) {
     const page = await peerCall<{ records: WireRecord[]; cursor: number; more: boolean }>('/peer/pull', withToken({ cursor: pullCursor }));
     for (const r of page.records.filter((x) => x.kind === 'capture')) {
       if (imageFileFor(r.data.captureId)) continue;
@@ -345,7 +343,7 @@ export async function buildBundle(): Promise<{ bundle: Bundle; records: number; 
   if (!p) throw new PeerError('not_paired', 'Pair with the PHC PC first: the bundle is encrypted for it.');
   const records: WireRecord[] = [];
   let cursor = Number((await kvGet('peer_push_cursor')) ?? 0);
-  for (;;) {
+  for (; ;) {
     const page = await localChangesSince(cursor, p.pcDeviceId, p.deviceId);
     records.push(...page.records);
     cursor = page.cursor;

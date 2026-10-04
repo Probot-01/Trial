@@ -1,35 +1,6 @@
 'use strict';
 
-/**
- * resourceRecommendations.js -- the Simulink Integration service (backend plan
- * §G, design doc §7 / §5.3).
- *
- * The district resource model (simulink-model/) was built and validated, and
- * then reached nothing: the admin dashboard's Resource Recommendations panel is
- * hardcoded copy. This runs the model on a schedule and stores its answer.
- *
- * WHAT RUNS: referenceQueueingModel('recommend', params) -- the pure-MATLAB
- * queueing model the SimEvents .slx was validated against (plan §G.2 option b).
- * It takes a few seconds; the .slx stays the PS deliverable and the validation
- * check (runDistrictScreeningModel), not something run per refresh.
- *
- * WITH WHAT: observed values where this database has enough of them, the
- * model's documented defaults otherwise, and the stored row says which is
- * which (inputs_source) -- a planning figure built on assumptions must be
- * readable as such:
- *   tierFractions        observed A/B/C mix over the last 90 days, when there
- *                        are >= MIN_CASES_FOR_OBSERVED_MIX graded cases
- *   numPhcs              count of phc_sites (when > 0)
- *   numOphthalmologists  count of ophthalmologist users (when > 0)
- *   annualPatients       RESOURCE_MODEL_ANNUAL_PATIENTS if set; otherwise the
- *                        PS's 100,000/year per 10 PHCs, scaled to numPhcs --
- *                        a pilot database's own case count says nothing
- *                        about district volume
- *
- * WHEN: daily at RESOURCE_MODEL_CRON (default 02:30 server time), and on
- * demand via POST /api/v1/admin/resource-recommendations/refresh. Runs are
- * serialised: a refresh while one is running joins it.
- */
+
 
 const path = require('path');
 const { execFile } = require('child_process');
@@ -139,9 +110,9 @@ async function doRun() {
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
   `, [r.minOphthalmologistsRoutine ?? null, r.minOphthalmologistsCamp ?? null,
-      r.maxSearched ?? null, r.p95TargetMin ?? null, r.bottleneck, r.recommendation,
-      r.current ?? null, r.params, source, r.model || 'referenceQueueingModel',
-      r.runSeconds ?? null]);
+  r.maxSearched ?? null, r.p95TargetMin ?? null, r.bottleneck, r.recommendation,
+  r.current ?? null, r.params, source, r.model || 'referenceQueueingModel',
+  r.runSeconds ?? null]);
   console.log(`[resourceModel] refreshed: routine ${r.minOphthalmologistsRoutine ?? '>max'}, ` +
     `camp ${r.minOphthalmologistsCamp ?? '>max'}, bottleneck "${r.bottleneck}"`);
   return toResponse(rows[0]);

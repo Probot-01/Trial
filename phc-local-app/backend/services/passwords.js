@@ -1,14 +1,6 @@
 'use strict';
 
-/**
- * Password hashing for technician accounts -- scrypt from Node's crypto
- * (no native add-on to install on a PHC PC). Stored as
- *
- *     scrypt$<N>$<r>$<p>$<salt b64>$<hash b64>
- *
- * so the cost can be raised later without invalidating existing hashes.
- * Verification is constant-time.
- */
+
 const crypto = require('crypto');
 
 const N = 1 << 15;
@@ -38,8 +30,7 @@ function verifyPassword(password, stored) {
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
-// Compared against when the username does not exist, so a wrong username and
-// a wrong password take the same time (no account enumeration by timing).
+
 const DUMMY_HASH = hashPassword('not-a-real-password');
 
 module.exports = { hashPassword, verifyPassword, DUMMY_HASH };

@@ -1,41 +1,21 @@
 'use strict';
 
-/**
- * caseReport.js -- the per-case clinical-rationale PDF (backend plan §O,
- * design doc §6.9).
- *
- *   const { reportUrl, generatedAt, cached } = await getOrCreateReport(caseId)
- *
- * Generated ON DEMAND, the first time someone asks for it, rather than inside
- * the grading pipeline: it adds nothing to grading latency, and the report is
- * cached at media/cases/<caseId>/report.pdf (path recorded in
- * explainability_outputs.rationale_report_path). A cached report older than the
- * case's latest grading is regenerated, so a re-graded case never serves a
- * stale PDF. `force` regenerates regardless.
- *
- * Rendering is ml-pipeline/explainability/generateReport.m. It runs in the
- * persistent MATLAB session when that is up (a report then takes a couple of
- * seconds), and falls back to a one-off `matlab -batch` (~30-40 s) when not.
- *
- * Served through /media, which requires a session like every other patient-
- * data route (§A.3).
- */
 
-const fs   = require('fs');
-const os   = require('os');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 
-const pool       = require('../db/pgClient');
+const pool = require('../db/pgClient');
 const mediaPaths = require('./mediaPaths');
 const mediaCrypto = require('./mediaCrypto');
 const matlabSession = require('./matlabSessionClient');
 const engineProvenance = require('./engineProvenance');
 
-const ML_ROOT     = path.resolve(__dirname, '..', 'ml-pipeline');
-const MATLAB_EXE  = process.env.MATLAB_EXECUTABLE || 'matlab';
+const ML_ROOT = path.resolve(__dirname, '..', 'ml-pipeline');
+const MATLAB_EXE = process.env.MATLAB_EXECUTABLE || 'matlab';
 const SESSION_TIMEOUT_MS = 60_000;
-const BATCH_TIMEOUT_MS   = 180_000;
+const BATCH_TIMEOUT_MS = 180_000;
 
 const toMatlabStr = (s) => String(s).replace(/\\/g, '/').replace(/'/g, "''");
 const inflight = new Map();   // caseId -> promise: concurrent requests share one render
@@ -192,7 +172,7 @@ async function renderPlain(caseId, row) {
       await viaBatch(inputPath, outPath);
     }
   } finally {
-    fs.unlink(inputPath, () => {});
+    fs.unlink(inputPath, () => { });
   }
   if (!fs.existsSync(outPath)) throw new Error('report generation produced no file');
 

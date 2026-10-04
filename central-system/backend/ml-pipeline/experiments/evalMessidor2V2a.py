@@ -1,31 +1,4 @@
-"""
-evalMessidor2V2a.py
-=====================
-External validation of the v2a DR-severity classifier
-(models/Model1/v2a/branchA_v2a.pt) on Messidor-2 - a dataset never used in
-v2a's training, calibration, or threshold-locking.
 
-EVALUATION ONLY. This script does not modify any production file, does not
-commit anything, and does not copy Messidor-2 images anywhere - it reads them
-in place from datasets/Messidor-2/ (git-ignored) and writes only aggregated
-arrays/reports under diagnostics/out/.
-
-Preprocessing and the model class are extracted VERBATIM from
-training/train_classifier_kaggle_v2.ipynb cells 4 and 14 - the source of
-truth for how v2a was actually trained - NOT from inference/'s current
-production preprocessing, which is still pinned to v1's 384px pipeline.
-
-Every operating-point threshold used against Messidor-2 (the argmax rule is
-threshold-free; the three P(g>=2) thresholds) is locked on v2a's own VAL
-arrays (branchA_v2a_val_*.npy) BEFORE Messidor-2 is touched, using the same
-lock_threshold_on_val() this codebase already uses in
-experiments/evalV2aPostHoc.py. Nothing is tuned on Messidor-2 results.
-
-Usage:
-    python experiments/evalMessidor2V2a.py               # fidelity check + full run
-    python experiments/evalMessidor2V2a.py --fidelity-only
-    python experiments/evalMessidor2V2a.py --skip-fovea   # skip the optional fovea-gate diagnostic
-"""
 import os
 import sys
 import json

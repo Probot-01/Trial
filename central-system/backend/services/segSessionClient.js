@@ -1,17 +1,6 @@
 'use strict';
 
-/**
- * segSessionClient.js -- the persistent Python segmentation worker
- * (ml-pipeline/inference/segSession/runSegWorker.py), addressed through the
- * shared file protocol in sessionClient.js.
- *
- *   if (alive()) await call({ image, outdir }, { timeoutMs });
- *
- * One request type: segment one image, get back exactly the JSON segInfer.py
- * prints on the command line. The worker calls the same segInfer.run_one, so
- * this changes where the 17 s of torch-import-and-model-load is paid, and
- * nothing about the numbers.
- */
+
 
 const path = require('path');
 const { createSessionClient } = require('./sessionClient');

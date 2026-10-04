@@ -1,15 +1,6 @@
 import React from 'react';
 
-/**
- * LoadError — the live-mode error state. Shown in place of a screen's data
- * when its request failed, so a failure is visible as a failure and is never
- * papered over with fixture data (design doc §1.22).
- *
- *   <LoadError error={err} what="the review queue" onRetry={reload} />
- *
- * `title` replaces the "COULD NOT LOAD …" heading (e.g. for a failed save).
- * `error` is normally an ApiError from centralApiClient ({ code, message }).
- */
+
 export const LoadError = ({ error, what = 'this data', title, onRetry, compact = false }) => (
   <div
     role="alert"

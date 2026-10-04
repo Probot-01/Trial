@@ -1,9 +1,4 @@
-/**
- * This phone's pairing with its PHC PC: made once by scanning the QR code the
- * PC prints (`npm run peer -- pair "<name>"` in phc-local-app/backend).
- * The payload carries the 256-bit key for the sealed channel, so it is kept in
- * the OS keystore (lib/secrets.ts), not in the app database, and never shown again.
- */
+
 import { secretGet, secretSet } from '../lib/secrets';
 
 export interface Pairing {

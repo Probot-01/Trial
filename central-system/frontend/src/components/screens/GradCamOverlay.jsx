@@ -1,17 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { CENTRAL_API_BASE, USE_MOCK_DATA } from '../../config';
 
-/**
- * GradCamOverlay — real case: renders the actual fundus image with the real
- * Grad-CAM PNG (produced by branchAInfer.py) as an absolutely-positioned
- * semi-transparent layer on top, toggled by showOverlay. imageUrl/
- * gradCamOverlayUrl come back from the API as paths under /media (e.g.
- * "/media/cases/<id>/original.jpg"), served by the central backend itself —
- * not the frontend dev server — so they're resolved against CENTRAL_API_BASE.
- *
- * No image (imageUrl null): mock mode draws the procedurally generated
- * synthetic retina; live mode shows why there is no image (see GradCamOverlay).
- */
+
 const RealGradCam = ({ showOverlay, caseData, onLoadError }) => {
   const imageSrc = `${CENTRAL_API_BASE}${caseData.imageUrl}`;
   const overlaySrc = caseData.gradCamOverlayUrl ? `${CENTRAL_API_BASE}${caseData.gradCamOverlayUrl}` : null;
@@ -361,7 +351,7 @@ export const GradCamOverlay = ({ showOverlay, caseData }) => {
   }
   return realImageFailed
     ? <NoImage title="FUNDUS IMAGE FAILED TO LOAD"
-        detail={`${caseData.imageUrl} could not be fetched from the central server. Check that it is running and that you are signed in, then reload.`} />
+      detail={`${caseData.imageUrl} could not be fetched from the central server. Check that it is running and that you are signed in, then reload.`} />
     : <NoImage title="NO FUNDUS IMAGE ON THIS CASE"
-        detail="The case has no stored image yet (not graded, or grading failed). No attention map can be shown." />;
+      detail="The case has no stored image yet (not graded, or grading failed). No attention map can be shown." />;
 };

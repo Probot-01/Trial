@@ -157,15 +157,7 @@ export const mockSyncStatus = {
   lastSyncAttempt: '2026-09-06T09:40:00.000Z',
 };
 
-/**
- * Phones paired with this PC (GET /peer/devices). Shapes only -- mock mode
- * renders behind the DEMO DATA banner and cannot revoke anything, because a
- * revoke that reports success without a backend would teach an operator that
- * a lost phone is cut off when it is not.
- *
- * One revoked entry is included on purpose: a revoked device stays in the
- * list rather than disappearing, so the screen has to render that state.
- */
+
 export const mockPeerDevices = [
   {
     deviceId: 'ph-4a91c2e7b03f',

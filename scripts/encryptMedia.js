@@ -1,22 +1,8 @@
 'use strict';
 
-/**
- * encryptMedia.js -- one-off: encrypt case media already on disk (AES-256-GCM,
- * services/mediaCrypto.js) that was written before MEDIA_ENCRYPTION_KEY was set.
- *
- *   node scripts/encryptMedia.js            encrypt every plaintext file under media/
- *   node scripts/encryptMedia.js --dry-run  list what would be encrypted
- *
- * Only central-system/backend/media/ (the tree /media serves) is touched.
- * Model files are never in it, and as a second guard anything with a model
- * extension is skipped even if it somehow were. Already-encrypted files are
- * left alone, so re-running is safe. Each file is replaced atomically (write
- * to a temp file, then rename).
- *
- * Env: MEDIA_ENCRYPTION_KEY, read from the central backend's .env.
- */
 
-const fs   = require('fs');
+
+const fs = require('fs');
 const path = require('path');
 
 const backendDir = path.resolve(__dirname, '..', 'central-system', 'backend');

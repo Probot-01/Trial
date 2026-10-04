@@ -1,17 +1,4 @@
-/**
- * The desktop DiagnosticResultModal as a full screen, with real data.
- *
- *   LOCAL QUALITY REPORT  always -- computed on this phone, stored with the case.
- *   FULL REPORT           from central (GET /api/v1/phc/cases/:captureRef/report),
- *                         fetched only while there is a connection. Offline, the
- *                         screen says so; it never shows a stand-in.
- *
- * The desktop modal's verdict ("Mild NPDR"), biomarkers ("4 microaneurysms")
- * and "macular edema risk 0.04" are hard-coded for every patient. Here each
- * one is what central actually computed, "NOT AVAILABLE" where it computed
- * nothing, and the grade is labelled unconfirmed until an ophthalmologist has
- * reviewed it (design doc §1.5).
- */
+
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,13 +19,7 @@ import { PhcReport, QueueEntry } from '../types';
 import { gradeLabel, isReferable, TIER_TEXT } from '../lib/grades';
 import { InfoModalButton } from '../components/InfoModalButton';
 
-// generateEvidenceReport.m (central) appends Branch B's under-grading/
-// calibration caveat as its own final sentence when one applies, after the
-// clinical finding. It is not a separate API field (evidenceSummaryText is
-// one string), so this is a display-only split: a methodology footnote about
-// a threshold being provisional is a fact about the SYSTEM, not the patient's
-// eye, and reads as equally-weighted clinical evidence when not set apart.
-// Mirrors central-system/frontend LesionEvidencePanel.jsx's splitCaveat.
+
 const CAVEAT_MARKERS = [
   'PROVISIONAL', 'never been measured', 'should be refitted', 'was fitted on',
   'This grade may be an under-call', 'not the literature',
@@ -109,12 +90,7 @@ export default function CaseReportScreen() {
 
   const shareSlip = async () => {
     try {
-      // expo-print's returned uri is not readable by this app in Expo Go
-      // (neither Sharing nor File.copy can open it -- a print-spooler/scoped-
-      // storage permission gap, not something this app's own files are
-      // subject to). Asking for base64 sidesteps reading that uri entirely:
-      // the PDF bytes come back in the same response, written straight into
-      // a file this app owns and can share.
+
       const { base64 } = await Print.printToFileAsync({ html: slipHtml(entry, r, finalGrade), base64: true });
       if (!base64) throw new Error('Print did not return the PDF data.');
       const dest = new File(Paths.cache, `clinical-slip-${captureId}.pdf`);

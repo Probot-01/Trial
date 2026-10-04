@@ -1,22 +1,9 @@
 'use strict';
 
-/**
- * provisionPhcKey.js -- issue a PHC site its API key (backend plan §A.12).
- *
- *   cd central-system/backend
- *   npm run provision-phc-key -- --phc-id 419402ef-84ff-43cc-99e2-60cc57da2ed2
- *   npm run provision-phc-key -- --create "PHC Wagholi"
- *   npm run provision-phc-key -- --list
- *
- * Prints the new key ONCE. Only its SHA-256 is stored (phc_sites.api_key_hash),
- * so it cannot be shown again: an operator copies it into that PHC's .env as
- * PHC_API_KEY (together with PHC_ID) during on-site setup. Lost it? Run this
- * again for the same --phc-id; that issues a fresh key and the old one stops
- * working immediately, which is also how a key is revoked.
- */
+
 
 const crypto = require('crypto');
-const path   = require('path');
+const path = require('path');
 const backendDir = path.resolve(__dirname, '..', 'central-system', 'backend');
 
 const pool = require(path.join(backendDir, 'db', 'pgClient'));
@@ -36,7 +23,7 @@ function usage(msg) {
 }
 
 async function run() {
-  const phcId  = arg('--phc-id');
+  const phcId = arg('--phc-id');
   const create = arg('--create');
 
   try {
@@ -55,8 +42,7 @@ async function run() {
     if (phcId && !UUID_RE.test(phcId)) return usage(`--phc-id is not a UUID: ${phcId}`);
     if (create !== undefined && !create.trim()) return usage('--create needs a PHC name.');
 
-    // 32 random bytes. The "phc_" prefix makes a leaked key recognisable in a
-    // log or a paste, and tells a reader which system it belongs to.
+
     const key = `phc_${crypto.randomBytes(32).toString('base64url')}`;
     const hash = hashApiKey(key);
 

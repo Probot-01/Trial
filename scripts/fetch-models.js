@@ -1,45 +1,6 @@
 'use strict';
 
-/**
- * fetch-models.js -- get the 1.5 GB of git-ignored model weights onto a fresh
- * clone, and confirm they're the exact bytes the demo was recorded with
- * (docs/RELEASE.md P0-1: "nobody has to be told twice").
- *
- * The weights themselves are never in git (see .gitignore) -- only their
- * SHA-256 list is, at central-system/backend/ml-pipeline/models.sha256
- * (extracted from docs/RELEASE.md's "Checksums" section, same 27 files).
- *
- * Two modes:
- *
- *   node scripts/fetch-models.js --verify
- *     Check whatever is already on disk against models.sha256. Exits
- *     non-zero and lists every MISSING/MISMATCH file. Safe to run any time,
- *     needs no network and no URL -- this is what CI or a teammate should
- *     run right after cloning to know if they're blocked.
- *
- *   node scripts/fetch-models.js --url <archive-url> [--verify]
- *     Download the archive (whoever holds MODELS_ARCHIVE_URL -- a Drive
- *     direct-download link or a GitHub Release asset), extract it into
- *     central-system/backend/ml-pipeline/, then run the same verification.
- *     Also reads the URL from the MODELS_ARCHIVE_URL env var so it doesn't
- *     have to be retyped. Extraction shells out to `tar` (bsdtar ships with
- *     Windows 10/11 and handles .zip; on Linux/Mac, GNU tar handles .tar.gz
- *     natively and most distros' tar also links bsdtar's zip support -- if
- *     yours doesn't, extract the archive by hand into ml-pipeline/ and
- *     rerun with --verify).
- *
- * MODELS_REPO_TOKEN (optional, additive): for a PRIVATE GitHub release asset
- * (e.g. the Render build step pulling from a private models repo rather than
- * a public link), set MODELS_ARCHIVE_URL to the asset's stable API URL
- * (api.github.com/repos/<owner>/<repo>/releases/assets/<id> -- get <id> via
- * `gh api repos/<owner>/<repo>/releases/tags/<tag>`, NOT the tag/browser
- * download URL, which 404s without a browser session) and set
- * MODELS_REPO_TOKEN to a token with read access to that repo. Unset = a
- * plain, unauthenticated GET, exactly today's behavior.
- *
- * Nothing here touches, retrains or re-exports a model file (CLAUDE.md) --
- * this only moves bytes and checks hashes.
- */
+
 
 const fs = require('fs');
 const path = require('path');
@@ -125,11 +86,7 @@ function download(url, destPath, headers = {}) {
     const file = fs.createWriteStream(destPath);
     console.log(`Downloading ${url} ...`);
     const req = client.get(url, { headers }, (res) => {
-      // Follow one redirect (Drive/Release asset links commonly 302 once).
-      // Deliberately WITHOUT `headers` on the follow-up: a private GitHub
-      // release asset's first response (api.github.com/.../assets/<id>,
-      // with our auth header) 302s to a short-lived, pre-signed blob URL
-      // that rejects a GitHub Authorization header on the second request.
+
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         file.close();
         fs.unlinkSync(destPath);
@@ -154,8 +111,7 @@ function download(url, destPath, headers = {}) {
 
 function extract(archivePath, destDir) {
   console.log(`Extracting ${archivePath} -> ${destDir}`);
-  // bsdtar (Windows 10/11's built-in tar.exe) and GNU tar both take this form
-  // for .zip/.tar.gz alike; -C sets the extraction root.
+
   execFileSync('tar', ['-xf', archivePath, '-C', destDir], { stdio: 'inherit' });
 }
 
@@ -166,12 +122,7 @@ async function main() {
   if (url) {
     fs.mkdirSync(ML_DIR, { recursive: true });
     const archivePath = path.join(require('os').tmpdir(), `netrasetu-models-${Date.now()}${path.extname(new URL(url).pathname) || '.zip'}`);
-    // MODELS_REPO_TOKEN: for a private GitHub release asset, MODELS_ARCHIVE_URL
-    // must be the stable API asset URL (api.github.com/repos/<owner>/<repo>/
-    // releases/assets/<id>), not the browser_download_url -- GitHub only
-    // accepts the Authorization header on that endpoint, and redirects from
-    // there to a pre-signed blob URL (see download()'s own comment). Unset
-    // for a plain public URL (Parth's original flow) -- this is additive.
+
     const token = process.env.MODELS_REPO_TOKEN;
     const headers = token ? { Authorization: `Bearer ${token}`, Accept: 'application/octet-stream', 'User-Agent': 'netrasetu-fetch-models' } : {};
     await download(url, archivePath, headers);

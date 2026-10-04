@@ -1,25 +1,6 @@
 import React from 'react';
 
-/**
- * CaseStatusBanner -- says whether this case actually HAS a grade.
- *
- * api-contracts.md: "a case with status: error must not be indistinguishable
- * from a graded one". It was, on this screen. Every ML field is null on a case
- * that failed AND on one still being graded, so Case Detail rendered the two
- * identically: grade "—", confidence "NOT COMPUTED", no evidence, no lesion
- * counts. A reviewer could not tell "not yet" from "never", and nothing on the
- * page said which. The backend has served `status`, `failureCode` and
- * `failedAt` since 2026-09-20 for exactly this, and no screen read them.
- *
- * Renders nothing for a graded case -- the page itself is the answer then.
- *
- * The failure MESSAGE is deliberately not available here: it can quote
- * internal paths and library errors, so the contract serves it only to an
- * admin via GET /admin/system-health. The CODE is enough to say what happened
- * and who to ask.
- */
 
-/** What each failureCode means to a clinician, not to whoever wrote it. */
 const FAILURE_TEXT = {
   matlab_unavailable:
     'The grading engine could not be reached.',
@@ -31,9 +12,7 @@ const FAILURE_TEXT = {
     'The segmentation worker could not be reached.',
   image_not_found:
     'The uploaded image could not be read back for grading.',
-  // Seen on real rows in this database. `not_recorded` is deliberately NOT
-  // here: the contract says that grouping label belongs to the admin health
-  // screen and never appears as a case's own failureCode.
+
   unknown:
     'Grading stopped, and the engine did not report a specific reason.',
 };
@@ -62,11 +41,7 @@ export const CaseStatusBanner = ({ caseData }) => {
   const c = caseData || {};
   const status = c.status;
 
-  // Only the states this component actually understands. A graded case needs
-  // no banner, and an UNRECOGNISED status gets none either: asserting "not
-  // graded yet" about a state added to the contract after this was written
-  // would be the same mistake, in a new place. The contract's four are
-  // processing | awaiting_image | graded | error.
+
   if (status !== 'error' && status !== 'processing' && status !== 'awaiting_image') return null;
 
   const failed = status === 'error';
@@ -94,7 +69,7 @@ export const CaseStatusBanner = ({ caseData }) => {
         <p className="t-mono" style={{ fontSize: 'var(--fs-small)', lineHeight: 1.6, margin: 0 }}>
           {failed
             ? (FAILURE_TEXT[c.failureCode]
-               || 'Grading stopped before producing a result.')
+              || 'Grading stopped before producing a result.')
             : (PROCESSING_TEXT[status] || 'This case has not been graded yet.')}
         </p>
 
@@ -102,7 +77,7 @@ export const CaseStatusBanner = ({ caseData }) => {
           <>
             <p className="t-mono" style={{ fontSize: 'var(--fs-small)', lineHeight: 1.6, marginTop: 'var(--sp-2)' }}>
               The empty grade, confidence and lesion fields below are <strong>missing
-              results, not findings</strong>. Nothing here says this eye is healthy.
+                results, not findings</strong>. Nothing here says this eye is healthy.
               Grade this case from the image yourself, or ask an administrator to
               re-run it.
             </p>

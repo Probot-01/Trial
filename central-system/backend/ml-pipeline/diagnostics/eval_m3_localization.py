@@ -1,49 +1,4 @@
-"""
-eval_m3_localization.py
-=======================
-Diagnostic evaluation of M3 (optic disc / fovea localization), PyTorch, with
-a characterisation of its fovea failure mode and a test of whether that mode
-is DETECTABLE at inference time.
 
-    python eval_m3_localization.py [--set heldout|all] [--json OUT.json]
-
--- WHY DETECTABILITY IS THE POINT -----------------------------------------
-M3's mean fovea error is roughly three times its median: a small number of
-images are not slightly wrong but grossly wrong, with the predicted fovea
-landing thousands of pixels away. That matters beyond the metric, because
-segInfer.quadrant_counts builds the quadrant axis from the fovea->disc
-vector. A fovea several disc-diameters out rotates that axis arbitrarily, the
-ICDR rule engine grades on quadrant counts, and the result is a wrong grade
-rather than a failure. segInfer already guards the degenerate case where disc
-and fovea coincide; a confidently-wrong fovea passes that guard.
-
-So the question this file answers is not "how often is it wrong" but "can the
-pipeline TELL when it is wrong, from something available at inference time".
-Three candidate signals are scored as detectors, by AUC and by the recall
-achievable at a usable false-alarm rate:
-
-  peak       the heatmap maximum for that landmark
-  margin     peak minus the heatmap's mean -- a peak is only meaningful
-             relative to the background it stands out from
-  geometry   the disc-fovea distance in disc-diameter units. Anatomy fixes
-             this at roughly 2-3 DD in a real eye, so a prediction far
-             outside that range is impossible regardless of confidence, and
-             unlike the other two it needs no threshold fitting.
-
-A detector that works turns a silent wrong grade into a flagged one, which is
-the actionable output here.
-
--- SETS -------------------------------------------------------------------
-Same rule as evalIdridOnnx.py: 'heldout' is the 78 images recorded in
-models/Model3/localization_test_predictions.csv, and it is the only set that
-estimates generalization. 'all' is 516 images most of which M3 trained on and
-is labelled contaminated wherever it prints.
-
-Ids are resolved through verifyModel3.resolve_images because IDRiD's Training
-and Testing folders both number from IDRiD_001 -- a bare id names two
-different eyes, and verifyModel3 records that reading the wrong folder looked
-like a preprocessing problem rather than failing loudly.
-"""
 
 import argparse
 import csv

@@ -1,46 +1,4 @@
-"""
-branchAInfer.py
-===============
-Branch A inference. Reads a fundus image, returns a graded result as JSON.
 
-    python branchAInfer.py <imagePath>
-
-Prints ONE line of JSON to stdout and nothing else on success:
-
-    {"drGradeCnn": 2, "confidenceScore": 0.71, "conformalTier": "B", ...}
-
-Exit codes:
-    0  success, JSON on stdout
-    2  wrong arguments
-    3  inference failed (unreadable image, missing model, ...)
-
-── WHY THIS IS PYTHON AND NOT MATLAB ───────────────────────────────────────
-The design doc requires MATLAB for the image-analysis and modelling code,
-including both grading branches, and that was tested rather than waived.
-MATLAB's official converter imports this network and computes the WRONG
-NUMBERS: on identical input tensors it agrees with the model's published
-logits on 8-11% of cases with a correlation of -0.25, while Python reproduces
-them to 0.0050 with 100% agreement. The structure imports correctly, which is
-what makes it dangerous -- only running it against known-good outputs catches
-it. See testImportedNetwork.m; re-run it when the converter is updated.
-
-So Branch A runs here. Everything that does not need the model's internals
-stays in MATLAB: quality gate, camera calibration, the ICDR rule engine,
-conformal tiering, the evidence report, Simulink.
-
-── ERRORS GO TO STDERR, NEVER STDOUT ───────────────────────────────────────
-Node parses stdout as JSON. A traceback printed there would be read as a
-malformed result rather than a failure, and the orchestrator would report a
-parse error instead of the real cause. stdout carries exactly one thing.
-
-── THE PREPROCESSING IS NOT A CHOICE ───────────────────────────────────────
-ben_graham_preprocess is imported from the training code, not reimplemented.
-A model only ever sees what preprocessing hands it, and this project has
-already measured what a mismatched chain costs: adding a CLAHE stage that
-training never used dropped agreement with the model's own outputs from 100%
-to 57.7%. If the training preprocessing changes, this import follows it
-automatically -- which is the entire reason it is an import.
-"""
 
 import argparse
 import json
@@ -121,48 +79,7 @@ def _fail(msg, code=3):
 
 
 def load_calibration(ckpt=None):
-    """Temperature and conformal thresholds, fitted by calibrateBranchA.m.
-
-    Absent calibration is NOT silently treated as "no calibration needed".
-    T defaults to 1.0 only with an explicit flag in the output, because an
-    uncalibrated confidence flowing into the Tier A/B/C routing would look
-    exactly like a calibrated one and would route cases on numbers that mean
-    something different.
-
-    METHOD GUARD (2026-09-20, updated for score v3): the file at CALIB_PATH
-    must declare method == EXPECTED_CALIB_METHOD (the referable-stratified
-    ordinal mode-interval scheme, score v3, assign_tier() below implements).
-    Unlike the trainedImgSize check, a MISSING or mismatched method is always
-    a hard refusal, never treated as "legacy and unverifiable" -- neither the
-    old marginal-LAC schema (a single qhat/probThreshold) nor the v2
-    per-CLASS Mondrian schema (qhatPerClass, no qhatPerStratum/
-    referableThreshold) has fields this code could silently fall back to
-    reading, and that is the point: there must be no path from a stale file
-    (of either older schema) to a score/tiering rule this code no longer
-    implements. See calibration_v1_marginal_lac_ARCHIVE.json for the LAC
-    schema; the v2 per-class schema this replaces is 'ordinal_mode_interval_
-    mondrian_v2' (qhatPerClass), now equally refused.
-
-    VERSION GUARD (2026-09-19): pass the loaded checkpoint (load_checkpoint())
-    and this refuses to treat calibration_v1.json's qhatPerStratum/temperature
-    as valid if the file's trainedImgSize doesn't match ckpt["img_size"] --
-    e.g. a v2 model trained at 512/640 with a v1-fitted file still in place.
-    qhatPerStratum is a quantile of ONE model's nonconformity scores and means
-    nothing for a differently-trained one. A calibration file with no
-    trainedImgSize field at all (but the right method) is NOT treated as a
-    mismatch (nothing to compare), only as unverifiable -- it degrades the
-    same way a missing file does, calibrated=True but flagged, not a hard
-    failure.
-
-    MODEL-VERSION GUARD (v2a integration, GATE 4): the file must also declare
-    modelVersion == BRANCH_A_MODEL_VERSION. CALIB_PATH already points at a
-    version-specific filename (never calibration_v1.json for a non-v1
-    version), so this guard is a second, explicit check rather than the only
-    thing standing between two models' thresholds -- belt and braces, not
-    redundant: a copy-pasted file with the right name but a stale
-    modelVersion field inside it must still be refused, not silently
-    accepted because the filename happened to match.
-    """
+    
     if not os.path.exists(CALIB_PATH):
         return {"temperature": 1.0, "qhatPerStratum": None, "calibrated": False,
                 "warning": f"{os.path.basename(CALIB_PATH)} missing; run "
@@ -256,17 +173,7 @@ PREPROCESS_KEYS = ("img_size", "channel_order", "normalize_mean", "normalize_std
 
 
 def load_preprocess_meta():
-    """preprocess()'s checkpoint metadata, cached on disk across processes.
-
-    preprocessBranchATensor.py is a FRESH process on every case, so the
-    in-process _CKPT cache never survived to a second case: each one paid
-    `import torch` plus a full torch.load of the checkpoint (~2.9 s measured)
-    to read four small values. They are now read FROM THE CHECKPOINT ITSELF
-    once and kept in a JSON cache keyed by the checkpoint's resolved path,
-    size and mtime, plus BRANCH_A_MODEL_VERSION -- so a swapped or retrained
-    checkpoint, or a version switch, misses the cache and is re-read. Nothing
-    is hardcoded here; a cache miss is exactly the old behaviour.
-    """
+    
     import tempfile
     from modelPaths import resolve, CheckpointMissing
     role = BRANCH_A_MODEL_VERSIONS[BRANCH_A_MODEL_VERSION]["role"]
@@ -359,17 +266,7 @@ def load_model():
 
 
 def display_base(bgr, size):
-    """The fundus at the model's geometry, without the contrast step.
-
-    ben_graham does crop -> resize -> contrast boost. Only the first two move
-    pixels; the boost is pixel-wise. So repeating the crop and resize gives an
-    image the heatmap aligns to EXACTLY while still looking like a retina,
-    rather than the grey, contrast-stretched thing the model consumes.
-
-    Display only. If this ever drifted from ben_graham's crop the consequence
-    is a heatmap drawn a few pixels off, not a wrong grade — but it is
-    duplicated logic and is flagged as such.
-    """
+   
     import cv2
     green = bgr[:, :, 1]
     _, mask = cv2.threshold(green, 7, 255, cv2.THRESH_BINARY)
@@ -386,28 +283,7 @@ def display_base(bgr, size):
 
 
 def preprocess(image_path, ckpt):
-    """The training chain, imported rather than reimplemented.
-
-    THE shared preprocessing step -- branchAInfer.py's own main() below and
-    preprocessBranchATensor.py (the MATLAB backend's tensor-generation
-    script) both call this exact function, so the two inference backends see
-    identical input by construction rather than by two implementations (one
-    of them, formerly, a MATLAB port with a measured SSIM-0.981 residual)
-    trying to independently agree. Do not reimplement any piece of this
-    elsewhere for any caller, MATLAB included.
-
-    Returns (model_input_NCHW, display_base_bgr, enhanced_rgb_uint8):
-      model_input_NCHW    - what the network actually consumes (normalized).
-      display_base_bgr    - crop+resize only, no contrast boost, BGR -- this
-                             process's own Grad-CAM overlay background.
-      enhanced_rgb_uint8   - crop+resize+contrast boost, RGB, uint8, BEFORE
-                             normalization -- i.e. model_input_NCHW's pixels
-                             one step earlier. Exported for
-                             preprocessBranchATensor.py, whose consumer
-                             (MATLAB's gradCam.m) expects the same enhanced
-                             image the network saw, not the unenhanced one
-                             this process's own overlay uses.
-    """
+    
     import cv2
     from preprocessing.ben_graham import ben_graham_preprocess
 
@@ -439,36 +315,7 @@ def softmax(v):
 
 
 def ordinal_mode_interval_score(probs):
-    """Ordinal mode-interval nonconformity score, v3 -- see
-    calibration/ordinalModeIntervalScore.m.
-
-    mode = argmax(probs), ties broken to the HIGHER grade (last index
-    attaining the max, not the first) -- unchanged from v2. score(mode) = 0
-    by definition. For k != mode: score(k) = (sum of probs over the grades
-    between mode and k inclusive) MINUS probs[k] -- the interval mass minus
-    k's own mass. Nondecreasing as k moves away from the mode.
-
-    v2's score included k's own probability mass in its own score
-    (score(mode) == probs[mode], close to 1 for a confident-correct case --
-    backwards for a nonconformity score, where low should mean "conforms
-    well"). This never showed up in mode MEMBERSHIP (the mode is always
-    added to the set regardless of its own score), but it silently inflated
-    qhat wherever a grade's own calibration examples included points whose
-    true grade equalled the mode, admitting more neighbouring grades than
-    the requested alpha should have. v3 fixes the definition itself: see
-    experiments/conformalPolicySweep2.py's row_scores_v3 (the reference this
-    was ported from) and tests/conformal_golden_vectors.json for the
-    hand-worked vectors that pin it down.
-
-    This is a direct, function-for-function port of
-    calibration/ordinalModeIntervalScore.m in the MATLAB codebase. It is
-    duplicated here only because Branch A's model runs in Python while
-    conformal tiering for the MATLAB backend runs in MATLAB (see this file's
-    own header for why); the two are NOT allowed to independently drift, and
-    tests/conformal_golden_vectors.json plus tests/test_conformal_v2.py
-    are what catches it if they ever do -- both implementations are checked
-    against the same MATLAB-generated golden vectors on every run.
-    """
+    
     max_val = max(probs)
     mode = max(g for g in range(5) if probs[g] == max_val)  # last tie = higher grade
     scores = [0.0] * 5
@@ -485,41 +332,7 @@ STRATUM_OF_CLASS = [0, 0, 1, 1, 1]
 
 
 def assign_tier(probs, calib):
-    """Conformal tier from a contiguous, referable-stratified prediction set
-    (score v3), method ordinal_mode_interval_stratified_v3, plus the
-    referable-threshold safety gate.
-
-    Membership of candidate grade k is tested as
-    score(k) <= qhatPerStratum[stratumOf[k]] + EPS -- the threshold fitted
-    from calibration examples whose TRUE grade fell in k's own REFERABLE
-    STRATUM (non-referable: 0-1; referable: 2-4), not k's individual grade
-    (v2's finest per-grade split could not support a reliable quantile at
-    grade 3's n). The mode is always a member regardless of its own score
-    (score v3 makes this trivial: score(mode)=0 <= any qhat >= 0). Per-
-    stratum thresholds can still reopen gaps in that raw membership even
-    though the score is ordinal, so the CONTIGUOUS HULL [min(raw), max(raw)]
-    is returned, never the raw set -- it only ever adds coverage, and a
-    gapped set like {1,3} misrepresents what "referable vs not" means on an
-    ordinal scale. The EPS guard mirrors the score-scale-comparison
-    discipline needed for the same reason in v2; here it also absorbs the
-    last-bit differences that can arise between this Python implementation
-    and the MATLAB one it is checked against in tests/test_conformal_v2.py.
-
-    Because the mode is always a member, the returned set is NEVER empty.
-
-    REFERABLE-THRESHOLD SAFETY GATE (new in v3): a case whose own
-    P(g>=2) = sum(probs[2:5]) is >= calib["referableThreshold"] can NEVER be
-    Tier A, even if the conformal set itself says {0,1} -- this is a
-    separate, independently-fitted check (targets ~95% referable
-    sensitivity on its own), not a property of the stratum-conditional set
-    guarantee, which is about the stratum on average, not this specific
-    case. Demotes A -> B; does not change the reported prediction set.
-
-    Branch disagreement and forced-poor-quality overrides are applied by the
-    orchestrator, which is the only place that knows about Branch B.
-
-    Returns (tier, predictionSet, reason, low, high, contiguous).
-    """
+    
     if not calib.get("calibrated") or calib.get("qhatPerStratum") is None:
         return None, [], "no calibration available", None, None, None
 
@@ -566,45 +379,11 @@ def assign_tier(probs, calib):
     return tier, pred_set, reason, low, high, contiguous
 
 
-# ── ONNX Runtime backend (BRANCH_A_INFERENCE_ENGINE=onnx) ───────────────────
-# The SIH online-demo deployment only (ml-inference-service/, Render free
-# web service, 512MB). torch+timm alone cost ~480MB to import and load this
-# model -- measured directly, see the deployment session's own notes --
-# before a single inference runs, which does not fit. ONNX Runtime's own
-# import is ~30MB.
-#
-# Grad-CAM and MC-dropout are computed in CLOSED FORM instead of via
-# autograd: everything after backbone.bn2.act (the spatial feature map
-# gradcam.py already hooks, TARGET_LAYER) is global-average-pool ->
-# dropout (identity in eval mode for the point estimate) -> one Linear
-# layer (head.weight/head.bias) -- simple enough to differentiate and
-# resample by hand. This is the SAME technique mcDropoutMatlab.m already
-# uses for MC-dropout on the MATLAB backend (verified there to 8.3e-07
-# against the real head), extended here to Grad-CAM too:
-#
-#   d(logits[k])/d(acts[c,h,w]) = head.weight[k,c] / (H*W)   -- CONSTANT
-#   over all (h,w) for a fixed channel, because global-average-pooling's
-#   own gradient is uniform. So Grad-CAM's channel weights (normally the
-#   spatial MEAN of the backprop gradient) equal head.weight[class,:]/(H*W)
-#   exactly -- not an approximation, the same formula, computed differently.
-#
-# Verified against the real torch path (logits, Grad-CAM map, and a
-# deterministic same-dropout-mask head-math cross-check that isolates RNG
-# differences) across three distinct real images before being trusted:
-# logits max|diff| ~5e-6, Grad-CAM max|diff| ~3e-6, head-math cross-check
-# ~1e-6 -- see extract_branchA_onnx_artifacts.py's header for how the two
-# derived artifacts below were produced.
-#
-# ONLY supports branchA_v2c (the deployed default): branchA_v2c_graphcam.onnx
-# and branchA_v2c_head.npz were generated for that version specifically.
+
 BRANCH_A_INFERENCE_ENGINE = os.environ.get("BRANCH_A_INFERENCE_ENGINE", "torch").strip().lower()
 _ONNX_GRAPHCAM_PATH = os.path.join(ML_ROOT, "training", "onnx_out", "branchA_v2c_graphcam.onnx")
 _ONNX_HEAD_NPZ_PATH = os.path.join(MODEL_DIR, "Model1", "v2c", "branchA_v2c_head.npz")
-# The 5 fields preprocess()/load_calibration() need (img_size, channel_order,
-# normalize_mean, normalize_std, preprocessing), extracted once offline
-# (extract_branchA_onnx_artifacts.py) -- NOT read via load_checkpoint() here,
-# which would import torch just to read them, reintroducing the exact
-# ~480MB import cost this whole path exists to avoid.
+
 _ONNX_META_PATH = os.path.join(MODEL_DIR, "Model1", "v2c", "branchA_v2c_meta.json")
 _ACT_OUTPUT_NAME = "/backbone/bn2/act/Mul_output_0"
 
@@ -620,13 +399,7 @@ def _entropy(p, axis=-1):
 
 
 def _mc_dropout_onnx(pooled, W, b, drop_rate, temperature, n_passes=20, seed=12345):
-    """MC-dropout over the head, closed form: resample a dropout mask on the
-    pooled features (the same point dropout acts at in
-    DRClassifier.forward: head(dropout(backbone(x)))) and apply the head's
-    own frozen weights by hand. Returns the same shape mcDropout.py's
-    mc_dropout() does, so both engines write the same quantity into
-    grading_results.uncertainty_score.
-    """
+  
     if n_passes < 2:
         raise ValueError("n_passes must be at least 2")
     if drop_rate <= 0:
@@ -674,8 +447,7 @@ def _mc_dropout_onnx(pooled, W, b, drop_rate, temperature, n_passes=20, seed=123
 
 
 def run_onnx(image_path, gradcam_path, mc_dropout_passes):
-    """The ONNX Runtime twin of main()'s torch block: identical output dict
-    shape, computed without torch -- see this section's header comment."""
+
     if BRANCH_A_MODEL_VERSION != "branchA_v2c":
         _fail("BRANCH_A_INFERENCE_ENGINE=onnx only supports branchA_v2c, got "
              f"BRANCH_A_MODEL_VERSION={BRANCH_A_MODEL_VERSION!r}")
@@ -811,17 +583,7 @@ def main():
         grade = int(cal.argmax())
         tier, pred_set, tier_reason, set_low, set_high, set_contiguous = assign_tier(cal, calib)
 
-        # Live referable flag (conformal policy v3): P(g>=2) clearing the
-        # fitted referableThreshold (targets ~95% referable sensitivity on
-        # its own, independent of the conformal set/tier), OR the grade-3/
-        # grade-4 safety check (P(g3)+P(g4) > 0.5) -- catches a genuinely
-        # proliferative-leaning case even when neither single grade nor the
-        # combined referable mass alone crosses its own threshold. The
-        # safety-check term does not require calibration; the
-        # referableThreshold term does (absent calibration, only the safety
-        # check can fire, which is intentional -- referable must never look
-        # MORE confident than the model's calibration state actually
-        # supports).
+      
         p_referable = float(cal[2] + cal[3] + cal[4])
         p34 = float(cal[3] + cal[4])
         referable_threshold = calib.get("referableThreshold")
@@ -845,14 +607,7 @@ def main():
             "tierReason": tier_reason,
             "temperature": T,
             "calibrated": bool(calib.get("calibrated", False)),
-            # The ACTUAL resolved version, not calib.get("modelVersion", ...):
-            # calib can be legitimately uncalibrated/absent (v2a today, by
-            # design -- see the v2a integration brief) while inference still
-            # ran on a real, known model. Reading this from calib would have
-            # reported "branchA_v1" while actually running v2a's weights
-            # whenever calibration was missing -- a real bug this fixes, not
-            # cosmetic: gradingOrchestrator.js and the DB row trust this
-            # field to know which model actually produced the grade.
+           
             "modelVersion": BRANCH_A_MODEL_VERSION,
             "imgSize": int(ckpt["img_size"]),
             "preprocessing": ckpt.get("preprocessing", ""),
@@ -860,16 +615,7 @@ def main():
         if calib.get("warning"):
             out["calibrationWarning"] = calib["warning"]
 
-        # ── Task 6.1: MC-dropout uncertainty ───────────────────────────────
-        # Same process and same preprocessed tensor as the grade. On this model
-        # the convolutional trunk is deterministic and the single dropout sits
-        # after it, so 20 passes cost ~0.1 s -- the trunk runs once.
-        #
-        # A failure here must NOT fail the grade: uncertainty_score orders the
-        # review QUEUE, it does not decide anything clinical. The column stays
-        # NULL and the queue falls back to (1 - confidence), which is what it
-        # already does. NULL means "not measured"; 0.0 would mean "measured, and
-        # maximally certain", and those must never be confused.
+        
         if args.mc_dropout and args.mc_dropout >= 2:
             try:
                 from mcDropout import mc_dropout
@@ -884,14 +630,7 @@ def main():
         else:
             out["uncertaintyScore"] = None
 
-        # ── Grad-CAM, in the same process ──────────────────────────────────
-        # Same spawn as the grade: the interpreter start and model load
-        # dominate the cost, so a second process would roughly double the time
-        # to produce one explained result.
-        #
-        # A Grad-CAM failure must NOT fail the grade. The grade is the clinical
-        # output and is already computed; losing the picture is a degraded
-        # result, not a lost one. The reason is reported rather than swallowed.
+       
         if args.gradcam:
             try:
                 from gradcam import compute_gradcam, save_overlay
@@ -900,11 +639,7 @@ def main():
                 info = save_overlay(cam, base, args.gradcam)
                 out["gradcam"] = info
                 out["gradcamClass"] = cam_class
-                # The RAW cam, at its own 12x12 resolution -- 144 floats, small
-                # enough to travel in the JSON. Task 7.1 scores attention
-                # against a lesion mask and needs the map itself; the overlay
-                # PNG has already been colour-mapped and alpha-blended with the
-                # fundus, so recovering the map from it is not possible.
+              
                 out["gradcamMap"] = [[float(v) for v in row] for row in cam]
                 out["gradcamPath"] = args.gradcam
                 if info.get("mostlyOutsideRetina"):

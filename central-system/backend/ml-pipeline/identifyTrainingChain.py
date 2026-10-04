@@ -1,38 +1,4 @@
-"""
-identifyTrainingChain.py
-========================
-Determine which preprocessing chain Branch A (Model1) was ACTUALLY trained
-with, by reproducing its published logits.
 
-    python identifyTrainingChain.py
-
-── WHY THIS IS NEEDED ──────────────────────────────────────────────────────
-Two sources disagree about the training preprocessing:
-
-  * the repo ships ben_graham.py AND clahe_enhance.py, side by side, with
-    clahe_enhance exported from preprocessing/__init__.py;
-  * the checkpoint's own metadata says
-
-        preprocessing: "ben_graham: circular crop -> resize ->
-                        gaussian-subtraction contrast"
-
-    naming ben_graham only, with no mention of CLAHE.
-
-The training script is not in the repo, so neither can be confirmed by
-reading. Guessing wrong is not a cosmetic error: serving a chain the model
-was not trained on degrades every prediction silently, which is the exact
-failure this project treats as its highest risk.
-
-── THE TEST ────────────────────────────────────────────────────────────────
-The checkpoint ships the test-split LOGITS. Logits are a fingerprint: run the
-model on the same images with the right preprocessing and they reproduce
-almost exactly; with the wrong preprocessing they do not. So each candidate
-chain is run and compared against the stored values.
-
-The test split is 550 APTOS + 78 IDRiD images. APTOS is not in the repo, but
-IDRiD is, so this runs on those 78 -- ample to separate two chains that
-differ by a whole CLAHE stage.
-"""
 
 import os
 import sys
@@ -54,9 +20,7 @@ IDRID_DIR = os.path.join(HERE, "datasets", "idrid", "grading",
 
 
 class DRClassifier(nn.Module):
-    """Rebuilt from the checkpoint's own `arch` string:
-       timm(model_name, num_classes=0, drop_rate=0) -> Dropout -> Linear
-    """
+   
 
     def __init__(self, model_name, num_classes, num_features, drop_rate):
         super().__init__()
@@ -78,25 +42,7 @@ def load_model(ckpt):
 
 
 def find_image(image_id):
-    """'idrid__idrid_train_IDRiD_396' -> the IDRiD_396 file in the TRAINING set.
-
-    The split in the id is authoritative and must not be treated as a hint.
-    IDRiD reuses filenames across its two splits -- IDRiD_044 exists in both --
-    so 'a. Training Set/IDRiD_044.jpg' and 'b. Testing Set/IDRiD_044.jpg' are
-    DIFFERENT PATIENTS.
-
-    The first version of this function searched Training then Testing and
-    returned whichever it found first. That silently returned the wrong
-    patient's photograph whenever an id named one split and the file happened
-    to exist only in the other -- which is common here, because this repo's
-    Training Set is incomplete (251 of IDRiD's 413 images).
-
-    The damage was invisible and looked like a modelling result: it depressed
-    logit agreement to 81.2%, which was then reported as "the port is close but
-    not exact". It was not the port. Returning None and skipping is the only
-    safe behaviour; a missing file must never be substituted with a different
-    one.
-    """
+    
     stem_full = image_id.split("__")[-1]
     if stem_full.startswith("idrid_train_"):
         split = "a. Training Set"

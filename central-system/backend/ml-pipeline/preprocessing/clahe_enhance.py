@@ -1,45 +1,10 @@
-"""
-clahe_enhance.py
-================
-CLAHE (Contrast Limited Adaptive Histogram Equalization) enhancement
-for fundus photographs, applied to the L channel in LAB color space.
-
-Reused across vessel segmentation, lesion segmentation, and grading
-training scripts in the SIH 2026 DR Screening pipeline.
-
-Usage:
-    from preprocessing.clahe_enhance import clahe_enhance
-    enhanced = clahe_enhance(image, clip_limit=2.0)
-"""
 
 import cv2
 import numpy as np
 
 
 def clahe_enhance(image: np.ndarray, clip_limit: float = 2.0, tile_grid_size: tuple = (8, 8)) -> np.ndarray:
-    """
-    Apply CLAHE to the L (luminance) channel of a fundus image in LAB space.
-
-    Converts BGR → LAB, applies CLAHE on L only (preserves colour fidelity),
-    then converts back to BGR. This avoids the colour distortion caused by
-    applying histogram equalization directly to RGB/BGR channels independently.
-
-    Parameters
-    ----------
-    image : np.ndarray
-        Input BGR fundus image, shape (H, W, 3), dtype uint8.
-    clip_limit : float
-        Threshold for contrast limiting. Higher values give more aggressive
-        enhancement but increase noise amplification. Default 2.0.
-    tile_grid_size : tuple of (int, int)
-        Size of the grid for histogram equalization. Default (8, 8).
-
-    Returns
-    -------
-    np.ndarray
-        CLAHE-enhanced image, shape (H, W, 3), dtype uint8.
-        Same spatial dimensions as the input.
-    """
+    
     if image is None or image.size == 0:
         raise ValueError("clahe_enhance received an empty or None image.")
     if image.ndim != 3 or image.shape[2] != 3:

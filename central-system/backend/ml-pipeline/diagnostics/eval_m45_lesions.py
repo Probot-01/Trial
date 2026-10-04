@@ -1,61 +1,4 @@
-"""
-eval_m45_lesions.py
-===================
-Diagnostic evaluation of M4 (bright lesions) and M5 (red lesions), PyTorch,
-against IDRiD's A. Segmentation ground truth -- plus direct tests of two
-specific suspected failure modes.
 
-    python eval_m45_lesions.py [--json OUT.json] [--limit N]
-
--- WHICH IMAGES ARE HELD OUT, PER MODEL -----------------------------------
-The two models were split differently, and using one split for both would
-report training error for one of them.
-
-  M5  red_lesion_metrics.json records its exact split: 65 train / 16 val ids
-      over all 81 images (the Training and Testing folders pooled:
-      IDRiD_01-54 and IDRiD_55-81). Its 16 val_ids are the held-out set, and
-      per_image_val_dice_at_best lets the recipe be checked against the
-      number training recorded.
-  M4  bright_lesion_final_metrics.json records 43 train / 11 val and NO ids,
-      totalling the 54 images of the Training folder alone. So M4 never saw
-      the 27-image Testing Set (IDRiD_55-81) -- that is a clean held-out set
-      for M4, better than the unrecorded val split.
-
-segInfer.py already notes M4's val split is unrecorded and its exact Dice
-therefore unreproducible. This works around that rather than ignoring it.
-
--- WHAT M4's TARGET ACTUALLY IS -------------------------------------------
-M4's checkpoint says "bright lesion" without naming the ground truth. IDRiD
-ships Hard Exudates (EX) and Soft Exudates (SE) separately, and "bright
-lesion" could mean either or their union. Guessing would silently halve or
-double the target. So all three hypotheses are scored and the best-fitting
-one is reported -- the model's own agreement decides it, which is the same
-evidence-over-assumption rule verifyModel3.py used for M3's interpolation.
-
--- THE TWO SUSPECTED FAILURE MODES, TESTED -------------------------------
-1. Does M4 fire on the OPTIC DISC? The disc is bright and round and IDRiD
-   annotates it (5. Optic Disc), so this is directly measurable: what share
-   of M4's false positives land inside the disc, and how much does Dice
-   improve when the disc is masked. segInfer applies an od_mask of radius 58
-   because the checkpoint says the model does NOT -- this quantifies what
-   that mask is worth and whether 58 px is the right radius.
-
-2. Does M5 miss small microaneurysms? MA and HE are annotated separately, so
-   per-lesion recall can be computed against each and stratified by lesion
-   AREA. "Misses microaneurysms" and "misses small lesions" are different
-   claims with different fixes, and the size breakdown separates them.
-   Detection is scored per CONNECTED COMPONENT, not per pixel: the rule
-   engine counts lesions, and a 5-pixel MA contributes nothing to pixel Dice
-   while mattering fully to an ICDR grade.
-
--- PREPROCESSING ----------------------------------------------------------
-CROP-512: ben_graham_preprocess(target_size=512) -> RGB, then
-(x/255 - 0.5)/0.5 -- NOT ImageNet, despite M4's checkpoint saying
-encoder_weights='imagenet', which describes only the encoder's
-initialisation. segInfer records that reading it as the input normalization
-costs Dice 0.49 -> 0.33 and still produces a plausible-looking mask. Called
-through segInfer so there is one copy.
-"""
 
 import argparse
 import json
@@ -92,13 +35,7 @@ def find_image(img_id):
 
 
 def load_gt_mask(img_id, split, kind, shape):
-    """Binary GT at ORIGINAL resolution, or zeros when that lesion is absent.
-
-    An absent file is a genuine negative in IDRiD -- not every eye has soft
-    exudates -- so it becomes an empty mask rather than being skipped. Skipping
-    would quietly drop the images where the model should predict nothing,
-    which are exactly the ones a false-positive problem shows up on.
-    """
+ 
     from PIL import Image
     folder = os.path.join(SEG, "2. All Segmentation Groundtruths",
                           IMG_DIRS[split], GT_SUB[kind])
@@ -112,13 +49,7 @@ def load_gt_mask(img_id, split, kind, shape):
 
 
 def to_512(mask_orig, box):
-    """ORIGINAL-space mask -> CROP-512, matching the model's frame.
-
-    NEAREST: a binary mask must stay binary. segInfer makes the same choice
-    going the other way, for the same reason -- interpolating produces
-    fractional values that a later threshold re-binarises along resampled
-    edges, changing lesion areas and counts.
-    """
+  
     import cv2
     x0, y0, bw, bh = box
     crop = mask_orig[y0:y0 + bh, x0:x0 + bw]

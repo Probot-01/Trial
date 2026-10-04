@@ -1,22 +1,4 @@
-/**
- * Sync Manager -- design doc §4.2 / §10.1, the mobile implementation.
- *
- *   - Order: urgency tier first, then age (sync_queue.priority_tier, enqueued_at).
- *   - Every case sends its lightweight summary packet first, then the image:
- *     on a thin link central learns the case exists (patient, questionnaires,
- *     "this PHC is alive") before the megabytes move.
- *   - Images above POLICY.chunkThresholdBytes go through the resumable chunked
- *     upload; smaller ones in one POST.
- *   - The local capture ID is the idempotency key on every request, so a retry
- *     after a lost response is recognised centrally, never a second case.
- *   - "Synced" = central accepted the image (201 or duplicate 200). Nothing
- *     else sets that state (§4.4).
- *   - Transient failures back off and retry; a rejection (4xx) stops and is
- *     shown to the technician. Nothing is ever dropped silently.
- *
- * Also polls grading status for synced cases, so the Local Queue moves on to
- * RESULT READY by itself.
- */
+
 import { AppState } from 'react-native';
 import * as Network from 'expo-network';
 import { POLICY } from '../config';
@@ -116,11 +98,7 @@ class SyncManager {
     this.set({ pendingCount: await pendingUploadCount() });
   }
 
-  /**
-   * Run a pass now, or once more right after the current one. The promise
-   * resolves when that pass has finished; it never rejects (failures are
-   * recorded on the queue rows and in the snapshot).
-   */
+
   trigger(): Promise<void> {
     if (this.inFlight) { this.rerun = true; return this.inFlight; }
     this.inFlight = (async () => {
@@ -145,8 +123,7 @@ class SyncManager {
       await this.refreshPending();
       return;
     }
-    // The PHC PC first: it is on the LAN (or this phone's hotspot) and works
-    // with no internet at all, which is exactly when it matters.
+
     await this.pcPass();
     this.set({ activity: 'CONTACTING CENTRAL SERVER...' });
     const up = await checkHealth();
@@ -204,9 +181,11 @@ class SyncManager {
       questionnaireData: b.questionnaire,
       captureMetadata: b.metadata,
       qualityScores: b.capture.qualityScores
-        ? { ...b.capture.qualityScores.scores, status: b.capture.qualityScores.status, reason: b.capture.qualityScores.reason,
-            compositeScore: b.capture.qualityScores.compositeScore, preset: b.capture.qualityScores.preset,
-            analysedAt: b.capture.qualityScores.analysedAt, bestEffort: b.capture.bestEffort, source: 'mobile_js_port' }
+        ? {
+          ...b.capture.qualityScores.scores, status: b.capture.qualityScores.status, reason: b.capture.qualityScores.reason,
+          compositeScore: b.capture.qualityScores.compositeScore, preset: b.capture.qualityScores.preset,
+          analysedAt: b.capture.qualityScores.analysedAt, bestEffort: b.capture.bestEffort, source: 'mobile_js_port'
+        }
         : null,
       qualityGateEngine: b.capture.qualityEngine,
       pendingCount,

@@ -1,35 +1,9 @@
 'use strict';
 
-/**
- * workerSupervisor.js -- keeps a persistent worker alive, for any of them.
- *
- *   const sup = createWorkerSupervisor({ name, sessionDir, heartbeatPath, ... });
- *   sup.start();           // at boot
- *   sup.getStatus();       // for GET /admin/system-health
- *
- * Two workers are supervised: the MATLAB inference session (backend plan §E)
- * and the Python segmentation worker. They fail the same way and need the same
- * response, so the logic lives here once:
- *
- *   - the HEARTBEAT decides, not the PID. A process that is up but wedged
- *     keeps its PID and stops refreshing the file.
- *   - a restart is `stop` then `start`, in that order. `stop` is a no-op when
- *     nothing runs, and it force-kills a process that is alive but no longer
- *     heart-beating -- which `start` alone would refuse to replace, because the
- *     manage script would see a live PID and report "Already running".
- *   - restarts are CAPPED. A missing model file or a licence problem is not
- *     fixed by restarting, and a supervisor that keeps trying turns one broken
- *     install into an endless process-spawn loop. After the cap it raises an
- *     alert and stops.
- *   - a cold start at boot is not an alert. A missing heartbeat when the
- *     backend has only just come up means "start it", not "something is wrong".
- *
- * The alert goes to systemAlerts, so it surfaces on /admin/system-health, and
- * it is RESOLVED automatically when the heartbeat comes back.
- */
 
-const fs           = require('fs');
-const path         = require('path');
+
+const fs = require('fs');
+const path = require('path');
 const { execFile } = require('child_process');
 
 const { raiseAlert, resolveAlert } = require('./systemAlerts');
@@ -73,9 +47,11 @@ function createWorkerSupervisor(cfg) {
   /** Runs `<managerScript> <cmd>`; resolves { ok, output }. Test seam. */
   let runManager = (cmd) => new Promise((resolve) => {
     if (process.platform !== 'win32') {
-      return resolve({ ok: false, output:
-        `Automatic restart uses ${path.basename(managerScript)} and is only `
-        + 'implemented on Windows.' });
+      return resolve({
+        ok: false, output:
+          `Automatic restart uses ${path.basename(managerScript)} and is only `
+          + 'implemented on Windows.'
+      });
     }
     execFile('powershell.exe',
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', managerScript, cmd],
@@ -174,8 +150,7 @@ function createWorkerSupervisor(cfg) {
       if (!enabled()) console.log(`${tag} disabled.`);
       return;
     }
-    // Treat boot like "never started": a missing heartbeat means start it now,
-    // without raising an alert for what is just a cold start.
+
     state.status = 'unknown';
     checkOnce();
     timer = setInterval(checkOnce, intervalMs);

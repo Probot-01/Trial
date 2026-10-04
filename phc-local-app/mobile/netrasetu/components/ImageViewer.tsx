@@ -1,9 +1,4 @@
-/**
- * The desktop RetinalImageViewer for touch: the image is always fully visible
- * (contain, never cropped), pinch or +/- to zoom 50-400%, drag to pan,
- * double-tap to toggle 160%. Corner brackets and fovea reticle as on the
- * desktop scan frame.
- */
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, ImageSourcePropType, PanResponder, Pressable, Text, View } from 'react-native';
 import { makeStyles } from '../theme/ThemeContext';

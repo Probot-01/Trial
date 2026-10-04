@@ -1,9 +1,4 @@
-/**
- * Design tokens, ported from phc-local-app/frontend/src/styles/main.css so the
- * mobile app reads as the same product as the desktop PHC app: cream surfaces,
- * crimson accent, monospace uppercase labels, zero border radius, hard offset
- * shadows. `dark` mirrors the desktop's [data-contrast="dark"] palette.
- */
+
 
 export interface Palette {
   crimson: string;

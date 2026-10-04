@@ -1,38 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * demo-reset.js -- put THIS checkout's stack into a clean, recording-ready state.
- *
- *   node scripts/demo-reset.js [--yes-wipe-database] [--skip-cases] [--no-review]
- *
- *   1. stops the stack (central, PHC desktop backend, both web frontends, the
- *      MATLAB session, the segmentation worker) -- by the ports and pid files this
- *      checkout's own .env files name, so a second worktree's stack is never touched
- *   2. wipes: the central database (dropped and recreated: cases, referrals,
- *      reviews, access log, alerts, users, PHC sites), central media, the PHC
- *      desktop's SQLite queue and its stored images, and the worker session logs
- *   3. runs every migration, re-seeds users and PHC sites (phc_code populated,
- *      fresh API keys; PHC001's id/key go into the PHC backend's git-ignored .env),
- *      and creates the PHC desktop technician account once its backend is up
- *   4. starts everything and waits until every /health check is green
- *   5. warms MATLAB and the models with one real inference (no case is created)
- *   6. creates the demo set (scripts/demo-set.json) through the REAL pipeline:
- *      PHC local backend -> quality gate -> sync -> central grading, then verifies
- *      each case got the outcome the demo needs
- *   7. reviews the cases that carry a `review` (as the demo ophthalmologist, through
- *      the real review API) and leaves the two referables UNREVIEWED
- *   8. prints credentials, URLs, case references, and how to clear the mobile store
- *
- * Secrets: passwords are generated per run and printed once at the end, in
- * memory only. Nothing is written to a file that git could pick up; service logs
- * go to the OS temp directory. The database is dropped by name from
- * central-system/backend/.env; the shared default name dr_screening_central is
- * refused unless --yes-wipe-database is given.
- *
- * Exit: 0 = ready; 1 = a step failed; 2 = ready but a demo case did not get the
- * outcome the demo needs (the table says which).
- */
+
 
 const { spawnSync } = require('child_process');
 const crypto = require('crypto');
@@ -152,8 +121,7 @@ async function startAndWait() {
   return cfg2;
 }
 
-// The PHC desktop's login is real: a technician row in its SQLite (wiped above), created
-// once the backend has made the schema. Generated password, printed once at the end.
+
 function addTechnician() {
   const password = crypto.randomBytes(9).toString('base64url');
   const r = spawnSync(process.execPath, [path.join(PHC_DIR, 'scripts', 'technician.js'), 'add', 'technician', 'Demo Technician', '--password', password],
@@ -179,7 +147,7 @@ function findIdrid(id) {
   const rel = path.join('central-system', 'backend', 'ml-pipeline', 'datasets', 'idrid', 'grading',
     'B. Disease Grading', '1. Original Images', 'b. Testing Set', name);
   const cands = [process.env.IDRID_TESTING_DIR && path.join(process.env.IDRID_TESTING_DIR, name),
-    path.join(ROOT, rel), path.join(ROOT, '..', 'SIH_2026', rel), path.join(ROOT, '..', 'SIH_2026-integration', rel)].filter(Boolean);
+  path.join(ROOT, rel), path.join(ROOT, '..', 'SIH_2026', rel), path.join(ROOT, '..', 'SIH_2026-integration', rel)].filter(Boolean);
   const hit = cands.find((c) => fs.existsSync(c));
   if (!hit) throw new Error(`${name} not found. Set IDRID_TESTING_DIR to the IDRiD 'b. Testing Set' folder. Looked in:\n  ${cands.join('\n  ')}`);
   return hit;
@@ -187,19 +155,17 @@ function findIdrid(id) {
 
 async function phcCall(base, method, url, body, form, token) {
   const headers = form || !body ? {} : { 'content-type': 'application/json' };
-  // Sent on every call. This script used to rely on LOCAL_AUTH_ENABLED=false,
-  // which is why the PHC backend shipped with auth OFF -- and with it off,
-  // anonymous GET /patients returns real names, ages and phone numbers to
-  // anything on the same network. demo-reset logs in like a technician does
-  // instead, so the flag can default to true.
+
   if (token) headers.authorization = `Bearer ${token}`;
-  const r = await fetch(base + url, { method, signal: AbortSignal.timeout(180000),
-    body: form || (body ? JSON.stringify(body) : undefined), headers });
+  const r = await fetch(base + url, {
+    method, signal: AbortSignal.timeout(180000),
+    body: form || (body ? JSON.stringify(body) : undefined), headers
+  });
   const text = await r.text();
   let json = null; try { json = JSON.parse(text); } catch { /* keep text */ }
   if (!r.ok) throw new Error(`${method} ${url} -> ${r.status} ${json ? JSON.stringify(json) : text.slice(0, 200)}`
     + (r.status === 401 ? ' (PHC login failed or the session expired -- demo-reset signs in as the'
-                        + ' technician account it just created; it no longer needs auth switched off)' : ''));
+      + ' technician account it just created; it no longer needs auth switched off)' : ''));
   return json;
 }
 
@@ -227,14 +193,14 @@ async function createDemoSet(cfg2, creds) {
   const made = [];
   for (const [i, c] of set.entries()) {
     const file = findIdrid(c.idrid);
-    const p = await phcCall(base, 'POST', '/patients', { name: c.name, age: c.age,
-      contactNumber: `+91000000${String(1000 + i)}`, consentGivenAt: new Date().toISOString() }, null, token);
+    const p = await phcCall(base, 'POST', '/patients', {
+      name: c.name, age: c.age,
+      contactNumber: `+91000000${String(1000 + i)}`, consentGivenAt: new Date().toISOString()
+    }, null, token);
     const fd = new FormData();
     fd.append('patientId', p.patientId); fd.append('cameraDeviceId', 'unknown');
     fd.append('image', new Blob([fs.readFileSync(file)], { type: 'image/jpeg' }), path.basename(file));
-    // The gate is a fresh `matlab -batch` per capture; on Windows it now and then dies at
-    // process start (exit 3221225794, DLL init) while other MATLABs are running. The
-    // capture is saved and its 503 carries the id, so re-run the check instead of failing.
+
     let cap;
     try { cap = await phcCall(base, 'POST', '/captures', null, fd, token); } catch (err) {
       const m = /"captureId":"([^"]+)"/.exec(err.message);
@@ -248,9 +214,11 @@ async function createDemoSet(cfg2, creds) {
       throw new Error(`IDRiD_${c.idrid}: the quality gate said '${cap.qualityStatus}${cap.qualityReason ? '/' + cap.qualityReason : ''}', so it would never sync. Pick another image in demo-set.json.`);
     }
     await phcCall(base, 'POST', `/captures/${cap.captureId}/questionnaire`, { riskFactors: c.risk, symptoms: c.symptoms, language: 'en' }, null, token);
-    await phcCall(base, 'POST', `/captures/${cap.captureId}/capture-metadata`, { cameraDeviceReported: 'unknown',
+    await phcCall(base, 'POST', `/captures/${cap.captureId}/capture-metadata`, {
+      cameraDeviceReported: 'unknown',
       pupilStatus: 'dilated', lightingEnvironment: 'indoor_clinic', observedIssues: ['none_noticed'],
-      workerUsabilityRating: 'clear', eyeLaterality: c.eye }, null, token);
+      workerUsabilityRating: 'clear', eyeLaterality: c.eye
+    }, null, token);
     say(`     ${c.role.padEnd(12)} IDRiD_${c.idrid}  captured (${cap.captureId}), gate ${cap.qualityStatus}`);
     made.push({ ...c, captureId: cap.captureId });
   }
@@ -292,17 +260,23 @@ function verify(made) {
 async function reviewSome(made, creds, cfg2) {
   say('7/8 reviewing the cases that carry a review; the referables stay unreviewed');
   const base = `http://localhost:${cfg2.ports.central}`;
-  const login = await fetch(`${base}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(creds.ophthalmologist) });
+  const login = await fetch(`${base}/api/v1/auth/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(creds.ophthalmologist)
+  });
   if (!login.ok) throw new Error(`demo ophthalmologist login failed (${login.status})`);
   const cookie = (login.headers.getSetCookie() || []).map((c) => c.split(';')[0]).join('; ');
   const csrf = (await login.json()).csrfToken;
   for (const m of made.filter((x) => x.review)) {
     const r = m.review;
-    const body = { decision: r.decision, overrideReasonCategory: r.decision === 'override' ? r.category : null,
-      ...(r.correctedGrade !== undefined ? { correctedGrade: r.correctedGrade } : {}) };
-    const res = await fetch(`${base}/api/v1/cases/${m.case_id}/review`, { method: 'POST',
-      headers: { 'content-type': 'application/json', cookie, 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+    const body = {
+      decision: r.decision, overrideReasonCategory: r.decision === 'override' ? r.category : null,
+      ...(r.correctedGrade !== undefined ? { correctedGrade: r.correctedGrade } : {})
+    };
+    const res = await fetch(`${base}/api/v1/cases/${m.case_id}/review`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie, 'X-CSRF-Token': csrf }, body: JSON.stringify(body)
+    });
     const out = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(`review of ${m.patient_reference} failed: ${res.status} ${JSON.stringify(out)}`);
     m.reviewed = `${r.decision}${r.correctedGrade !== undefined ? ` -> grade ${r.correctedGrade}` : ''}${out.referralId ? ', referral raised' : ''}`;

@@ -1,11 +1,4 @@
-// Building the two questionnaire request bodies (docs/api-contracts.md, Local
-// API) from what the technician actually answered.
-//
-// The rule: NOTHING IS INVENTED. Every field comes from an answer the technician
-// gave; a missing or out-of-contract answer throws and lists what is missing,
-// instead of being replaced by a plausible default ('moderate', 'indoor_clinic',
-// 'clear', 'none_noticed'...). The previous builders defaulted silently, and
-// silently discarded any observed issue that was not in the contract's list.
+
 
 import {
   YEARS_SINCE_DIAGNOSIS, GLYCEMIC_CONTROL, BLOOD_PRESSURE, SYMPTOMS,
@@ -23,13 +16,7 @@ export class IncompleteAnswers extends Error {
 const ids = (list) => list.map((o) => o.id);
 const oneOf = (list, v) => ids(list).includes(v);
 
-/**
- * The patient questionnaire, as the registration form stores it:
- *   { knownDiabetic: boolean, yearsSinceDiagnosis, glycemicControl, bloodPressure,
- *     pregnancy: 'yes'|'no'|'not_applicable', blurredVision, floaters,
- *     suddenVisionChange, eyePain, hba1c?, yearsDiabetic? }
- * -> the POST /captures/:captureId/questionnaire body.
- */
+
 export function buildQuestionnairePayload(q, language = null) {
   const missing = [];
   if (!q || typeof q !== 'object') throw new IncompleteAnswers('The patient questionnaire', ['all answers']);
@@ -61,11 +48,7 @@ export function buildQuestionnairePayload(q, language = null) {
   };
 }
 
-/**
- * The capture-context answers -> the POST /captures/:captureId/capture-metadata body.
- *   m = { pupilStatus, lightingEnvironment, observedIssues: string[], workerUsabilityRating }
- * eye and cameraDeviceId are chosen BEFORE the photograph is taken and passed in.
- */
+
 export function buildMetadataPayload(m, { eye, cameraDeviceId }) {
   const missing = [];
   if (!oneOf(EYES, eye)) missing.push('eye (left/right)');

@@ -1,35 +1,5 @@
 import React from 'react';
 
-/**
- * LesionAttentionMetric -- does the Grad-CAM look where the lesions are?
- *
- * Replaces a plain 0-1 bar, which could not show this honestly.
- * `lesionAttentionConsistency.m`'s own header is explicit about why:
- *
- *   "A RAW OVERLAP FRACTION IS NOT INTERPRETABLE. '70% of the attention is on
- *    lesions' sounds excellent and can be terrible. If lesions cover 70% of the
- *    retina, a heatmap of pure noise scores 0.70 too. The number only means
- *    something against its chance level... a UI showing '0.70' beside a green
- *    tick would be actively misleading."
- *
- * So this shows the comparison, not the fraction: what the attention scored,
- * what a RANDOM heatmap would have scored on this same eye, and the ratio
- * between them. The pass/fail comes from `lesionAttentionFlagged`, which the
- * backend computes next to the maths -- not from a threshold invented here.
- * The bar that used to sit in this slot coloured anything under 0.6 red, a
- * number with no basis: a perfectly good heatmap on an eye with few lesions
- * scores far below 0.6 and should not be red.
- *
- * Three distinct states, kept distinct:
- *   - not computed        the score is null AND nothing was flagged
- *   - undefined, flagged  no score, but flagged -- Grad-CAM produced no energy
- *                         at all, which is itself a reason to review
- *   - measured            score, chance level and enrichment all present
- *
- * A low result is a reason to REVIEW, never to change a grade: the lesion masks
- * are themselves model output with their own error rate, so a disagreement
- * between two imperfect models says a human should look, not which one is wrong.
- */
 
 const pct = (v) => `${(v * 100).toFixed(1)}%`;
 
@@ -110,8 +80,8 @@ export const LesionAttentionMetric = ({ caseData }) => {
         {ok
           ? 'The model looked where the lesions are.'
           : 'That is at or below chance — the heatmap does not explain this grade, '
-            + 'so the case is worth a closer look. It is not a reason to change the grade: '
-            + 'the lesion masks are model output too.'}
+          + 'so the case is worth a closer look. It is not a reason to change the grade: '
+          + 'the lesion masks are model output too.'}
       </p>
     </div>
   );

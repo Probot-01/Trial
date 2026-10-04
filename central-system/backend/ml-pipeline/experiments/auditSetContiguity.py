@@ -1,15 +1,4 @@
-"""
-auditSetContiguity.py — empirical audit: are branchAInfer.py's conformal
-prediction sets actually contiguous intervals in practice, on real images?
 
-Written for a confidence-routing audit (system-design-v3-final.md §6.8; no
-system-design-v4.md exists in this repo -- see the audit report). Calls the
-REAL, unmodified assign_tier() / load_calibration() from branchAInfer.py and
-the REAL calibration_v1.json -- nothing here reimplements the conformal math.
-
-A set is "contiguous" if, sorted, it has no gap: {1,2,3} is contiguous,
-{0,3} is not, {} and singletons are trivially contiguous.
-"""
 import glob
 import os
 import sys

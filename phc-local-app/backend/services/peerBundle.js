@@ -1,16 +1,5 @@
 'use strict';
 
-/**
- * peerBundle.js -- the no-network fallback (design doc §4.2 "export queue to
- * external drive", used here for desktop <-> phone hand-carry too).
- *
- * A bundle is one JSON file:
- *   { kind: 'netrasetu-bundle', v: 1, fromDevice, toDevice, createdAt, envelope }
- * where `envelope` is AES-256-GCM (peerCrypto) over
- *   { records: [...wire records], images: { captureId: { bytesB64, sha256, ext } } }
- * sealed with the phone's pairing key, AAD binding it to sender, recipient and
- * time. A lost USB stick exposes nothing; a modified file fails to open.
- */
 const db = require('../db/localDb');
 const peerCrypto = require('./peerCrypto');
 const peerSync = require('./peerSync');
@@ -21,7 +10,7 @@ function deviceKey(deviceId) {
   return peerCrypto.keyFromB64(d.key_b64);
 }
 
-/** Opens and applies a bundle addressed to this PC. */
+
 function importBundle(bundle) {
   if (!bundle || bundle.kind !== 'netrasetu-bundle' || bundle.v !== 1) {
     throw Object.assign(new Error('not a NetraSetu bundle'), { code: 'bundle_invalid' });
@@ -40,12 +29,12 @@ function importBundle(bundle) {
   return { ...out, fromDevice: bundle.fromDevice, records: (payload.records || []).length };
 }
 
-/** Everything this PC has for a phone that it has not seen yet (or everything), sealed for that phone. */
+
 function exportBundle(toDevice, { cursor = 0 } = {}) {
   const key = deviceKey(toDevice);
   const records = [];
   let c = cursor;
-  for (;;) {
+  for (; ;) {
     const page = peerSync.changesSince(c, toDevice);
     records.push(...page.records);
     c = page.cursor;

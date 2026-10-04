@@ -1,18 +1,4 @@
-/**
- * Desktop PatientRegistrationForm.jsx on a phone: the same four numbered
- * sections (patient information, address, symptom & risk questionnaire,
- * verbal consent), the same fields and footer (CLEAR ALL / INITIATE CAPTURE).
- *
- * Differences, each required by the design doc:
- *   - Starts empty. The desktop pre-fills a demo patient for testing; on a
- *     real device that would register fake patients.
- *   - Contact number is required and validated (§4.4).
- *   - Every questionnaire item must be answered -- no skip (§9.1).
- *   - "Find existing patient" plus an automatic duplicate check before a new
- *     ID is minted (§4.1, §10.3). A confirmed match re-uses the patient's ID.
- *   - Blood pressure offers the contract's three values; the desktop's
- *     "Low" has no contract value and would have to be sent as something else.
- */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -76,7 +62,7 @@ export default function RegistrationScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    searchPatients(search).then((r) => { if (!cancelled) setResults(r); }).catch(() => {});
+    searchPatients(search).then((r) => { if (!cancelled) setResults(r); }).catch(() => { });
     return () => { cancelled = true; };
   }, [search]);
 
@@ -271,7 +257,7 @@ export default function RegistrationScreen() {
                   <Field label="OCCUPATION">
                     <SelectField title="OCCUPATION" value={d.occupation} onChange={(v) => setDemo('occupation', v)}
                       options={[{ value: 'farmer', label: 'Farmer' }, { value: 'labourer', label: 'Daily Labourer' }, { value: 'homemaker', label: 'Homemaker' },
-                        { value: 'govt_employee', label: 'Govt. Employee' }, { value: 'business', label: 'Business' }, { value: 'student', label: 'Student' }, { value: 'other', label: 'Other' }]} />
+                      { value: 'govt_employee', label: 'Govt. Employee' }, { value: 'business', label: 'Business' }, { value: 'student', label: 'Student' }, { value: 'other', label: 'Other' }]} />
                   </Field>
                 </Row>
               </>

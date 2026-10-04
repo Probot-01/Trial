@@ -1,17 +1,4 @@
-"""
-convertNVCacheToMat.py
-========================
-Cheap companion to computeNVInputs.py: converts each dataset's cached .npz
-(mask512, discX512, discY512, grade) into a .mat MATLAB can load natively
-with plain `load()`, so scoreNVBatch.m never needs a Python bridge. Pure
-reformatting - no model inference, so this is seconds, not minutes, and is
-safe to re-run any time after computeNVInputs.py adds new images.
 
-Writes alongside the .npz, same scratch directory (outside git either way).
-
-Usage:
-    python experiments/convertNVCacheToMat.py --cache-dir <scratch>/nv_score_pipeline
-"""
 import argparse
 from pathlib import Path
 

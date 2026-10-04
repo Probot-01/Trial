@@ -1,54 +1,4 @@
-"""
-explainabilityValidation.py
-===========================
-Task 9.4 -- quantitative explainability validation.
 
-    python explainabilityValidation.py [--n N]
-
-Task 9.4 has three parts. This does the two that are measurable from code, and
-reports the third as NOT DONE rather than quietly dropping it.
-
-  1. Lesion-attention consistency (Task 7.1)      -- measured here
-  2. Counterfactual occlusion test (Task 7.1)     -- measured here
-  3. The "<30 s ophthalmologist validation" claim -- NOT MEASURED. It needs a
-     real timer on the review screen writing
-     ophthalmologist_reviews.review_duration_seconds, which does not exist yet.
-     The DoD is a median with n stated; today n = 0. An unqualified "under 30
-     seconds" would be a fabricated number, and the PS asks for a measured one.
-  4. Clinician plausibility rating                -- NOT DONE, and cannot be.
-     "Grad-CAM rated as clinically useful" is a human judgement. Self-assessing
-     it would be worthless.
-
-── WHY THIS IS ONLY NOW POSSIBLE ───────────────────────────────────────────
-Both measures compare Grad-CAM against a LESION MASK. Until the segmentation
-models were delivered and verified there was no mask, so 7.1 was built,
-unit-tested on synthetic arrays, and left returning null on real cases. The
-masks now reproduce their own published Dice, so the measures can run on real
-data for the first time.
-
-Note this is unaffected by the rule-engine count-scale problem: that concerns
-how many DISCRETE lesions the counts should report, while these measures use
-the mask as a region. A mask that is right about WHERE lesions are is enough
-here even while the counting convention is unresolved.
-
-── THE TWO MEASURES, AND WHY BOTH ──────────────────────────────────────────
-ATTENTION CONSISTENCY asks whether the heatmap sits on lesions. Reported
-against its CHANCE level -- the fraction of the retina the lesions occupy --
-because a raw "62% of attention is on lesions" is meaningless if lesions cover
-60% of the image. Enrichment (observed / chance) is the honest number, and 1.0
-means the heatmap is no better than pointing anywhere.
-
-OCCLUSION asks something consistency cannot: whether the model is USING that
-evidence. A heatmap can sit on lesions that the model ignores -- attention
-correlates with saliency, not with causation. So the lesions are removed by
-inpainting and the model re-run: if the confidence in the original grade does
-not fall, the highlighted region was not what drove the decision, and the
-explanation is decorative.
-
-Inpainting rather than blacking out, because a black patch is itself a strong
-out-of-distribution stimulus. Confidence would drop for the wrong reason and
-the test would pass while proving nothing.
-"""
 
 import argparse
 import json
@@ -70,13 +20,7 @@ SEG_SIZE = 512          # the lesion models' input size
 
 
 def lesion_mask_384(bgr):
-    """Union of red and bright lesion masks, in Branch A's 384 crop space.
-
-    Both spaces are ben_graham's crop resized to a square, so 512 -> 384 is a
-    plain resize and the two align exactly. NEAREST keeps the mask binary --
-    interpolating it would resample lesion edges into fractional values that a
-    threshold then re-binarises, changing the very areas being measured.
-    """
+    
     import segInfer as S
     rgb512, _box = S._crop512(bgr)
     red = S._lesion_prob("red_lesion", rgb512) > 0.5
@@ -239,20 +183,7 @@ def main():
             "min": float(np.min(enr)), "max": float(np.max(enr)),
             "aboveChance": int(sum(e > 1.0 for e in enr)),
         },
-        # STRATIFIED BY PREDICTED GRADE, because the pooled number is
-        # actively misleading here. Pooled, this looks like a coin flip --
-        # half the cases drop and half rise. Split by what the model predicted,
-        # it is not a coin flip at all, and both halves are the CORRECT
-        # direction:
-        #
-        #   predicted referable  -> removing lesions removes the evidence FOR
-        #                           that grade, so confidence must FALL.
-        #   predicted grade 0    -> removing the few lesion-like pixels makes
-        #                           the eye look even healthier, so confidence
-        #                           in "healthy" must RISE.
-        #
-        # A pooled median near zero would have been reported as "the occlusion
-        # test is inconclusive" when in fact it passes cleanly on both arms.
+      
         "occlusionByPrediction": {
             "referable": _drop_stats(
                 [r["confidenceDrop"] for r in rows

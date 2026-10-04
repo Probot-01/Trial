@@ -1,32 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * exportSimCalibration.js — the numbers the Simulink model runs on, taken
- * from this system rather than invented.
- *
- *   node scripts/exportSimCalibration.js [--out simulink-model/calibration.json]
- *
- * The district model has always been parameterised by assumptions from the
- * design doc. Some of those numbers we can now MEASURE, because the pipeline
- * has run on real images: how long grading takes, how often the quality gate
- * asks for a retake, how often a case fails outright. Measured beats assumed,
- * and a simulation whose inputs came from the system it models is a much
- * harder claim to argue with.
- *
- * ── WHAT IS DELIBERATELY NOT TAKEN FROM THE DATABASE ────────────────────────
- * The TIER MIX. This development database holds mostly IDRiD images, which is
- * a teaching set enriched for disease: its split is A=2, B=48, C=9, i.e. 3%
- * auto-cleared. A real screening population is the other way round -- most
- * people who turn up have no retinopathy. Feeding 3% into the model would
- * make every scenario look catastrophic for a reason that has nothing to do
- * with the system's design.
- *
- * So the export carries BOTH, each labelled with its provenance, and the
- * model defaults to the design-doc assumption for tier mix while using the
- * measured value everywhere it is honest to do so. Every field says where it
- * came from; nothing is silently blended.
- */
+
 
 const fs = require('fs');
 const path = require('path');
@@ -48,10 +23,7 @@ function assumed(value, note) {
 }
 
 async function qualityGate() {
-  // The PHC's own SQLite, read directly: the quality gate's verdicts never
-  // reach the central database, because a retake is resolved at the PHC
-  // before anything syncs. Which is itself the point -- the retake loop is
-  // invisible centrally, and the model is where it becomes visible.
+
   const dbPath = path.join(ROOT, 'phc-local-app', 'backend', 'db', 'local.sqlite');
   if (!fs.existsSync(dbPath)) return null;
   try {
@@ -115,7 +87,7 @@ async function main() {
   const tierTotal = (byTier.A || 0) + (byTier.B || 0) + (byTier.C || 0);
   out.tierFractionsObserved = measured(
     tierTotal ? [(byTier.A || 0) / tierTotal, (byTier.B || 0) / tierTotal,
-                 (byTier.C || 0) / tierTotal] : null,
+    (byTier.C || 0) / tierTotal] : null,
     tierTotal,
     'THIS CORPUS, which is mostly IDRiD -- a teaching set enriched for disease. '
     + 'NOT a screening population. Do not use as the model default.');
@@ -136,7 +108,7 @@ async function main() {
   // patients is 0.0 across all 50 folds -- so the workload reduction is real
   // and nothing referable is being cleared to achieve it.
   out.tierFractions = measured([0.38405690395145775, 0.4375477282817819,
-                                0.1783953677667604], 628,
+    0.1783953677667604], 628,
     'branchA_v2c conformal policy, 50-fold cross-fit on the held-out test '
     + 'split scored against ground truth; false auto-clear of truly referable '
     + 'cases 0.0 across all folds. NOT this database -- see '

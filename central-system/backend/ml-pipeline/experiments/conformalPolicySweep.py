@@ -1,75 +1,4 @@
-"""
-conformalPolicySweep.py
-========================
-Conformal policy sweep for branchA_v2a -- the model that will actually ship.
-CPU-only, reads only saved arrays (models/Model1/v2a/*.npy), never retrains,
-never touches production code or config.
 
-    CUDA_VISIBLE_DEVICES= python experiments/conformalPolicySweep.py
-
-Writes diagnostics/out/conformal_policy_sweep.{json,txt}.
-
-── WHY CROSS-FIT AND NOT VAL-ONLY ────────────────────────────────────────────
-The current production calibration (calibration_v1.json, C1 below) is fit
-once on a val split and evaluated once on test. v2's own evaluation already
-showed grade-3 coverage sliding from the fitted target down to a worse
-observed number on test at these per-class n (rare grades like 3/4 have only
-tens of calibration points -- see nCalPerClass in calibration_v1.json: grade
-3 has 43). A single val-fit/test-eval split cannot distinguish "the method is
-wrong" from "this particular random split was unlucky" at that n. Pooling
-val+test and cross-fitting (10 repeats x 5-fold, stratified by grade) gives
-~50 independent calibrate/evaluate splits instead of 1, so every metric below
-is a mean with a real interval, not a single anecdote. The old protocol (fit
-on VAL, evaluate on TEST, exactly as production does it today) is reported
-alongside for comparison ONLY -- the decision rule at the end uses the
-cross-fit numbers, because that is the whole reason this script exists.
-
-No fold's evaluation metric ever uses a point that fold's temperature or
-qhat was fit on -- enforced structurally: fit_temperature/fit_group_qhat only
-ever see the calibration-half arrays, and every evaluate_* call below is
-passed the held-out half's arrays under a different variable name.
-
-── PRODUCTION CODE REUSED, UNCHANGED ─────────────────────────────────────────
-  inference/branchAInfer.py: ordinal_mode_interval_score(), assign_tier()
-    (imported directly, not reimplemented) for C1-C5's inference-time
-    scoring and tiering (contiguous hull, mode-always-member, EPS guard,
-    Tier A/B/C mapping). These are the exact functions the live Python
-    inference path calls, and are covered by tests/test_conformal_v2.py
-    against MATLAB-generated golden vectors.
-
-── WHAT HAD TO BE REPLICATED, AND WHY ────────────────────────────────────────
-  * Temperature fit (NLL golden-section search): calibrateBranchA.m's own
-    algorithm (golden-section over log(T), bounds [log(0.05), log(20)]) is
-    MATLAB-only and is a FITTING step, not an inference-time function branchA
-    Infer.py exposes for import. Replicated here bit-for-bit (same bounds,
-    same golden-section recursion) and VALIDATED below against the one real
-    artifact that exists (models/calibration_v1.json, fit on
-    branchA_v1_val_{logits,labels}.npy) before this script is trusted for
-    v2a.
-  * Mondrian qhat fitting (conformalCalibrate.m's per-group quantile-with-
-    saturation): also MATLAB-only, also a fitting step. Replicated as one
-    general function, fit_group_qhat(), parameterised by an arbitrary
-    per-point group id and a saturation rule identical to conformalCalibrate.
-    m's (rank = ceil((n_g+1)(1-alpha_g)); qhat=1 if rank>n_g). C1 and C2 use
-    group=true grade (conformalCalibrate.m's own grouping); C3 uses
-    group=predicted mode; C4 uses one group for everyone; C5 uses group=
-    referable stratum. All five then hand a 5-length qhatPerClass vector to
-    the UNCHANGED assign_tier() -- only the calibration-time grouping differs
-    between configs, never the inference-time set-construction/tiering code.
-  * C0 (legacy marginal LAC) is NOT expressible through assign_tier() at all
-    -- it uses a different, non-ordinal score (1-p(true)) and does not
-    guarantee a contiguous set or a non-empty one. It is reimplemented here
-    from the score's mathematical definition (see conformalCalibrate.m's own
-    docstring on "the previous method") and is clearly marked non-contiguous
-    and reference-only throughout.
-
-── VALIDATION GATE ────────────────────────────────────────────────────────────
-Before any v2a numbers are trusted, this script fits temperature + C1's
-qhatPerClass on branchA_v1_val_{logits,labels}.npy (the exact array
-calibration_v1.json was fit from) and asserts the result matches that file's
-temperature and qhatPerClass. If this assertion fails, the script stops --
-nothing downstream is meaningful if the replica doesn't reproduce production.
-"""
 
 import json
 import os
@@ -339,13 +268,7 @@ def fold_metrics(eval_out, eval_labels):
     m["tierC_share"] = float((tiers == "C").mean())
     m["workload_tierC_share"] = m["tierC_share"]
 
-    # coverage: true grade's set membership. C0's set can be non-contiguous
-    # or empty; an empty set never counts as covering, and a non-empty one
-    # is tested against its [low,high] ENVELOPE (not exact gap membership --
-    # a gapped set like {0,3} is treated as "could be anywhere 0..3" for
-    # coverage purposes, the same conservative envelope the safety/tier
-    # checks below use). This is a documented simplification for a
-    # reference-only config, not applied to C1-C5 (never gapped, never empty).
+
     if "empty" in eval_out:
         m["frac_empty_set"] = float(eval_out["empty"].mean())
         covered = np.zeros(n, dtype=bool)

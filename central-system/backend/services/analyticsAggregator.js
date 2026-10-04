@@ -1,43 +1,13 @@
 'use strict';
 
-/**
- * analyticsAggregator.js  (Task 3.7)
- *
- * Aggregate metrics for the district admin interface.
- *
- * Aggregate-first by design (design doc §1.6): an admin managing a whole
- * district needs to see where the system is backed up and where resources
- * should move — not a feed of individual patients. Nothing here returns
- * per-case detail, and no per-case push exists. Keep it that way.
- *
- * ── Why there is a report timezone ──────────────────────────────────────────
- * "Cases today" has to mean today *where the district is*. received_at is a
- * TIMESTAMPTZ, and casting it with `::date` resolves in the server's session
- * timezone — so a server running UTC would roll the day over at 05:30 local
- * time in India. Every morning's first few hours of screening would be counted
- * against the previous day, and the number an admin checks at 9am would be
- * quietly wrong. The conversion is explicit here for that reason.
- */
+
 
 const pool = require('../db/pgClient');
 
-// Override per deployment. Default matches the target deployment region rather
-// than UTC, because UTC is the answer that is wrong in a way nobody notices.
+
 const REPORT_TZ = process.env.REPORT_TIMEZONE || 'Asia/Kolkata';
 
-/**
- * getDashboard()
- *
- * -> { casesToday, casesPerPhc, averageReviewTurnaroundSeconds,
- *        casesThisWeek, totalCasesProcessed, overrideRate, avgConfidenceScore,
- *        drGradeDistribution, weeklyTrend }
- *
- * The last six are additive (api-contracts.md, 2026-09-26) and every one is
- * computed from stored rows. What central cannot know is NOT here at all:
- * images rejected by the PHC quality gate never reach central, and a model
- * accuracy needs ground truth this system does not hold -- the screen shows
- * those as unavailable rather than inventing them.
- */
+
 async function getDashboard() {
   const [today, perPhc, turnaround, totals, reviews, grades, weekly] = await Promise.all([
     pool.query(`
@@ -46,10 +16,6 @@ async function getDashboard() {
       WHERE (received_at AT TIME ZONE $1)::date = (now() AT TIME ZONE $1)::date
     `, [REPORT_TZ]),
 
-    // LEFT JOIN, and cases with no phc_id are kept as a null-PHC bucket rather
-    // than dropped. If they were dropped, the casesPerPhc counts would not sum
-    // to casesToday, and an admin comparing the two numbers would be looking at
-    // a discrepancy with no explanation. Better to show an unattributed bucket.
     pool.query(`
       SELECT c.phc_id, s.name AS phc_name, COUNT(*)::int AS n
       FROM cases c
@@ -109,13 +75,11 @@ async function getDashboard() {
   return {
     casesToday: today.rows[0].n,
     casesPerPhc: perPhc.rows.map((r) => ({
-      phcId:   r.phc_id ?? null,
+      phcId: r.phc_id ?? null,
       phcName: r.phc_name ?? null,   // null = cases that arrived without a PHC id
-      count:   r.n,
+      count: r.n,
     })),
-    // null, not 0, when nothing has been reviewed. A 0 here would claim reviews
-    // are completing instantly — the opposite of "no data" — and this figure is
-    // read as a service-level number.
+
     averageReviewTurnaroundSeconds: avg === null ? null : Math.round(avg),
 
     casesThisWeek: totals.rows[0].week_n,
@@ -141,25 +105,12 @@ function gradeDistribution(rows) {
   });
 }
 
-/**
- * getReferrals()
- *
- * -> [ { referralId, patientReference, status, assignedWorker, updatedAt } ]
- *
- * patientReference, never patientId: this list is the follow-up worklist and
- * gets handed to ASHA workers, so it must not carry the internal identifier.
- */
+
 async function getReferrals() {
   return selectReferrals(null);
 }
 
-/**
- * One query for the list and for a single referral (the PATCH response has the
- * same shape as a list item). phcName and drGrade are additive
- * (api-contracts.md, 2026-09-26): drGrade is the FINAL grade -- the reviewer's
- * corrected grade when there is one, else the classifier's -- because that is
- * the grade the referral was raised on.
- */
+
 async function selectReferrals(referralId) {
   const { rows } = await pool.query(`
     SELECT r.referral_id, r.status, r.assigned_worker, r.updated_at,
@@ -195,23 +146,13 @@ async function updateReferral(referralId, { status, assignedWorker }) {
       AND c.case_id    = r.case_id
       AND p.patient_id = c.patient_id
   `, [referralId, status ?? null, assignedWorker ?? null,
-      assignedWorker !== undefined]);
+    assignedWorker !== undefined]);
 
   if (!rowCount) return null;
   return (await selectReferrals(referralId))[0] ?? null;
 }
 
-/**
- * getPhcSyncStatus(phcId)
- *
- * -> { phcId, phcName, lastSyncAt, pendingCount } | null
- *
- * pendingCount is REPORTED BY the PHC, not computed here: the sync queue lives
- * in the PHC's local SQLite and the central server has no visibility into it.
- * The value is therefore only accurate as of lastSyncAt — and a PHC that is
- * offline right now is exactly the one whose real backlog is growing while this
- * number stays frozen. Read the pair together, never pendingCount alone.
- */
+
 async function getPhcSyncStatus(phcId) {
   const { rows } = await pool.query(
     'SELECT phc_id, name, last_sync_at, last_contact_at, pending_count FROM phc_sites WHERE phc_id = $1',
@@ -219,12 +160,10 @@ async function getPhcSyncStatus(phcId) {
   if (!rows.length) return null;
   const r = rows[0];
   return {
-    phcId:        r.phc_id,
-    phcName:      r.name,
-    lastSyncAt:   r.last_sync_at ? r.last_sync_at.toISOString() : null,
-    // Any contact at all, summary packets included (backend plan §F). A health
-    // badge should key off this, not lastSyncAt: a site on a thin link that is
-    // only getting summaries through is alive.
+    phcId: r.phc_id,
+    phcName: r.name,
+    lastSyncAt: r.last_sync_at ? r.last_sync_at.toISOString() : null,
+
     lastContactAt: r.last_contact_at ? r.last_contact_at.toISOString() : null,
     pendingCount: r.pending_count ?? 0,
   };
@@ -232,27 +171,7 @@ async function getPhcSyncStatus(phcId) {
 
 const { PHC_SILENT_HOURS, isSilent } = require('./phcSilence');
 
-/**
- * getPhcs()
- *
- * -> [ { phcId, phcCode, name, district, lastSyncAt, casesLast24h,
- *        pendingOrFailedCount, status } ], every row in phc_sites.
- *
- * lastSyncAt is the latest case CENTRAL RECEIVED from the site (not
- * phc_sites.last_sync_at, which has its own narrower meaning). null = it has
- * never sent a case, which is "silent", not "recent".
- *
- * pendingOrFailedCount = what the PHC last said it still has queued
- * (phc_sites.pending_count, accurate only as of its last contact) + cases from
- * that site whose grading failed here (status 'error'). Both are work that has
- * not reached a result.
- *
- * status: 'silent' when the site has made no contact of any kind within
- * PHC_SILENT_HOURS (default 24) -- the same rule as the System Health card,
- * see phcSilence.js -- else 'active'.
- *
- * The API key and its hash are never selected.
- */
+
 async function getPhcs() {
   const { rows } = await pool.query(`
     SELECT s.phc_id, s.phc_code, s.name, s.district, s.pending_count, s.last_contact_at,
@@ -265,27 +184,27 @@ async function getPhcs() {
     ORDER BY s.name, s.phc_id
   `);
   return rows.map((r) => ({
-    phcId:                r.phc_id,
-    phcCode:              r.phc_code ?? null,
-    name:                 r.name,
-    district:             r.district ?? null,
-    lastSyncAt:           r.last_received ? r.last_received.toISOString() : null,
-    casesLast24h:         r.cases_24h,
+    phcId: r.phc_id,
+    phcCode: r.phc_code ?? null,
+    name: r.name,
+    district: r.district ?? null,
+    lastSyncAt: r.last_received ? r.last_received.toISOString() : null,
+    casesLast24h: r.cases_24h,
     pendingOrFailedCount: (r.pending_count ?? 0) + r.failed,
-    lastContactAt:        r.last_contact_at ? r.last_contact_at.toISOString() : null,
-    status:               isSilent(r.last_contact_at) ? 'silent' : 'active',
+    lastContactAt: r.last_contact_at ? r.last_contact_at.toISOString() : null,
+    status: isSilent(r.last_contact_at) ? 'silent' : 'active',
   }));
 }
 
 function toReferral(r) {
   return {
-    referralId:       r.referral_id,
+    referralId: r.referral_id,
     patientReference: r.patient_reference ?? null,
-    status:           r.status,
-    assignedWorker:   r.assigned_worker ?? null,
-    phcName:          r.phc_name ?? null,
-    drGrade:          r.dr_grade ?? null,
-    updatedAt:        r.updated_at.toISOString(),
+    status: r.status,
+    assignedWorker: r.assigned_worker ?? null,
+    phcName: r.phc_name ?? null,
+    drGrade: r.dr_grade ?? null,
+    updatedAt: r.updated_at.toISOString(),
   };
 }
 

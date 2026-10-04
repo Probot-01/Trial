@@ -1,13 +1,4 @@
-"""
-check_dropout.py  -  DIAGNOSTIC ONLY (throwaway, not production)
 
-Question: does models/branchA_v1.pt have a real dropout LAYER (nn.Dropout module)
-right before the final classification head, and can it be forced active at
-inference time while the rest of the model stays in eval mode?
-(Standard MC-Dropout requirement.)
-
-Run:  python diagnostics/check_dropout.py
-"""
 import sys
 from pathlib import Path
 

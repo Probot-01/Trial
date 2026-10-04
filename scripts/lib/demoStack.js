@@ -1,15 +1,6 @@
 'use strict';
 
-/**
- * demoStack.js -- start, stop and health-check THIS checkout's local stack.
- * Shared by scripts/demo-reset.js and scripts/demo-offline.js.
- *
- * Everything is derived from the service .env files of the checkout the script
- * lives in (ports, database), never hardcoded, so the same script works in a
- * second worktree running beside another stack. Stopping is by PORT (and by the
- * MATLAB/segmentation workers' own pid files under this checkout), so it can
- * only ever touch processes this checkout's configuration names.
- */
+
 
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
@@ -138,16 +129,7 @@ async function waitFor(what, check, timeoutMs, everyMs = 2000) {
   throw new Error(`timed out after ${Math.round(timeoutMs / 1000)} s waiting for ${what}${last ? ` (last error: ${last})` : ''}`);
 }
 
-/** Central /health with every component green (MATLAB session and segmentation worker included).
- *
- * segWorker's own status vocabulary is 'healthy' | 'restarting' | 'down' | 'disabled'
- * (services/segWorkerSupervisor.js) -- 'disabled' is the CORRECT steady state whenever
- * SEG_INFERENCE_BACKEND=matlab (the default, and the only backend all four segmentation
- * models now serve from), since the persistent Python segmentation worker isn't started
- * at all in that mode. Requiring strictly 'healthy' here meant this check could never
- * pass under the default/recommended config -- demo-reset/dev-up timed out at 360s
- * every time despite every real component already being fine, confirmed by curling
- * /health directly during the "failed" wait. */
+
 async function centralHealthy(port) {
   const { status, body } = await getJson(`http://localhost:${port}/health`);
   const c = body && body.components;

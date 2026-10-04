@@ -57,16 +57,11 @@ export async function createPatient(p: NewPatient): Promise<Patient> {
                            registered_at, demographics_json, questionnaire_json, updated_at)
      VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
     [patient.patientId, patient.name, patient.age, patient.contactNumber, patient.consentGivenAt,
-     patient.registeredAt, JSON.stringify(p.demographics), JSON.stringify(p.questionnaire), patient.registeredAt]);
+    patient.registeredAt, JSON.stringify(p.demographics), JSON.stringify(p.questionnaire), patient.registeredAt]);
   return patient;
 }
 
-/**
- * Re-uses an existing patient for today's visit (the technician confirmed a
- * duplicate match, §10.3): today's questionnaire answers replace the stored
- * ones, and consent is re-confirmed. The patient ID -- which central already
- * knows -- is kept.
- */
+
 export async function updatePatientVisit(patientId: string, q: PatientQuestionnaire, consentGivenAt: string, contactNumber: string): Promise<Patient> {
   const db = await getDb();
   await db.runAsync(
@@ -87,11 +82,7 @@ export async function getPatient(patientId: string): Promise<Patient | null> {
 
 export interface PatientMatch { patient: Patient; score: number; matchedOn: string[] }
 
-/**
- * Duplicate check at registration (design doc §10.3), against this device's
- * own records so it works offline. Candidates are narrowed in SQL by phone
- * suffix or name prefix, then scored in JS.
- */
+
 export async function findPossibleDuplicates(name: string, age: number | null, phone: string): Promise<PatientMatch[]> {
   const db = await getDb();
   const phoneTail = normalizePhone(phone).slice(-6);

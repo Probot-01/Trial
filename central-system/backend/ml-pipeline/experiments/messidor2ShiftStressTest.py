@@ -1,56 +1,4 @@
-"""
-messidor2ShiftStressTest.py
-=============================
-External-shift stress test of the v2a pipeline on Messidor-2. CPU-only
-(everything here reads cached arrays or does cheap cv2/numpy work - no
-classifier forward passes are needed since diagnostics/out/messidor2_v2a_logits.npy
-already has them; the one exception, the fovea-gate peak in Part C, itself
-runs on CPU in inference/segInfer.py, unchanged).
 
-New file. No production code is modified. Nothing is committed. Nothing here
-tunes any model, threshold, or preprocessing choice to Messidor-2's DR grade
-labels, EXCEPT Part D, which is an explicitly-labelled site-calibration
-ADAPTATION experiment (not a generalization claim) and is the one place this
-rule is deliberately relaxed, in both directions of the swap.
-
-Reuses, unmodified:
-  - evalMessidor2V2a.py: ben_graham_preprocess, IDRiD raw-path resolution,
-    softmax, MESSIDOR_ROOT/MANIFEST_CSV/V2A_DIR constants.
-  - evalV2aPostHoc.py: lock_threshold_on_val, apply_threshold, rate_with_ci,
-    safe_auc, sigmoid (the already-corrected VAL-lock logic).
-  - conformalPolicySweep2.py: fit_temperature, predicted_mode, true_scores_v3,
-    row_scores_v3, config_C5 (the C5v3 policy fitter), assign_tier_ordinal,
-    evaluate_ordinal_config, fold_metrics (the C5v3 policy evaluator). Its own
-    diagnostics/out/conformal_policy_sweep2.json cross-fit numbers for C5v3
-    are read as the in-domain reference, not recomputed here.
-
-Usage:
-    python experiments/messidor2ShiftStressTest.py                        # all parts, v2a (unchanged)
-    python experiments/messidor2ShiftStressTest.py --parts A,C            # subset, v2a
-    python experiments/messidor2ShiftStressTest.py --tag v2b              # parts B,D for v2b (A/C not
-                                                                            # generalized -- see --tag below)
-
-── --tag (GENERALIZE) ───────────────────────────────────────────────────────
---tag TAG selects which branchA_v2* checkpoint's Messidor-2 predictions are
-evaluated (default 'v2a', which is BYTE-IDENTICAL to this script's original,
-unparameterised behaviour -- same cache file, same Part B algorithm, same
-default parts A,B,C,D). For any other tag, the default parts become B,D
-(Parts A/C are not generalized -- they lean on v2a-specific IDRiD-raw-file
-inspection this task did not ask to extend; requesting A or C for a non-v2a
-tag is a hard error, not a silent v2a fallback).
-
-For tag != v2a, Part B is NOT the C5v3-sweep replica v2a's Part B is (that
-replica is explicitly NOT the current production policy -- see
-evalMessidor2Candidate.py's own docstring). It is the PRODUCTION-INSTALLED
-policy instead: models/calibration_branchA_<tag>.json, exactly as shipped
-(fitted by calibrateBranchA.m on that model's own pooled in-domain
-val+test), applied through inference/branchAInfer.assign_tier() -- the real
-production tiering function -- using that file's own shipped
-referableThreshold. It is reported on the SELECTION half and the REPORT
-half SEPARATELY (evalMessidor2Candidate.py's peek-proof patient-parity
-split), not pooled, so a number that already influenced candidate selection
-is never silently blended into the one the submission may quote.
-"""
 import os
 import sys
 import json
@@ -614,23 +562,7 @@ def run_part_b(manifest, logits5, indomain):
     }
 
 
-# ===========================================================================
-# PART B (tag != v2a): PRODUCTION-INSTALLED POLICY UNDER SHIFT
-#
-# Unlike run_part_b above (v2a, unchanged -- the C5v3-sweep replica from
-# conformalPolicySweep2.py), this evaluates the ACTUAL shipped artefact:
-# models/calibration_branchA_<tag>.json (fitted by calibrateBranchA.m on
-# that model's own pooled in-domain val+test, exactly as shipped) applied
-# through inference/branchAInfer.assign_tier() -- the real production
-# tiering function, not a parallel reimplementation -- using that file's
-# own shipped referableThreshold. Reported on the SELECTION half and the
-# REPORT half SEPARATELY (evalMessidor2Candidate.py's peek-proof patient-
-# parity split: even patient_id = SELECTION, odd = REPORT), because the
-# report half is the one the submission may quote and the selection half
-# is the one already used for candidate selection -- conflating them would
-# quietly leak the report half into a number that influenced picking the
-# model.
-# ===========================================================================
+
 def load_shipped_calibration(tag):
     """Reads models/calibration_branchA_<tag>.json DIRECTLY (not via
     branchAInfer.load_calibration, which is locked to whatever

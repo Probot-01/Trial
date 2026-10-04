@@ -1,22 +1,6 @@
 'use strict';
 
-/**
- * peerCrypto.js -- encryption for the desktop <-> phone link and for export
- * bundles (docs/peer-sync-protocol.md).
- *
- * AES-256-GCM with the 32-byte key shared once at pairing (QR code). Every
- * message is a sealed envelope { v, iv, ct, tag }:
- *   - a fresh 96-bit random IV per message;
- *   - AAD binds the ciphertext to its context (device, method, path,
- *     timestamp, nonce), so a captured body cannot be replayed against another
- *     endpoint or passed off as a different request;
- *   - the tag makes any modification, or the wrong key, fail to decrypt.
- *
- * Why application-level and not just TLS: the phone talks to the PC over the
- * PHC's LAN (or the phone's hotspot) with no CA-signed certificate available,
- * and a React Native app does not trust a self-signed one. The same envelope
- * also protects export bundles carried on a USB stick, which TLS never covers.
- */
+
 const crypto = require('crypto');
 
 const VERSION = 1;

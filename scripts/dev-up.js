@@ -1,43 +1,10 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * dev-up.js -- the whole system, locally, with one command.
- *
- *   npm run dev:all                  (repo root)   same as: node scripts/dev-up.js
- *   scripts/dev-up.sh | scripts\dev-up.ps1         thin wrappers around this file
- *
- * In order, stopping at the first thing that is wrong:
- *    1. preflight     Node >= 18; Docker CLI present and its daemon up (on
- *                     Windows, starts Docker Desktop if it is installed)
- *    2. env files     copies each service's .env.example to .env if missing
- *    3. npm install   in any service without node_modules
- *    4. Postgres      docker compose -f docker-compose.dev.yml up -d --wait
- *    5. migrations    node scripts/setupCentralDb.js (idempotent)
- *    6. seed          node scripts/seed-demo.js --write-phc-env (only if not
- *                     already seeded), and one PHC technician account if the
- *                     PHC's local database has none. Secrets print ONCE.
- *    7. start         central API, PHC local API, central web, PHC web -- one
- *                     process each, logs prefixed, all stopped by Ctrl+C
- *    8. health        every service's health endpoint must answer
- *    9. MATLAB        the central backend's supervisor starts the persistent
- *                     MATLAB session; this waits for its heartbeat
- *   10. summary       every URL, and what (if anything) is not healthy
- *
- * Flags:
- *   --check          do everything, print the summary, then stop the services
- *                    and exit (0 = all healthy). For CI and for verifying a
- *                    fresh clone. The MATLAB session is left running (it is a
- *                    separate process the next run reuses).
- *   --no-matlab-wait do not wait for the MATLAB heartbeat
- *   --skip-install   do not run npm install
- *
- * Uses only Node built-ins until step 3, so it runs on a fresh clone.
- */
 
 const { spawn, spawnSync } = require('child_process');
-const fs   = require('fs');
-const net  = require('net');
+const fs = require('fs');
+const net = require('net');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -51,7 +18,7 @@ const C = process.stdout.isTTY
   : { dim: '', red: '', green: '', yellow: '', bold: '', reset: '' };
 
 const step = (n, msg) => console.log(`\n${C.bold}[dev-up ${n}]${C.reset} ${msg}`);
-const ok   = (msg) => console.log(`  ${C.green}✓${C.reset} ${msg}`);
+const ok = (msg) => console.log(`  ${C.green}✓${C.reset} ${msg}`);
 const warn = (msg) => console.log(`  ${C.yellow}!${C.reset} ${msg}`);
 function die(msg, hint) {
   console.error(`\n  ${C.red}✗ ${msg}${C.reset}`);
@@ -61,16 +28,14 @@ function die(msg, hint) {
 
 const SERVICE_DIRS = {
   centralApi: 'central-system/backend',
-  phcApi:     'phc-local-app/backend',
+  phcApi: 'phc-local-app/backend',
   centralWeb: 'central-system/frontend',
-  phcWeb:     'phc-local-app/frontend',
+  phcWeb: 'phc-local-app/frontend',
 };
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
-// npm (a .cmd shim) and bare names like docker need a shell on Windows to be
-// found; an absolute path (process.execPath, under "Program Files") must NOT
-// go through one, or the space splits it.
+
 const needsShell = (cmd) => IS_WIN && !path.isAbsolute(cmd);
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { cwd: ROOT, stdio: 'inherit', shell: needsShell(cmd), ...opts });
@@ -263,9 +228,9 @@ async function main() {
   const centralEnv = readEnvChain([rel('central-system/backend/.env'), rel('.env')]);
   const PORTS = {
     centralApi: Number(centralEnv.PORT || 5000),
-    phcApi:     Number(readEnvChain([rel('phc-local-app/backend/.env')]).PORT || 4000),
+    phcApi: Number(readEnvChain([rel('phc-local-app/backend/.env')]).PORT || 4000),
     centralWeb: 5174,   // pinned in central-system/frontend/vite.config.js
-    phcWeb:     5173,   // pinned in phc-local-app/frontend/vite.config.js
+    phcWeb: 5173,   // pinned in phc-local-app/frontend/vite.config.js
   };
 
   step(3, 'dependencies');
@@ -302,16 +267,16 @@ async function main() {
   step(7, 'starting services');
   const vite = 'node_modules/vite/bin/vite.js';
   startService('central-api', SERVICE_DIRS.centralApi, ['server.js']);
-  startService('phc-api',     SERVICE_DIRS.phcApi,     ['server.js']);
+  startService('phc-api', SERVICE_DIRS.phcApi, ['server.js']);
   startService('central-web', SERVICE_DIRS.centralWeb, [vite]);
-  startService('phc-web',     SERVICE_DIRS.phcWeb,     [vite]);
+  startService('phc-web', SERVICE_DIRS.phcWeb, [vite]);
 
   step(8, 'health checks');
   const checks = [
-    { name: 'Central API',      url: `http://localhost:${PORTS.centralApi}/health` },
-    { name: 'PHC local API',    url: `http://localhost:${PORTS.phcApi}/health` },
-    { name: 'Central web',      url: `http://localhost:${PORTS.centralWeb}/` },
-    { name: 'PHC web',          url: `http://localhost:${PORTS.phcWeb}/` },
+    { name: 'Central API', url: `http://localhost:${PORTS.centralApi}/health` },
+    { name: 'PHC local API', url: `http://localhost:${PORTS.phcApi}/health` },
+    { name: 'Central web', url: `http://localhost:${PORTS.centralWeb}/` },
+    { name: 'PHC web', url: `http://localhost:${PORTS.phcWeb}/` },
   ];
   const health = [];
   for (const c of checks) {
@@ -329,9 +294,11 @@ async function main() {
   if (matlabWanted) {
     const exe = matlabExecutable(centralEnv);
     if (!exe) {
-      matlab = { state: 'MISSING', detail: centralEnv.MATLAB_EXECUTABLE
-        ? `MATLAB_EXECUTABLE=${centralEnv.MATLAB_EXECUTABLE} does not exist`
-        : '`matlab` is not on PATH and MATLAB_EXECUTABLE is unset' };
+      matlab = {
+        state: 'MISSING', detail: centralEnv.MATLAB_EXECUTABLE
+          ? `MATLAB_EXECUTABLE=${centralEnv.MATLAB_EXECUTABLE} does not exist`
+          : '`matlab` is not on PATH and MATLAB_EXECUTABLE is unset'
+      };
       warn(`MATLAB not found: ${matlab.detail}. Grading through MATLAB will not work.`);
     } else if (ARGS.has('--no-matlab-wait')) {
       matlab = { state: 'not checked', detail: '--no-matlab-wait' };
@@ -365,8 +332,10 @@ async function main() {
     }, { timeoutMs: 20_000, intervalMs: 2000 });
     seg = r?.ok
       ? { state: 'healthy', detail: `heartbeat ${Math.round(r.age / 1000)} s old` }
-      : { state: 'NOT UP', detail: 'grading still works, ~17 s slower per case -- check PYTHON_EXECUTABLE and '
-          + 'central-system/backend/ml-pipeline/inference/segSession/worker.log' };
+      : {
+        state: 'NOT UP', detail: 'grading still works, ~17 s slower per case -- check PYTHON_EXECUTABLE and '
+          + 'central-system/backend/ml-pipeline/inference/segSession/worker.log'
+      };
     (r?.ok ? ok : warn)(`Segmentation worker ${seg.state} (${seg.detail})`);
   }
 

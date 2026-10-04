@@ -1,13 +1,6 @@
 'use strict';
 
-/**
- * warmup.js -- one real inference through the backend's OWN session clients, so
- * the MATLAB session and the segmentation worker have both served a request
- * before the demo starts. Creates no case and no media. Run by demo-reset.js
- * with the central backend directory as cwd (so its .env and clients resolve).
- *
- *   node scripts/lib/warmup.js <image>
- */
+
 
 const path = require('path');
 const os = require('os');

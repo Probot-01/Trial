@@ -1,85 +1,4 @@
-"""
-evalMessidor2Candidate.py
-===========================
-Reusable, peek-proof Messidor-2 candidate evaluator for branchA_v2* checkpoints.
-NEW FILE. Does not modify any production code, does not commit anything.
 
-    python experiments/evalMessidor2Candidate.py --checkpoint models/Model1/v2a/branchA_v2a.pt --tag v2a
-    python experiments/evalMessidor2Candidate.py --checkpoint ... --tag v2b --final
-    python experiments/evalMessidor2Candidate.py --compare v2a v2b v2c
-
-── WHAT THIS REUSES, AND WHAT IT DOES NOT REDO ─────────────────────────────
-Imports (not reimplements) from experiments/evalMessidor2V2a.py: the
-fidelity-checked ben_graham_preprocess, DRClassifierV2, build_eval_transform,
-MessidorDataset, amp_autocast (fp16-autocast PRIMARY, matching how every
-saved val/test array in this codebase was produced), softmax, per_grade_recall,
-load_manifest, and the path constants. This script does NOT re-run
-evalMessidor2V2a.py's IDRiD-raw-image fidelity check for every candidate --
-that check validates the SHARED preprocessing/model-loading CODE (verbatim
-from train_classifier_kaggle_v2.ipynb), not any one checkpoint's weights, and
-was already run for v2a. A future v2b/v2c checkpoint trained with the same
-notebook pipeline inherits that validation by construction; if a future
-candidate ever changes the preprocessing or model architecture, the fidelity
-check in evalMessidor2V2a.py should be re-run and this note revisited.
-
-Also imports (not reimplements) from experiments/conformalPolicySweep2.py:
-fit_temperature, config_C5, true_scores_v3, row_scores_v3, assign_tier_ordinal
--- the "production C5v3" policy replica the task asks for. This is NOT the
-actual current production conformal code (which has since moved to a
-referable-STRATIFIED v3 scheme, alphaPerStratum/method=
-'ordinal_mode_interval_stratified_v3' -- see calibration/conformalCalibrate.m).
-It is the specific, already-validated C5v3 config (referable-stratum grouping,
-alpha=[0.30, 0.05], corrected v3 score) from the policy sweep, used here
-because the task explicitly names it and because it is a stable, frozen
-reference point for candidate comparison -- not a re-implementation of
-whatever production happens to be running today.
-
-Also imports (not reimplements) lock_threshold_on_val/safe_auc from
-experiments/evalV2aPostHoc.py (the correctly-fixed VAL-then-TEST discipline).
-
-── PEEK-PROOFING ────────────────────────────────────────────────────────────
-Messidor-2's 874 patients are split ONCE, by a fixed, pre-declared rule with
-no randomness and no tuning: SELECTION = even patient_id, REPORT = odd
-patient_id (patient_id is eval_manifest.csv's 1-based pairing-file row
-number, assigned when the manifest was built -- see
-tasks/eval_manifest.csv's own generation). A default run computes and prints
-ONLY the SELECTION half (plus in-domain val/test numbers, which were never
-Messidor-2 data at all). The REPORT half is computed and printed ONLY with
---final, and every --final invocation appends one line (tag, UTC timestamp)
-to diagnostics/out/final_report_log.txt -- an append-only, human-readable
-audit trail of every time anyone looked at the held-out half. Nothing in
-this script deletes or rewrites that file's prior lines.
-
-── CACHING ──────────────────────────────────────────────────────────────────
-Both heads' logits for all 1,744 gradable Messidor-2 images are cached to
-exactly the three files the task names:
-    diagnostics/out/messidor2_<tag>_logits5.npy
-    diagnostics/out/messidor2_<tag>_logitsBin.npy
-    diagnostics/out/messidor2_<tag>_ids.npy
-A fourth, unlisted sidecar (messidor2_<tag>_meta.json) records which
-precision (fp16/fp32) produced the cache -- needed because the three named
-files alone cannot distinguish "cached at fp16" from "cached at fp32" if a
-later run asks for the other precision on the same tag; without it, a
-precision switch would silently reuse stale numbers. The cache is reused
-whenever the ids match the current manifest AND the recorded precision
-matches the requested one; otherwise it is recomputed.
-
-── DECISION RULE (--compare) ───────────────────────────────────────────────
-Incumbent defaults to v2a, overridable with --incumbent (e.g. once a
-challenger is promoted under Path 2, later runs pass --incumbent v2b) --
-this changes WHICH candidate the fixed rule is measured against, never the
-rule itself. For each OTHER tag passed to --compare:
-  Path 1: selection-half referable AUC (best of its two heads) beats the
-          incumbent's best-of-two-heads selection AUC by >= 0.02, AND
-          in-domain VAL P(g>=2) AUC (5-class head only) is not worse than the
-          incumbent's by more than 0.01, AND val QWK is not worse by more
-          than 0.01.
-  Path 2 (strong evidence): same three comparisons, thresholds 0.05 / 0.02 / 0.02.
-  Otherwise: keep the incumbent.
-Only the SELECTION half and each candidate's own in-domain VAL are used to
-decide -- never the recovered TEST split, never the REPORT half. Nothing is
-installed; the script only prints which path (if any) fired per candidate.
-"""
 
 import argparse
 import datetime
@@ -171,17 +90,7 @@ def p_ge2_from_logits5(logits5):
     return p[:, 2] + p[:, 3] + p[:, 4]
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Ensemble support (task item 3b): "ens(tagA,tagB,...)" is a pseudo-tag that
-# averages the listed models' output PROBABILITIES (not raw logits - a raw-
-# logit average is not meaningful across models with different scales/heads).
-# Everything downstream (locked operating points, C5v3 fitting, evaluate_half,
-# compute_point_metrics) is written in terms of logits5/logits_bin, so the
-# averaged probabilities are converted back to PSEUDO-logits via an exact
-# inverse (softmax(log(p)) == p when p already sums to 1; sigmoid(logit(p))
-# == p exactly) - this lets the ensemble reuse every existing function
-# unchanged rather than forking a parallel probability-space code path.
-# ═══════════════════════════════════════════════════════════════════════════
+
 ENSEMBLE_RE = re.compile(r"^ens\(([^)]+)\)$")
 
 
@@ -291,13 +200,6 @@ def run_or_load_messidor_inference(model, img_size, transform, manifest_df, tag,
     print(f"Cached: {p_logits5.name}, {p_logits_bin.name}, {p_ids.name}  (precision={precision})")
     return logits5, logits_bin
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Generic per-tag resolution: works for a real checkpoint tag (v2a, v2b, ...)
-# OR an ensemble pseudo-tag ("ens(tagA,tagB,...)"), so every downstream
-# consumer (run_single, compute_compare_summary) is agnostic to which kind of
-# tag it was handed.
-# ═══════════════════════════════════════════════════════════════════════════
 def get_messidor_logits_for_tag(tag, precision, manifest_df):
     """Returns (logits5, logits_bin) for `tag`. For a real tag: cache first,
     loading the checkpoint only on a cache miss. For an ensemble tag: gets

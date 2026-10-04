@@ -1,31 +1,9 @@
 'use strict';
 
-/**
- * requirePhcApiKey.js -- device authentication for the PHC apps (backend plan
- * §A.12).
- *
- * A PHC app is a device submitting data, not a person at a browser, so it does
- * not log in. It sends its site's API key on every ingestion request:
- *
- *   X-PHC-Api-Key: phc_...
- *
- * The key is looked up by its SHA-256 (phc_sites.api_key_hash); a match sets
- * req.phc = { phcId, name } and stamps phc_sites.last_contact_at, which is what
- * the System Health silent-PHC check reads (§F).
- *
- * With PHC_AUTH_ENABLED=false (the default, until every PHC is provisioned):
- *   - no header      -> allowed through, unattributed, exactly as before;
- *   - a VALID key    -> attributed as above;
- *   - an INVALID key -> still rejected. A PHC sending a wrong key is
- *     misconfigured, and failing loudly now beats discovering it on the day
- *     enforcement is switched on.
- *
- * Also exported: requireUserOrPhc, for the one endpoint both kinds of client
- * call (GET /cases/:caseId/status).
- */
+
 
 const pool = require('../db/pgClient');
-const cfg  = require('../services/authConfig');
+const cfg = require('../services/authConfig');
 const { hashApiKey } = require('../services/authTokens');
 const requireAuth = require('./requireAuth');
 

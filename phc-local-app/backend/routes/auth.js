@@ -1,15 +1,6 @@
 'use strict';
 
-/**
- * routes/auth.js -- technician login for the PHC local backend.
- *
- *   POST /auth/login   { username, password, deviceId? } -> 200 { token, expiresAt, user }
- *   GET  /auth/me                                        -> 200 { user, expiresAt? }
- *   POST /auth/logout                                    -> 204
- *
- * Same failure body for an unknown user and a wrong password (no account
- * enumeration), and a lockout after repeated failures, as on central.
- */
+
 const express = require('express');
 const auth = require('../services/localAuth');
 

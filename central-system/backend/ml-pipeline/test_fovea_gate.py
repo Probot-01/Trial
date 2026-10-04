@@ -1,12 +1,3 @@
-"""
-test_fovea_gate.py
-===================
-Unit tests for segInfer.fovea_unreliable() -- the fovea peak-confidence gate
-(ML plan section 5). Pure-function tests against synthetic heatmaps; no model
-weights, no images, no GPU.
-
-    python -m pytest test_fovea_gate.py -v
-"""
 
 import json
 import os
@@ -70,14 +61,10 @@ def test_nan_heatmap_is_unreliable():
 
 
 def test_partial_nan_with_high_peak_elsewhere_is_still_reliable():
-    """NaN in part of the heatmap does not itself make the max non-finite,
-    as long as the max element is a real number -- only a non-finite MAX
-    (all-NaN, or a NaN that wins the argmax) forces True."""
+
     hm = gaussian_heatmap(peak=0.9)
     hm[0, 0] = np.nan
-    # np.max propagates NaN if present anywhere; this documents that a single
-    # NaN pixel anywhere in the heatmap makes the whole heatmap unreliable,
-    # which is the conservative (correct) behaviour for "cannot be computed".
+  
     assert segInfer.fovea_unreliable(hm) is True
 
 
@@ -95,10 +82,7 @@ def test_result_type_is_exactly_bool():
 
 
 def test_json_dumps_emits_lowercase_true_false():
-    """A numpy.bool_ leaking through would still look right when printed but
-    serialises to a Python repr, not JSON true/false, if json.dumps ever saw
-    it directly outside of a dict -- guard the exact wire format instead of
-    just the Python-side type."""
+   
     payload_true = {"foveaUnreliable": segInfer.fovea_unreliable(None)}
     payload_false = {"foveaUnreliable": segInfer.fovea_unreliable(gaussian_heatmap(peak=0.9))}
     assert json.dumps(payload_true) == '{"foveaUnreliable": true}'

@@ -1,16 +1,4 @@
-/**
- * Runtime configuration for this PHC device.
- *
- * Defaults come from EXPO_PUBLIC_* variables (inlined at build time, see
- * .env.example). Each value can be overridden on the device from Settings and
- * is then persisted in the local database (kv table) -- a PHC's server address
- * changes more often than anyone rebuilds an APK.
- *
- * This app talks to exactly one server: the central backend (design doc §3,
- * "No external inference services"). There is deliberately no mock mode: a
- * failure is shown as a failure or queued for retry, never replaced with a
- * plausible-looking result (§1.22).
- */
+
 
 export interface AppConfig {
   /** Central backend base URL, e.g. http://192.168.1.20:5000 */
@@ -26,9 +14,7 @@ export interface AppConfig {
 /** kv key the device's overrides are stored under. */
 export const CONFIG_KV_KEY = 'config';
 
-// No hardcoded server: unset EXPO_PUBLIC_CENTRAL_API_URL leaves the address
-// empty, and every request then fails with "not set -- open Settings"
-// (api/central.ts) instead of quietly trying an emulator-only address.
+
 export const DEFAULT_CONFIG: AppConfig = {
   centralUrl: (process.env.EXPO_PUBLIC_CENTRAL_API_URL ?? '').replace(/\/+$/, ''),
   phcApiKey: process.env.EXPO_PUBLIC_PHC_API_KEY ?? '',
@@ -54,11 +40,7 @@ export function subscribeConfig(listener: (c: AppConfig) => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/**
- * The bundled sample scan is not a patient's photograph; a real case built from
- * it would be a fabricated capture (CLAUDE.md, design §1.22). It is offered only
- * when this build is explicitly a demo (EXPO_PUBLIC_DEMO_TOOLS=1).
- */
+
 export const DEMO_TOOLS = process.env.EXPO_PUBLIC_DEMO_TOOLS === '1';
 
 /** Tunables that are policy, not deployment. */

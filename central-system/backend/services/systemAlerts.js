@@ -1,18 +1,5 @@
 'use strict';
 
-/**
- * systemAlerts.js -- raise / resolve / list operational alerts (backend plan
- * §E.3, §F). Backed by the system_alerts table.
- *
- *   await raiseAlert('matlab_session_down', '', 'Restart failed: ...')
- *   await resolveAlert('matlab_session_down')
- *   await openAlerts()
- *
- * Raising is idempotent per (kind, subject): an alert that is already open is
- * refreshed, not duplicated. Neither call throws -- an alerting failure must
- * never take down the component that was trying to report a problem; it is
- * logged instead.
- */
 
 const pool = require('../db/pgClient');
 

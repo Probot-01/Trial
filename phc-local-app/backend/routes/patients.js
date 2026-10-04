@@ -1,42 +1,21 @@
 'use strict';
 
-/**
- * routes/patients.js  (Task 3.2)
- *
- * Mounted at /patients. Implements the "Local API" patient endpoints from
- * docs/api-contracts.md:
- *
- *   POST /patients            -> 201 { patientId, name, age, contactNumber, registeredAt,
- *                                        consentGivenAt }
- *   GET  /patients/search     -> 200 [ duplicate candidates ]   (design doc §10.3)
- *   GET  /patients/:patientId -> 200 same shape | 404 patient_not_found
- *
- * The DB stores snake_case; every response here is camelCase. That translation
- * happens in this file and nowhere else -- not in db/localDb.js, not in a
- * frontend component (api-contracts.md, "Global naming rule").
- */
 
 const express = require('express');
 
-const db                  = require('../db/localDb');
+const db = require('../db/localDb');
 const { generateLocalId } = require('../services/ids');
 
 const router = express.Router();
 
-/**
- * toPatientResponse(row)
- *
- * The single snake_case -> camelCase mapping for a patient. Every route that
- * returns a patient goes through this, so POST and GET cannot drift into
- * returning subtly different shapes for the same record.
- */
+
 function toPatientResponse(row) {
   return {
-    patientId:     row.patient_id,
-    name:          row.name,
-    age:           row.age,
+    patientId: row.patient_id,
+    name: row.name,
+    age: row.age,
     contactNumber: row.contact_number,
-    registeredAt:  row.registered_at,
+    registeredAt: row.registered_at,
     consentGivenAt: row.consent_given_at ?? null,
   };
 }
@@ -45,10 +24,7 @@ function toPatientResponse(row) {
 router.post('/', (req, res) => {
   const { name, age, contactNumber, consentGivenAt } = req.body || {};
 
-  // contactNumber is the contract's only explicitly required field, and it is
-  // required for a real reason: it is the sole channel for delivering a result
-  // to a patient who has already gone home (design doc §4.1). A patient
-  // registered without one cannot be told their outcome in the offline flow.
+
   if (!contactNumber) {
     return res.status(400).json({
       error: 'contact_number_required',
@@ -70,9 +46,6 @@ router.post('/', (req, res) => {
     });
   }
 
-  // §9.7: the frontend timestamps the moment the technician ticks "verbal
-  // consent obtained" and sends it here. Optional at the API so older clients
-  // keep working; the registration screen is what makes it mandatory.
   let consent = null;
   if (consentGivenAt !== undefined && consentGivenAt !== null && consentGivenAt !== '') {
     const t = new Date(consentGivenAt);
@@ -85,11 +58,11 @@ router.post('/', (req, res) => {
   }
 
   const row = {
-    patient_id:       generateLocalId(),
-    name:             String(name),
-    age:              parsedAge,
-    contact_number:   String(contactNumber),
-    registered_at:    new Date().toISOString(),
+    patient_id: generateLocalId(),
+    name: String(name),
+    age: parsedAge,
+    contact_number: String(contactNumber),
+    registered_at: new Date().toISOString(),
     consent_given_at: consent,
   };
 
@@ -101,17 +74,9 @@ router.post('/', (req, res) => {
   res.status(201).json(toPatientResponse(row));
 });
 
-// ── GET /patients/search?name=&age=&phone= ──────────────────────────────────
-// Design doc §10.3: before minting a new patient id, check this PHC's own
-// records for the same person. Same query parameters, matching rules and
-// response shape as central's GET /api/v1/patients/search (see that file for
-// the reasoning), so a frontend can call either -- this one works offline.
-// Differences: it searches only this PHC's patients, and returns the full
-// contact number, since it is this site's own data.
-//
-// Declared BEFORE /:patientId, which would otherwise swallow 'search' as an id.
+
 router.get('/search', (req, res) => {
-  const name  = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
+  const name = typeof req.query.name === 'string' ? req.query.name.trim().toLowerCase() : '';
   const phone = typeof req.query.phone === 'string' ? req.query.phone.replace(/\D/g, '') : '';
   const ageRaw = req.query.age;
   const age = ageRaw === undefined || ageRaw === '' ? null : Number(ageRaw);
@@ -142,7 +107,7 @@ router.get('/search', (req, res) => {
       const nameFull = !!name && n.includes(name);
       const nameWord = !nameFull && words.some((w) => n.includes(w));
       const phoneHit = !!phone10 && digits(r.contact_number).endsWith(phone10);
-      const ageHit   = age !== null && Math.abs(r.age - age) <= 1;
+      const ageHit = age !== null && Math.abs(r.age - age) <= 1;
       const matchedOn = [];
       if (nameFull || nameWord) matchedOn.push('name');
       if (phoneHit) matchedOn.push('phone');
@@ -179,11 +144,7 @@ router.get('/:patientId', (req, res) => {
   res.json(toPatientResponse(row));
 });
 
-// ── GET /patients ────────────────────────────────────────────────────────────
-// Not in api-contracts.md. Kept because Task 0.1's Definition of Done curls it,
-// and the Patient Lookup screen needs a list to search. Deliberately capped:
-// this is a local single-PHC database, but an unbounded SELECT that grows all
-// season is a slow surprise waiting to happen on modest PHC hardware.
+
 router.get('/', (req, res) => {
   const rows = db
     .prepare('SELECT * FROM patients ORDER BY registered_at DESC LIMIT 200')

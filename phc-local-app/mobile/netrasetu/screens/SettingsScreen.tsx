@@ -1,8 +1,4 @@
-/**
- * Device settings: which central server this phone reports to, as which PHC.
- * Stored in the local database so a changed server address does not need a
- * rebuild. Defaults come from EXPO_PUBLIC_* (see .env.example).
- */
+
 import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';

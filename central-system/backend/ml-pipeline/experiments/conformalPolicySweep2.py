@@ -1,132 +1,4 @@
-"""
-conformalPolicySweep2.py
-=========================
-Re-run of conformalPolicySweep.py's conformal policy sweep with a CORRECTED
-nonconformity score, plus one new mitigation config (C6). CPU-only, reads
-only saved arrays (models/Model1/v2a/*.npy), never retrains, never touches
-production code or config. A NEW file: conformalPolicySweep.py and its
-outputs (diagnostics/out/conformal_policy_sweep.{json,txt}) are untouched.
-This script writes to different filenames
-(diagnostics/out/conformal_policy_sweep2.{json,txt}) so nothing is
-overwritten. This script does not commit anything to git.
 
-    CUDA_VISIBLE_DEVICES= python experiments/conformalPolicySweep2.py
-
-── WHY A SECOND SCRIPT: THE SCORE IN C1-C5 WAS DEFECTIVE ──────────────────────
-conformalPolicySweep.py's score (== production's ordinal_mode_interval_score,
-inference/branchAInfer.py) is s(k) = the probability mass of the interval
-[mode,k] INCLUDING k's own probability. At k = mode itself, that is just
-s(mode) = p(mode) -- for a correct, CONFIDENT prediction (the case conformal
-calibration should find LEAST surprising), p(mode) is close to 1, so s(mode)
-is close to the MAXIMUM possible score. A calibration example with a correct,
-confident top pick therefore looks like one of the WORST (highest-non-
-conformity) points in the whole calibration set, not one of the best. Fed
-through the standard "qhat = the (1-alpha) quantile of the score" step, the
-quantile ends up being set by ordinary confident-correct cases rather than by
-genuine errors -- qhat saturates toward 1 for every class (see
-conformalPolicySweep.py's own C1 cross-fit output:
-mean_qhatPerClass=[0.998, 0.986, 0.972, 0.975, 0.997], all near the
-theoretical maximum of 1.0). Because conformalTiering.m/assign_tier() also
-force the mode into the prediction set unconditionally (a real, separate,
-CORRECT design choice -- "the model must be allowed to believe itself"), a
-qhat near 1 makes almost every OTHER grade satisfy s(k)<=qhat too, and sets
-balloon: mean set size ~3.09 for C1, and every config in the first sweep
-converges to a similar number (see conformal_policy_sweep.txt). Marginal
-coverage for C1 came out at 97.7% against an intended-90% target (C4 alpha=
-0.10 was 98.8% -- even more extreme, since C4 has only ONE group's worth of
-confident-correct cases feeding one shared quantile). This is
-OVER-coverage caused by the score rewarding confidence in the wrong
-direction, not a sign the method is conservative-by-design.
-
-── CORRECTED SCORE v3 ──────────────────────────────────────────────────────
-    s(mode) = 0                              (ties in the mode -> higher grade)
-    s(k) for k != mode:
-        s(k) = [sum of p_j over the closed interval between mode and k]
-               - p_k
-
-Equivalently, s(k) is the probability mass STRICTLY BETWEEN the mode and k
-(the mass you must "skip over" to reach k), never counting k's own
-probability or the mode's own probability as the "cost" of extending the set
-out to k. This is still non-decreasing moving away from the mode in either
-direction (each additional step away adds a new interior term to the sum),
-so {k : s(k) <= q} is still a contiguous interval containing the mode for
-any q -- the conformal-validity argument ("coverage holds for ANY fixed,
-data-independent score function measured consistently at calibration and
-inference time") never depended on which score was used, only on using the
-SAME one both times. s(mode)=0 by construction (mode==k means the interval
-is a single point whose own mass is entirely subtracted off), so a correct,
-confident case now correctly reads as the LEAST surprising point, not the
-most.
-
-── PRODUCTION CODE REUSED, UNCHANGED -- AND WHY THIS SCRIPT REIMPLEMENTS THE
-   REST ─────────────────────────────────────────────────────────────────────
-Nothing in inference/branchAInfer.py or inference/branchAInferMatlab.m is
-imported here, and neither file is modified. Both are hardwired to the OLD
-score (branchAInfer.assign_tier() calls ordinal_mode_interval_score(), which
-IS the defective score above) -- there is no way to hand assign_tier() a
-different score function without editing production code, which this task
-forbids. So this script carries its own generic, score-agnostic tiering
-function (assign_tier_ordinal below) that reproduces assign_tier()'s exact
-algorithm (mode always a member, contiguous hull, EPS boundary guard, Tier
-A/B/C from [low,high] vs REFERABLE_FROM) parameterised by which score
-function computes the per-candidate scores. This is also why
-conformalPolicySweep.py's helper functions (fit_temperature,
-true_scores/predicted_mode, fit_group_qhat, evaluate_ordinal_config,
-fold_metrics, ...) are NOT imported from that file either, even though they
-are not "production code": Step 1 below needs an INDEPENDENTLY-written copy
-of the whole harness, run with the OLD score, checked against the FROZEN
-numbers in conformal_policy_sweep.json -- importing the same function
-objects and calling them again would only prove this script can call
-conformalPolicySweep.py, not that a fresh implementation of the same
-arithmetic agrees with the persisted result of a previous run.
-
-── STEP 1: REPRODUCE THE FIRST SWEEP'S C1 WITH THE OLD SCORE, THEN SWITCH ────
-Before trusting anything new, this script rebuilds the exact same cross-fit
-protocol (10 repeats x 5-fold StratifiedKFold, random_state=repeat, same
-pooling order: val then test) with C1's OLD (defective) score and diffs the
-resulting mean_set_size / coverage_marginal / tierA,B,C shares /
-false_auto_clear_ref_rate / mean_qhatPerClass against
-diagnostics/out/conformal_policy_sweep.json's saved C1 cross-fit numbers.
-Only once that reproduction matches (small floating-point tolerance) does
-the script proceed to compute anything with v3.
-
-── C0 IN THIS SCRIPT: "+ HULL" ─────────────────────────────────────────────
-conformalPolicySweep.py's C0 reported RAW (possibly gapped, possibly empty)
-LAC set sizes for its size-share stats, and used the [low,high] envelope only
-for coverage/safety. This script's C0 additionally HULLS the raw set (when
-non-empty) for the size-share stats too, so C0's "mean set size" /
-size-share numbers are computed the same way as every ordinal config's
-(always-contiguous) numbers -- an apples-to-apples comparison, as the task
-asks for ("C0 ... + hull"). The empty-set case is unaffected (a hull of
-nothing is still nothing; frac_empty_set is still reported separately).
-
-── C6: A REFERABLE-SAFETY GATE ON TOP OF C4v3 ──────────────────────────────
-Base sets/tiers = C4v3 (marginal Mondrian, alpha=0.10, v3 score). On the
-calibration half of each fold: tau = the ceil((n+1)*alpha_ref)-th SMALLEST
-value of P(g>=2) = p2+p3+p4, among calibration points whose TRUE grade is
-referable (>=2). Since alpha_ref is small (0.02/0.03/0.05), this is a LOW
-quantile of the referable population's own P(g>=2) -- i.e. tau is small
-enough that only ~alpha_ref of genuinely-referable calibration cases have
-P(g>=2) at or below it. At evaluation: a case is only touched by the gate if
-C4v3 already places it in Tier A (its set lies entirely within {0,1}). Such
-a case is DEMOTED to Tier B unless its OWN P(g>=2) <= tau -- i.e. it survives
-as Tier A only if it looks at least as clearly non-referable, in raw
-probability terms, as the least-referable-looking alpha_ref fraction of
-genuine referable cases. This is a strict, one-sided safety net: it can only
-ever move cases OUT of Tier A, never into it, and never touches Tier B/C.
-
-  SATURATION (rank > n, i.e. too few referable calibration points at this
-  alpha_ref -- expected to be rare given pooled referable n~503, but guarded
-  for completeness): the SAFE direction for this gate is the opposite of
-  conformalCalibrate.m's qhat saturation. There, saturating to qhat=1 means
-  "always INCLUDE" (safe = wider sets, since excluding a grade wrongly is the
-  dangerous mistake). Here, the dangerous mistake is a Tier-A survival that
-  should not have happened, so the safe direction is a STRICT gate: on
-  saturation this script sets tau=0.0 (demotes essentially every Tier-A case
-  in that fold), rather than tau=max(observed), which would be permissive.
-  This choice is not specified by the task and is flagged as SATURATED in
-  the per-config report whenever it fires.
-"""
 
 import json
 import os
@@ -555,46 +427,19 @@ def aggregate_fold_metrics(fold_metric_list):
 
 
 def unit_tests_v3_score():
-    """Hand-worked vectors for the v3 score (task requirement: >=3 explicit
-    vectors incl. bimodal [0.45 0 0 0.05 0.5] and a one-hot). Printed, and
-    raises AssertionError (caught by main, treated as a hard stop) on any
-    mismatch."""
+
     cases = []
 
-    # 1) One-hot at grade 0: mode=0, p=[1,0,0,0,0].
-    #    s(0)=0 by definition. s(1)=interval[0,1]-p1=(1+0)-0=1. s(2)=
-    #    interval[0,2]-p2=(1+0+0)-0=1. s(3)=1. s(4)=1.
     cases.append(("one_hot_grade0", [1, 0, 0, 0, 0], [0, 1, 1, 1, 1], 0))
 
-    # 2) Bimodal, mode at the HIGH end (task's own example):
-    #    p=[0.45,0,0,0.05,0.5]. max=0.5 at index4 -> mode=4.
-    #    s(4)=0.
-    #    s(3)=interval[3,4]-p3=(0.05+0.5)-0.05=0.5.
-    #    s(2)=interval[2,4]-p2=(0+0.05+0.5)-0=0.55.
-    #    s(1)=interval[1,4]-p1=(0+0+0.05+0.5)-0=0.55.
-    #    s(0)=interval[0,4]-p0=(0.45+0+0+0.05+0.5)-0.45=0.55.
+ 
     cases.append(("bimodal_mode_high", [0.45, 0, 0, 0.05, 0.5],
                   [0.55, 0.55, 0.55, 0.5, 0.0], 4))
 
-    # 3) Uniform: p=[.2]*5. Five-way tie -> mode = HIGHEST index = 4.
-    #    s(4)=0. s(3)=interval[3,4]-p3=(.2+.2)-.2=.2. s(2)=interval[2,4]-p2=
-    #    (.2*3)-.2=.4. s(1)=interval[1,4]-p1=(.2*4)-.2=.6. s(0)=interval[0,4]
-    #    -p0=(.2*5)-.2=.8.
     cases.append(("uniform_tie_to_highest", [0.2, 0.2, 0.2, 0.2, 0.2],
                   [0.8, 0.6, 0.4, 0.2, 0.0], 4))
 
-    # 4) Asymmetric, mode in the middle: p=[0.05,0.10,0.60,0.15,0.10].
-    #    mode=2 (p=0.60). s(2)=0.
-    #    s(1)=interval[1,2]-p1=(0.10+0.60)-0.10=0.60.
-    #    s(0)=interval[0,2]-p0=(0.05+0.10+0.60)-0.05=0.70.
-    #    s(3)=interval[2,3]-p3=(0.60+0.15)-0.15=0.60.
-    #    s(4)=interval[2,4]-p4=(0.60+0.15+0.10)-0.10=0.75.
-    #    (both neighbours of the mode land on the SAME score, 0.60, despite
-    #    unequal neighbour probabilities (0.10 vs 0.15) -- a real, expected
-    #    property of "mass skipped over", not a computation error: skipping
-    #    over p1=0.10 to reach 1 costs the same as skipping over the mode's
-    #    own overlap on the other side. This is deliberately included as a
-    #    non-obvious case, not just a monotonicity smoke test.)
+
     cases.append(("asymmetric_mode_middle", [0.05, 0.10, 0.60, 0.15, 0.10],
                   [0.70, 0.60, 0.0, 0.60, 0.75], 2))
 
@@ -652,11 +497,7 @@ def main():
         _write_outputs(lines, {"status": "UNIT_TESTS_FAILED"})
         return 1
 
-    # ── Validation gate 0 (same as conformalPolicySweep.py): replica vs
-    #    production calibration_v1.json. Always uses the OLD score, because
-    #    calibration_v1.json itself was fit with the old score -- this gate
-    #    is about the fitting HARNESS (temperature + Mondrian arithmetic),
-    #    not about which score is correct. ─────────────────────────────────
+
     out("\n" + "=" * 78)
     out("VALIDATION GATE 0: replica vs production (branchA_v1, calibration_v1.json)")
     out("=" * 78)

@@ -1,14 +1,4 @@
--- Up Migration
--- =============================================================================
--- §G (backend plan): output of the district resource model, one row per run.
--- Written by services/resourceRecommendations.js (daily, or on demand), read by
--- GET /api/v1/admin/resource-recommendations. A table rather than a results
--- file: queryable, timestamped, and it keeps the history of what was advised.
---
--- min_ophthalmologists_* are NULL when the model's search hit its ceiling
--- without meeting the p95 target -- "more than max_searched" must never be
--- stored as a number that looks like it works.
--- =============================================================================
+
 CREATE TABLE IF NOT EXISTS resource_recommendations (
   recommendation_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   generated_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -1,9 +1,5 @@
-/**
- * i18n: the desktop PHC app's seven locale files (copied verbatim from
- * phc-local-app/frontend/src/i18n/locales), plus mobile-only strings, which
- * are English for now. Keys missing in a language fall back to English, the
- * same as the desktop.
- */
+
+
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';

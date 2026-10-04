@@ -1,39 +1,4 @@
-"""
-validate_conformal_v2.py
-=========================
->>> SUPERSEDED (2026-09-20, conformal policy v3) <<<
 
-This script's entire premise -- "branchA_v1's UNTOUCHED test split (n=628);
-nothing here was fitted on this data" -- is no longer true. Policy v3
-(calibrateBranchA.m) pools val+test for the final fit (a cross-fit study
-showed val-only calibration is not trustworthy at the per-stratum n a
-single split gives -- see calibrateBranchA.m's own header). test is now
-PART of the fitting pool for calibration_v1.json, so there is no more a
-genuinely held-out split for this script to evaluate on, and its method/
-schema assumptions (method=='ordinal_mode_interval_mondrian_v2',
-alphaPerClass) are both stale (now 'ordinal_mode_interval_stratified_v3',
-alphaPerStratum).
-
-The legitimate replacement -- out-of-sample coverage, set size, Tier A/B/C
-shares, false-auto-clear rates, all measured honestly via cross-fitting
-(refit inside every fold, never evaluate a fold on data it was fitted on)
--- is experiments/conformalCrossFitValidation.py. Run that instead. This
-file is left in place, not rewritten, for history; main() below now just
-prints this notice and exits cleanly rather than crashing on the stale
-schema.
-
-Original docstring, for the record (describes v2, no longer accurate):
-    One-shot validation report for the ordinal mode-interval Mondrian
-    conformal method on branchA_v1's UNTOUCHED test split (n=628) --
-    nothing here was fitted on this data; qhatPerClass/temperature come
-    from val (n=626) via calibrateBranchA.m. Reported, for the NEW (at the
-    time) method: marginal coverage, per-grade coverage with a Clopper-
-    Pearson 95% CI, mean prediction-set size and size shares, the Tier
-    A/B/C distribution; and, for comparison, the OLD marginal-LAC method's
-    non-contiguous-set fraction on the same images.
-
-Run: python tests/validate_conformal_v2.py
-"""
 
 import json
 import os

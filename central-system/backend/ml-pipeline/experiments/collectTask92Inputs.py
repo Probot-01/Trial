@@ -1,32 +1,4 @@
-"""
-collectTask92Inputs.py
-======================
-Collect real paired predictions for Task 9.2, on the held-out test split.
 
-    python collectTask92Inputs.py [--n N]
-
-Writes task92_inputs.csv: one row per image with the true grade, Branch A's
-five calibrated probabilities, and the lesion quadrant counts Branch B needs.
-
-The rule engine itself is NOT run here. It is MATLAB, it is tested there, and
-compareToBaseline.m is MATLAB too — so runTask92.m reads this CSV and calls the
-real ruleEngineGrade and branchesAgree. A Python mirror of the rule engine would
-be a second implementation of the thing being measured, free to drift from the
-one that actually grades patients.
-
-── WHY BOTH MODELS RUN IN-PROCESS ──────────────────────────────────────────
-Loading five networks costs seconds; doing it per image via subprocess would
-dominate the run. The functions imported here are the same ones the orchestrator
-spawns, so the numbers are the production numbers.
-
-── THE SPLIT, AND ITS LIMIT ────────────────────────────────────────────────
-M1's test split holds 550 APTOS and 78 IDRiD images. Only the IDRiD ones have
-files in this repo, and only 52 of those resolve (the local grading Training
-folder holds 251 of 413 images and starts at IDRiD_163). So n = 52, and every
-figure downstream carries that n. It is small, and the comparison is between two
-configurations on the SAME 52 cases, which is what makes it a paired comparison
-rather than two independent estimates.
-"""
 
 import argparse
 import csv

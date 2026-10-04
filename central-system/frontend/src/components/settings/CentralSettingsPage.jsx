@@ -9,14 +9,7 @@ import '../../styles/settings.css';
 
 const STORAGE_KEY = 'netrasetu_settings';
 
-// Notifications, Offline & Data, Security and the fake password/version/cache
-// actions that used to live here were removed 2026-09-30: none of them called a
-// real endpoint (there is no notification system, no offline mode and no
-// account-settings API on this web app), and several claimed a fabricated
-// success ("Password updated successfully", "Sync complete: All 7 PHC
-// records...", "14.8 MB local memory freed") -- exactly what CLAUDE.md's
-// "no frontend fabricates a result" rule forbids. Language and Display are
-// real: both persist to localStorage and are read by App.jsx / ReviewQueuePage.
+
 const DEFAULT_SETTINGS = {
   // 1. Language
   language: 'en',
@@ -95,8 +88,8 @@ export const CentralSettingsPage = ({
     localStorage.setItem('i18nextLng', langCode);
     showToast(
       langCode === 'mr' ? 'भाषा मराठीत बदलली' :
-      langCode === 'hi' ? 'भाषा हिंदी में बदली गई' :
-      'Language switched to English'
+        langCode === 'hi' ? 'भाषा हिंदी में बदली गई' :
+          'Language switched to English'
     );
   };
 
@@ -140,10 +133,7 @@ export const CentralSettingsPage = ({
     }
   };
 
-  // "Report a problem": there is no bug-report endpoint on this backend, so this
-  // opens a real mailto: to the support address with the technician's own text
-  // in the body, rather than claiming it was "submitted to NIC Helpdesk" when
-  // nothing was sent anywhere.
+
   const handleReportSubmit = () => {
     const body = encodeURIComponent(reportIssue || '(describe the issue here)');
     window.open(`mailto:support@netrasetu.gov.in?subject=${encodeURIComponent('NetraSetu issue report')}&body=${body}`, '_blank');

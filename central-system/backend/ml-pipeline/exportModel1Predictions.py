@@ -1,32 +1,4 @@
-"""
-exportModel1Predictions.py
-==========================
-Bridge Branch A's saved predictions from .npy into CSV, so the MATLAB
-calibration code (calibrateBranchA.m, via refitCalibration.m) can read them.
 
-    python exportModel1Predictions.py                      # branchA_v1 (default)
-    python exportModel1Predictions.py --model-version branchA_v2a
-
-Writes {val,test}_{logits,labels}.csv into the resolved model directory:
-    branchA_v1  -> models/Model1/                (unchanged from before)
-    branchA_v2a -> models/Model1/v2a/
-
-── WHY LOGITS AND NOT PROBABILITIES ────────────────────────────────────────
-Temperature scaling divides LOGITS by T before the softmax. Handing it
-probabilities means taking a log to recover the logits, which is lossy where
-a probability has already saturated to 1.0 or underflowed to 0. The
-checkpoint saved raw pre-softmax logits precisely so this step is exact.
-
-── VAL AND TEST ARE BOTH JUST "CALIBRATION POOL INPUT" NOW ────────────────
-Earlier (score v2), val was the calibration fold and test the genuinely
-untouched evaluation split, and they were never allowed to mix. Under the
-current protocol (score v3, calibrateBranchA.m) val+test are POOLED for the
-final fit -- a cross-fit study showed val-only calibration is not
-trustworthy at the per-stratum n a single split gives. This script still
-exports both splits SEPARATELY (calibrateBranchA.m does the pooling, not
-this script) so the caller retains the option to treat them differently if
-a future protocol needs to.
-"""
 
 import argparse
 import os
@@ -62,9 +34,7 @@ def main() -> int:
         if logits.shape[1] != 5:
             raise SystemExit(f"{split}: expected 5 classes, got {logits.shape[1]}")
 
-        # %.17g round-trips a float64 exactly. Fewer digits would quietly
-        # change the fitted temperature in the last decimal places, which is
-        # a silly way to introduce a discrepancy into a calibration constant.
+       
         np.savetxt(os.path.join(model_dir, f"{split}_logits.csv"),
                    logits, delimiter=",", fmt="%.17g")
         np.savetxt(os.path.join(model_dir, f"{split}_labels.csv"),

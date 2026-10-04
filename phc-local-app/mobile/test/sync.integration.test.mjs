@@ -1,12 +1,4 @@
-/**
- * The app's real sync stack -- sync/syncManager.ts, db/*.ts, api/central.ts --
- * against a running central backend. Only the device APIs are shimmed
- * (SQLite -> node:sqlite, files -> fs; see test/loader.mjs).
- *
- *   CENTRAL=http://localhost:5000 npm run test:sync
- *
- * Skips (does not pass) when central is not reachable.
- */
+
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';

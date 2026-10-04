@@ -1,21 +1,4 @@
-"""
-matlabSessionClient.py -- run one network forward pass in the persistent
-MATLAB inference session (backend plan §S).
 
-    y_nchw = forward("vessel_unet_v1", x_nchw)
-
-Same file protocol gradingOrchestrator.js uses for Branch A (see
-matlabSession/README.md): write requests/<id>.json atomically, poll for
-responses/<id>.json. The tensor goes over as a .mat in MATLAB's HWCN ('SSCB')
-layout -- the convention preprocessBranchATensor.py already uses -- and the raw
-network output comes back the same way.
-
-Only the FORWARD PASS happens in MATLAB. Everything before and after it stays
-in segInfer.py, so both backends share one copy of the pre/post-processing.
-
-Raises MatlabSessionError on timeout or on an error response; the caller
-decides whether to fall back.
-"""
 
 import json
 import os
@@ -63,9 +46,7 @@ def forward(model_name, x_nchw):
         deadline = time.time() + TIMEOUT_S
         while not os.path.exists(resp_path):
             if time.time() > deadline:
-                # Take the request back: a session that is merely slow would
-                # otherwise run it later for a caller that has already fallen
-                # back to PyTorch, and leave an orphan response behind.
+                
                 try:
                     os.remove(req_path)
                 except OSError:
@@ -75,9 +56,6 @@ def forward(model_name, x_nchw):
                     "(is it running? manageMatlabSession.ps1 status)")
             time.sleep(POLL_S)
 
-        # On Windows the response file exists before MATLAB's movefile has released it
-        # (PermissionError), or is half-written (JSONDecodeError). Read again until the
-        # same deadline instead of failing the request.
         while True:
             try:
                 with open(resp_path, encoding="utf-8") as f:

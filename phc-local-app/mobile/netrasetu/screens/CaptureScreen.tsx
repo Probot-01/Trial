@@ -1,15 +1,4 @@
-/**
- * Desktop CaptureScreen.jsx on a phone -- the same three-step flow:
- *   1. CAPTURE           import from gallery, capture with the fundus lens, or the sample scan
- *   2. QUALITY GATE      on-device gate (MATLAB port), real scores only
- *   3. METADATA & SYNC   capture-metadata questionnaire, then SAVE & SYNC
- *
- * Where the desktop falls back to mock quality numbers or a fabricated
- * capture ID when its backend is down, this screen either has a real result
- * or says the check could not run (design doc §1.22). SAVE & SYNC always
- * saves locally first; upload is the sync manager's job, so an offline
- * device loses nothing.
- */
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';

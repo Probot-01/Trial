@@ -98,12 +98,7 @@ export function newCaptureId(): string {
   return generateLocalId();
 }
 
-/**
- * Records a quality-checked capture. Every attempt is recorded, including
- * the ones that fail the gate: that is what makes the retake count real.
- * The gate that produced `quality` ran on this device, so the engine recorded
- * is always the on-device one ("js-device").
- */
+
 export async function recordCapture(c: {
   captureId: string;
   patientId: string;
@@ -121,16 +116,11 @@ export async function recordCapture(c: {
                            quality_status, quality_reason, quality_scores_json, quality_engine, retake_count, best_effort, captured_at)
      VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
     [c.captureId, c.patientId, c.cameraDeviceId, c.source, c.imagePath, c.imageBytes,
-     c.quality.status, c.quality.reason, JSON.stringify(c.quality), JSON.stringify(QUALITY_GATE_ENGINE), retakeCount, c.capturedAt]);
+    c.quality.status, c.quality.reason, JSON.stringify(c.quality), JSON.stringify(QUALITY_GATE_ENGINE), retakeCount, c.capturedAt]);
   return (await getCapture(c.captureId))!;
 }
 
-/**
- * Drops a capture that passed the gate but was then abandoned by the
- * technician (pressed RETAKE, or left the screen before SAVE & SYNC). It was
- * never queued, so nothing has left the device. A failed ('retake') attempt
- * is never discarded -- it is the evidence behind the retake count.
- */
+
 export async function discardUnqueuedCapture(captureId: string): Promise<void> {
   const db = await getDb();
   const c = await getCapture(captureId);
@@ -150,11 +140,6 @@ export async function getCapture(captureId: string): Promise<Capture | null> {
   return r ? captureFromRow(r) : null;
 }
 
-/**
- * Step 3 "SAVE & SYNC": attaches both questionnaires to the capture and puts
- * it on the sync queue, in one transaction -- a case is either fully queued or
- * not queued at all.
- */
 export async function queueCapture(args: {
   captureId: string;
   eye: Eye;
@@ -174,14 +159,14 @@ export async function queueCapture(args: {
       `INSERT INTO questionnaire_responses (response_id, capture_id, risk_factor_fields, symptom_fields, language, recorded_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [generateLocalId(), args.captureId, JSON.stringify(args.questionnaire.riskFactors),
-       JSON.stringify(args.questionnaire.symptoms), args.questionnaire.language, now]);
+      JSON.stringify(args.questionnaire.symptoms), args.questionnaire.language, now]);
     const m = args.metadata;
     await tx.runAsync(
       `INSERT INTO capture_metadata_responses (response_id, capture_id, camera_device_reported, pupil_status,
          lighting_environment, observed_issues, worker_usability_rating, eye_laterality, recorded_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [generateLocalId(), args.captureId, m.cameraDeviceReported, m.pupilStatus, m.lightingEnvironment,
-       JSON.stringify(m.observedIssues), m.workerUsabilityRating, m.eyeLaterality, now]);
+      JSON.stringify(m.observedIssues), m.workerUsabilityRating, m.eyeLaterality, now]);
     await tx.runAsync(
       `INSERT INTO sync_queue (capture_id, priority_tier, state, attempts, enqueued_at, updated_at)
        VALUES (?, ?, 'pending', 0, ?, ?)`,
@@ -226,16 +211,6 @@ export async function getCaseBundle(captureId: string): Promise<CaseBundle | nul
   };
 }
 
-// ── Local Queue ────────────────────────────────────────────────────────────
-
-/**
- * The desktop's pipeline vocabulary, derived from real local state:
- *   captured          image exists, has not cleared the gate
- *   quality_passed    queued on this device, central has nothing yet
- *   synced            central accepted the case summary, image not yet
- *   result_pending    central accepted the image and is grading it
- *   result_delivered  central has graded it
- */
 export function lifecycleOf(c: Capture, s: SyncRow | null): { lifecycle: LifecycleStatus; problem: QueueEntry['problem'] } {
   if (!s) return { lifecycle: c.qualityStatus === 'retake' && !c.bestEffort ? 'captured' : 'quality_passed', problem: null };
   if (s.state === 'failed') {
@@ -280,14 +255,7 @@ export async function getQueueEntry(captureId: string): Promise<QueueEntry | nul
   return all.find((e) => e.capture.captureId === captureId) ?? null;
 }
 
-// ── Sync queue state ───────────────────────────────────────────────────────
 
-/**
- * Next case due for upload work: urgency tier first, then age (design doc
- * §4.2) -- among the cases this phone OWNS. A capture replicated from the PHC
- * PC is uploaded by the PC unless it has gone silent (peer/replicate.ts
- * ownsUpload; docs/peer-sync-protocol.md).
- */
 export async function nextDueForUpload(): Promise<string | null> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ capture_id: string; owner_device: string | null }>(

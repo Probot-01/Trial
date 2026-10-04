@@ -1,38 +1,5 @@
 import React from 'react';
 
-/**
- * ProvenancePanel -- what produced this result, and where the image came from.
- *
- * Two facts a reviewer cannot get anywhere else on this screen:
- *
- *   1. WHICH ENGINE produced each ML output (api-contracts.md, engineProvenance;
- *      the standing rule in CLAUDE.md is that every case records it and no
- *      engine switch is silent). The backend has stored it since migration
- *      0019 and served it since 2026-09-26; nothing displayed it except the
- *      quality-gate entry, so a case graded on a non-primary engine looked
- *      exactly like one graded on the primary.
- *   2. WHAT THE IMAGE FILE SAYS ABOUT ITSELF -- sourceFormat, dicomDeviceModel
- *      and the detected camera family -- next to what the technician reported.
- *      Those are deliberately separate fields; a disagreement between them is
- *      the point, so they are shown side by side and never reconciled here.
- *
- * Rules this panel follows, all of them load-bearing:
- *
- *   - `null` is rendered as NOT RECORDED with a reason, never as a guess and
- *     never as a zero. "Not recorded" and "ran on the primary engine" are
- *     different claims.
- *   - `detail` is free text for a human, at most 300 characters, and the
- *     contract says not to parse it. It is printed verbatim. In particular
- *     `engine: "matlab"` covers BOTH the compiled MATLAB executable and
- *     `matlab -batch`, and only `detail` says which -- so when the pipeline
- *     moves to the MATLAB Compiler, this panel starts reporting the change
- *     with no edit here. Do not add a "matlab-compiled" engine value to make
- *     that visible; the enum is fixed by the contract.
- *   - `fallback: true` is made visible, per the contract's "a UI should make a
- *     true visible". It means an env flag let a non-primary engine answer.
- */
-
-/** Grading engine entries, in display order. */
 const GRADING_ROWS = [
   ['classifier', 'CLASSIFIER (BRANCH A)'],
   ['ruleEngine', 'RULE ENGINE (BRANCH B)'],
@@ -267,12 +234,7 @@ export const ProvenancePanel = ({ caseData }) => {
           hint="The device the technician selected at capture time."
         />
       </div>
-      {/* The cross-check's own result (migration 0021). The two tiles above are
-          different kinds of fact -- a family is coarser than a device id -- so
-          this is NOT re-derived here by comparing their text. It is the answer
-          classifyCameraFamily.m recorded, against the device-association table
-          the client does not have. Three states, and the third is the point:
-          null means nobody could check, which is not agreement. */}
+      { }
       <div style={{ padding: 'var(--sp-3)', borderTop: 'var(--border)' }} data-testid="camera-cross-check">
         <div className="u-flex u-justify-between u-items-center u-gap-4">
           <span className="t-label" style={{ opacity: 0.5 }}>CAMERA CROSS-CHECK</span>
@@ -298,9 +260,9 @@ export const ProvenancePanel = ({ caseData }) => {
         <p className="t-mono" style={{ fontSize: 'var(--fs-tiny)', opacity: 0.55, marginTop: 'var(--sp-1)' }}>
           {c.cameraMismatch === null || c.cameraMismatch === undefined
             ? 'No expected family is known for the reported device, so there was nothing '
-              + 'to compare the image against. This is not a statement that the two agree.'
+            + 'to compare the image against. This is not a statement that the two agree.'
             : `The reported device implies ${familyPhrase(c.cameraExpectedFamily)}; `
-              + `the image was read as ${familyPhrase(c.cameraFamilyDetected)}.`}
+            + `the image was read as ${familyPhrase(c.cameraFamilyDetected)}.`}
         </p>
       </div>
     </div>

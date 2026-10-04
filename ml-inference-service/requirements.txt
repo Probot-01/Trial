@@ -1,13 +1,4 @@
-# This service runs on a Render free web service (512MB RAM, no GPU). Both
-# branch-A and segmentation run on ONNX Runtime here (see branchAInfer.py's
-# BRANCH_A_INFERENCE_ENGINE=onnx and segInfer.py's SEG_INFERENCE_BACKEND=onnx
-# branches) -- NOT the original torch-based scripts those env vars bypass.
-# torch/torchvision/timm/segmentation-models-pytorch/pandas/scipy/
-# scikit-learn are therefore deliberately NOT listed: nothing in either
-# onnx code path imports them (confirmed by grep before trimming this file),
-# and the whole point of the onnx path is avoiding torch's own ~350MB
-# import cost, which installing it here (even unused) would not cause at
-# runtime, but is pure image bloat and build time for zero benefit.
+
 onnxruntime>=1.18.0
 opencv-python-headless>=4.9.0
 numpy>=1.26.0

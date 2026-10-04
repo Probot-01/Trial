@@ -1,26 +1,8 @@
 'use strict';
 
-/**
- * build_fixtures.js -- how the images in this folder were made. Re-runnable only
- * where the IDRiD dataset is on disk (it is not in git); the OUTPUT images are
- * what is committed. Public-dataset images only (CLAUDE.md).
- *
- *   node tests/fixtures/build_fixtures.js [path/to/idrid/grading/"B. Disease Grading"]
- *
- * Why these three "good" images (measured with the real MATLAB quality gate,
- * cameraDeviceId 'unknown', on 2026-09-26 -- see README.md):
- *   idrid_163_good_borderline.jpg   IDRiD_163 native      -> borderline (accepted)
- *   idrid_003_good_borderline.jpg   IDRiD_003 native      -> borderline (accepted)
- *   idrid_010_good_pass_w1800.jpg   IDRiD_010 @1800px q95 -> pass
- * The gate's focus metric is resolution-dependent by design (assessFocus.m), so
- * a downscaled copy can score as a "pass" where the native image is borderline.
- * That gives the flow tests both outcomes the gate can accept.
- *
- * Bad image: IDRiD_164 degraded on purpose (heavy Gaussian blur + dark), so the
- * gate must ask for a retake.
- */
 
-const fs   = require('fs');
+
+const fs = require('fs');
 const path = require('path');
 const sharp = require(require.resolve('sharp', { paths: [path.resolve(__dirname, '..', '..', 'phc-local-app', 'backend')] }));
 

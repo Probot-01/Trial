@@ -1,15 +1,4 @@
-/**
- * A DD/MM/YYYY field as three tap-to-pick dropdowns (Day / Month / Year),
- * built entirely from SelectField -- already proven safe in Expo Go, no
- * native module involved.
- *
- * @react-native-community/datetimepicker was tried here first and pulled
- * Expo Go into a crash loop: it is a native module, and nothing in this
- * project builds a custom dev client, so Expo Go's own precompiled module
- * set is all that is ever available -- this SDK's Expo Go does not carry
- * it. Reverted. `value`/`onChange` stay DD/MM/YYYY strings either way, so
- * RegistrationScreen did not need to change again.
- */
+
 import React, { useMemo } from 'react';
 import { View } from 'react-native';
 import { SelectField } from './SelectField';

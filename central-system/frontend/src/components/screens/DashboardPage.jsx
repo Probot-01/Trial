@@ -39,8 +39,8 @@ const SortHeader = React.memo(({ label, field, sortKey, sortDir, onSort, alignRi
           {sortKey === field && sortDir === 'asc'
             ? '↑'
             : sortKey === field && sortDir === 'desc'
-            ? '↓'
-            : '⇅'}
+              ? '↓'
+              : '⇅'}
         </span>
       </span>
     </th>
@@ -72,7 +72,7 @@ const useCountUp = (target, duration = 1200) => {
       // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = numericTarget * eased;
-      
+
       if (isFloat) {
         setDisplay(current.toFixed(decimals));
       } else {
@@ -85,11 +85,7 @@ const useCountUp = (target, duration = 1200) => {
     };
 
     const finalText = isFloat ? numericTarget.toFixed(decimals) : Math.round(numericTarget).toLocaleString();
-    // The count-up is decoration; the number is the data. Browsers pause
-    // requestAnimationFrame in a background or throttled tab, which left a real
-    // figure stuck on its starting "0" -- "0s" average review time reads as
-    // "reviews are instant". So: no animation while hidden, and a timer that
-    // lands the true value whatever the animation did.
+
     if (typeof document !== 'undefined' && document.hidden) {
       setDisplay(finalText);
       return undefined;
@@ -106,9 +102,7 @@ const useCountUp = (target, duration = 1200) => {
   return display;
 };
 
-// Live mode: the dashboard endpoint returns only casesToday, casesPerPhc and
-// averageReviewTurnaroundSeconds (api-contracts.md). Anything else is shown as
-// "—" rather than a number from nowhere; the trend deltas are mock-only copy.
+
 const NA = '—';
 const orNA = (v) => (v === null || v === undefined ? NA : v);
 const pctOrNA = (v) => (typeof v === 'number' ? (v * 100).toFixed(1) : NA);

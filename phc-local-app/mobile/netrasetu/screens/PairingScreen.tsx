@@ -1,9 +1,4 @@
-/**
- * Pair this phone with the PHC PC: scan the QR code printed by
- * `npm run peer -- pair "<phone name>"` (phc-local-app/backend), or paste it.
- * The code carries this phone's encryption key for the PC link, so the pairing
- * is checked with a sealed /peer/hello before it is kept.
- */
+
 import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';

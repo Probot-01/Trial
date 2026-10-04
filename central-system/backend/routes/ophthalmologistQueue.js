@@ -1,32 +1,10 @@
 'use strict';
 
-/**
- * routes/ophthalmologistQueue.js  (Task 3.5)
- *
- * Mounted at /api/v1/ophthalmologist.
- *
- *   GET /api/v1/ophthalmologist/queue -> 200 [ queue rows, priorityRank ascending ]
- *
- * ── The ranking rule, and why it is computed in SQL ─────────────────────────
- * api-contracts.md, checkpoint version:
- *   Tier C ranked 1-100 by (1 - confidenceScore) DESCENDING (least confident
- *   first). NOT by uncertaintyScore while that column is only partly
- *   populated -- see the ORDER BY for why mixing the two misorders the tier.
- *   Tier B ranked 101-200 by confidenceScore ASCENDING  (least confident first)
- *   Tier A never appears — it auto-clears and skips this queue entirely.
- *
- * Both orderings put the case the model is least sure about at the top, which
- * is the entire point: reviewer time is the scarce resource in this system, so
- * it goes where the model is weakest, not where the disease is worst.
- *
- * ROW_NUMBER() in SQL rather than sorting in JS, because the ranks must be
- * assigned over the WHOLE queue. Ranking a page of results in JS would give the
- * first row of page 2 a priorityRank of 1.
- */
+
 
 const express = require('express');
-const pool    = require('../db/pgClient');
-const cfg         = require('../services/authConfig');
+const pool = require('../db/pgClient');
+const cfg = require('../services/authConfig');
 const requireAuth = require('../middleware/requireAuth');
 const requireRole = require('../middleware/requireRole');
 const { logAccess } = require('../services/accessLog');
@@ -136,46 +114,33 @@ router.get('/queue', requireAuth, requireRole('ophthalmologist'), async (req, re
     await logAccess(req.user?.userId, 'view_queue', 'review_queue');
 
     res.json(rows.map((r) => ({
-      caseId:            r.case_id,
-      patientReference:  r.patient_reference ?? null,
-      phcName:           r.phc_name ?? null,
-      capturedAt:        r.captured_at ? r.captured_at.toISOString() : null,
-      // design doc §5.2: each row shows the eye, and whether someone else is
-      // already reviewing this case (§10.8), so the UI can show it before the
-      // reviewer opens a case they cannot act on.
-      eyeLaterality:     r.eye_laterality ?? null,
-      // Triage urgency -- an ordering HINT within the tier, never a clinical
-      // statement. Shipped with its limitation because a bare 1-100 number on
-      // a queue row reads as evidence about a patient, and this one is not:
-      // the model behind it is trained on synthetic data. A surface that shows
-      // urgencyScore must show urgencyLimitation. null = not computed (the
-      // clinical inputs were incomplete), never low urgency.
-      urgencyScore:      Number.isFinite(r.urgency_score) ? r.urgency_score : null,
-      urgencyTopFactor:  r.urgency_factor ?? null,
-      urgencyBasis:      r.urgency_score == null ? null : 'synthetic-model',
-      // WHICH of the model's clinical inputs were substituted rather than
-      // measured. A score of 79 resting on two bucket midpoints is a
-      // different claim from the same 79 computed from three real values,
-      // and on a queue row the two looked identical. [] = all measured,
-      // null = not known (no score, or a row from before this was recorded)
-      // -- deliberately distinct from [], which is a positive statement.
+      caseId: r.case_id,
+      patientReference: r.patient_reference ?? null,
+      phcName: r.phc_name ?? null,
+      capturedAt: r.captured_at ? r.captured_at.toISOString() : null,
+
+      eyeLaterality: r.eye_laterality ?? null,
+
+      urgencyScore: Number.isFinite(r.urgency_score) ? r.urgency_score : null,
+      urgencyTopFactor: r.urgency_factor ?? null,
+      urgencyBasis: r.urgency_score == null ? null : 'synthetic-model',
+
       urgencyAssumedInputs: urgencyInputs.assumedInputs(
         r.urgency_input_provenance ? { provenance: r.urgency_input_provenance } : null),
       urgencyLimitation: r.urgency_score == null ? null
         : 'Trained on synthetic data, never validated against patient outcomes. '
-          + 'Queue ordering hint only -- not a clinical assessment.',
-      claimedBy:         r.claim_live
+        + 'Queue ordering hint only -- not a clinical assessment.',
+      claimedBy: r.claim_live
         ? { userId: r.claimed_by, name: r.claimed_by_name ?? null }
         : null,
-      claimedAt:         r.claim_live ? r.claimed_at.toISOString() : null,
-      drGradeCnn:        r.dr_grade_cnn ?? null,
-      // null until Branch B ships in Phase 5. The frontend must handle null
-      // here from day one, not once Branch B lands.
+      claimedAt: r.claim_live ? r.claimed_at.toISOString() : null,
+      drGradeCnn: r.dr_grade_cnn ?? null,
+
       drGradeRuleEngine: r.dr_grade_rule_engine ?? null,
-      branchAgreement:   r.branch_agreement ?? null,
-      confidenceScore:   r.confidence_score ?? null,
-      conformalTier:     r.conformal_tier,
-      priorityRank:      Number(r.priority_rank),
+      branchAgreement: r.branch_agreement ?? null,
+      confidenceScore: r.confidence_score ?? null,
+      conformalTier: r.conformal_tier,
+      priorityRank: Number(r.priority_rank),
     })));
   } catch (err) { next(err); }
 });

@@ -1,15 +1,4 @@
-/**
- * The desktop Header.jsx, folded for a phone:
- *   row 1  NetraSetu logo · sync chip (PHC name, ONLINE/OFFLINE, ● N PENDING) · menu
- *   row 2  console status line
- * The desktop's inline controls (language, contrast toggle, operator badge,
- * logout) live in the menu sheet. Navigation (New Patient / Queue) is the tab
- * bar.
- *
- * The console line is driven by REAL state -- sync activity, connectivity,
- * queue size -- not a timer cycling canned messages (Kankshi's plan §2.3:
- * "INITIALIZING SYSTEM..." on a loaded screen reads as a hang).
- */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';

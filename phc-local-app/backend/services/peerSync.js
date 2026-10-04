@@ -1,24 +1,6 @@
 'use strict';
 
-/**
- * peerSync.js -- the PC side of desktop <-> phone replication
- * (docs/peer-sync-protocol.md).
- *
- *   changesSince(cursor, excludeOrigin) -> { records, cursor, more }
- *   applyRecords(records, origin)       -> { applied, skipped }
- *   readImage(captureId)                -> { bytes, sha256, ext } | null
- *   writeImage(captureId, bytes, sha256, ext)
- *   ownsUpload(row)                     -> should THIS PC upload that capture to central?
- *
- * Merge rules (identical on the phone, netrasetu/peer/merge.ts):
- *   patient              last writer wins on updatedAt (ties: the larger origin id)
- *   capture, responses   immutable once written: insert if absent, never overwrite
- *   syncState            monotonic: state and centralStatus only move forward;
- *                        centralCaseId fills in once known
- * Every record carries a patient/capture ID minted with the shared collision-safe
- * scheme (docs/id-format-spec.md), so two devices never mint the same ID for
- * different things and a union of their records is safe.
- */
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -75,11 +57,7 @@ const TABLE_OF = Object.fromEntries(Object.entries(KIND).map(([t, k]) => [k, t])
 // Parents before children, so foreign keys hold when a page is applied in order.
 const APPLY_ORDER = ['patient', 'capture', 'questionnaire', 'metadata', 'syncState'];
 
-/**
- * Records changed after `cursor`, oldest first, excluding those that came from
- * `excludeOrigin` (the requesting phone already has them). Captures still in
- * the gate ('pending') are held back until they have a verdict.
- */
+
 function changesSince(cursor, excludeOrigin = null) {
   const rows = db.prepare(`
     SELECT tbl, pk, MAX(seq) AS seq FROM change_log
@@ -240,15 +218,7 @@ function writeImage(captureId, bytes, sha256, ext = '.jpg') {
   return p;
 }
 
-// ── Upload ownership ────────────────────────────────────────────────────────
 
-/**
- * Whether THIS PC should upload a queued capture to central. Its own captures:
- * always. A phone's: only when that phone has been silent longer than
- * TAKEOVER_MS (it may be dead or out of battery). Uploading the same capture
- * twice is harmless -- central deduplicates on the capture ID -- this only
- * avoids spending thin bandwidth twice.
- */
 function ownsUpload(ownerDevice) {
   const me = db.deviceId();
   if (!ownerDevice || ownerDevice === me) return true;

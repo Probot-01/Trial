@@ -1,12 +1,4 @@
-/**
- * Desktop LocalQueueTable.jsx as a phone list: ID, patient, captured-at,
- * five-dot pipeline stage and the action button, one card per capture.
- *
- * Stages come from this device's own database and central's reported status
- * (db/captures.ts lifecycleOf) -- never inferred from elapsed time. Any row
- * opens the case: its local quality report is always available; the full
- * report is fetched from central when there is a connection.
- */
+
 import React, { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -49,7 +41,7 @@ export default function QueueScreen() {
 
   const reload = useCallback(() => {
     listQueue().then(setItems).catch(() => setItems([]));
-    queueSize().then(setSize).catch(() => {});
+    queueSize().then(setSize).catch(() => { });
   }, []);
   useQueueReload(reload);
   useFocusEffect(useCallback(() => { reload(); }, [reload]));

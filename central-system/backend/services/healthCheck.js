@@ -1,52 +1,28 @@
 'use strict';
 
-/**
- * healthCheck.js -- the component report behind GET /health.
- *
- *   { status: 'ok', components: { db, queue, matlabSession, python }, generatedAt }
- *
- * ── `status` STAYS 'ok' WHATEVER THE COMPONENTS SAY ─────────────────────────
- * GET /health is the PHC sync manager's and the mobile app's network
- * heartbeat: both only ask "did central answer with status 'ok'?" before every
- * transmission (syncManager.isOnline, mobile api/central.ts checkHealth). So
- * the top-level answer means "this process is reachable", and a DB blip or a
- * restarting MATLAB session must not stall every PHC's upload queue -- a case
- * that arrives while MATLAB is down is stored, and graded (or visibly failed)
- * by the queue. The per-component detail is for people and monitors.
- *
- * ── NOTHING HERE MAY MAKE THE HEARTBEAT SLOW ───────────────────────────────
- *   db             SELECT 1, capped at HEALTH_DB_TIMEOUT_MS (1 s).
- *   queue          in-memory counters.
- *   matlabSession  the supervisor's state plus a stat() of the heartbeat file.
- *   python         a CACHED probe: spawning the interpreter and importing torch
- *                  takes seconds, so it runs in the background at most once per
- *                  HEALTH_PYTHON_PROBE_INTERVAL_MS (60 s), and the response
- *                  reports the last result with its checkedAt.
- */
+
 
 const fs = require('fs');
 const { execFile } = require('child_process');
 
-const pool          = require('../db/pgClient');
-const gradingQueue  = require('./gradingQueue');
+const pool = require('../db/pgClient');
+const gradingQueue = require('./gradingQueue');
 const matlabSupervisor = require('./matlabSessionSupervisor');
 const segSupervisor = require('./segWorkerSupervisor');
 const matlabSession = require('./matlabSessionClient');
-const segSession    = require('./segSessionClient');
+const segSession = require('./segSessionClient');
 
 const num = (name, dflt) => {
   const v = Number(process.env[name]);
   return Number.isFinite(v) && v > 0 ? v : dflt;
 };
 
-const DB_TIMEOUT_MS      = num('HEALTH_DB_TIMEOUT_MS', 1000);
-const PY_PROBE_EVERY_MS  = num('HEALTH_PYTHON_PROBE_INTERVAL_MS', 60_000);
+const DB_TIMEOUT_MS = num('HEALTH_DB_TIMEOUT_MS', 1000);
+const PY_PROBE_EVERY_MS = num('HEALTH_PYTHON_PROBE_INTERVAL_MS', 60_000);
 const PY_PROBE_TIMEOUT_MS = num('HEALTH_PYTHON_PROBE_TIMEOUT_MS', 60_000);
 const PYTHON_EXE = process.env.PYTHON_EXECUTABLE || 'python';
 
-// The third-party modules the live pipeline imports (branchAInfer.py,
-// preprocessBranchATensor.py, segInfer.py, gradcam.py, matlabSessionClient.py).
-// "Python is available" means these import, not merely that an interpreter runs.
+
 const PY_REQUIRED = ['numpy', 'cv2', 'scipy', 'torch', 'timm', 'segmentation_models_pytorch'];
 const PY_PROBE_SRC = `import sys, importlib
 bad = []
@@ -122,7 +98,7 @@ function probePython() {
           py.error = (err.code === 'ENOENT' ? `no interpreter at '${PYTHON_EXE}'`
             : err.killed ? `the probe did not finish within ${Math.round(PY_PROBE_TIMEOUT_MS / 1000)} s `
               + '(a cold start can take that long; it is retried)'
-            : `the probe exited with code ${err.code}`)
+              : `the probe exited with code ${err.code}`)
             + (stderr ? ` -- ${String(stderr).trim().slice(-200)}` : '');
         } else {
           const [version, bad = ''] = String(stdout).trim().split(/\r?\n/);

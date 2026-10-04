@@ -1,11 +1,4 @@
-/**
- * Capture Metadata questionnaire (design doc §9.6), laid out like the
- * desktop's CaptureMetadataForm but with the contract's values: the desktop's
- * "CATARACT SUSPECTED / SMALL PUPIL / ..." chips match none of the values
- * central accepts and are silently dropped, and its lighting and usability
- * answers are hard-coded. Tap-only; no field is pre-answered except by an
- * explicit rule (a lens capture is always the lens).
- */
+
 import React from 'react';
 import { View } from 'react-native';
 import { Eye, LightingEnvironment, ObservedIssue, PupilStatus, UsabilityRating } from '../types';

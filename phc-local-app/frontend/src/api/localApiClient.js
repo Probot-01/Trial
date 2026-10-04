@@ -4,37 +4,24 @@ import * as mockData from './mockData';
 // Delay helper to simulate network latency (mock mode only)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// How long a real call to the local backend may take before it is reported as
-// failed. The quality gate itself can take a few seconds (it runs a real image
-// analysis), so this is generous.
+
 const REAL_CALL_TIMEOUT_MS = 8000;
-// POST /captures runs the MATLAB quality gate synchronously; a cold MATLAB
-// start is far slower than any other call here.
+
 const CAPTURE_TIMEOUT_MS = 60000;
 
-/**
- * ApiError — what every live-mode failure rejects with. `code` is the
- * contract's snake_case `error` field (api-contracts.md, "Error shape") or a
- * client-side code (network_error, timeout, config_missing, bad_response).
- */
+
 export class ApiError extends Error {
   constructor(code, message, status = null, details = null) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
-    // The rest of the error body the backend sent (e.g. captureId on a 503
-    // quality_gate_failed, which is what a re-check of the saved image needs).
+
     this.details = details;
   }
 }
 
-/**
- * The technician's session token from POST /auth/login (App.jsx keeps the
- * login payload in localStorage 'netra_phc_auth'). Sent as a Bearer header on
- * every real call; required once the local backend runs with
- * LOCAL_AUTH_ENABLED=true.
- */
+
 function authHeader() {
   try {
     const token = JSON.parse(localStorage.getItem('netra_phc_auth') || 'null')?.token;
@@ -44,12 +31,7 @@ function authHeader() {
   }
 }
 
-/**
- * DATA MODE (config.js): mock mode serves fixtures from mockData.js and nothing
- * else; live mode serves the PHC local backend and nothing else. A live request
- * that fails REJECTS — no fixture patients, no invented quality result, no
- * silent "best effort" (design doc §1.22). Callers render the rejection.
- */
+
 class LocalApiClient {
   constructor() {
     this.useMock = USE_MOCK_DATA;
@@ -82,9 +64,7 @@ class LocalApiClient {
     }
     const body = await res.json().catch(() => null);
     if (res.status === 401 && path !== '/auth/login') {
-      // The stored technician session is no longer valid (expired, or the backend's accounts were
-      // reset). Keeping it would leave every screen failing with a misleading "unreachable":
-      // drop it and go back to the login screen.
+
       try { localStorage.removeItem('netra_phc_auth'); } catch { /* storage unavailable */ }
       if (typeof window !== 'undefined' && window.location.pathname !== '/') window.location.assign('/');
     }
@@ -104,13 +84,7 @@ class LocalApiClient {
     });
   }
 
-  /**
-   * GET /auth/me -> { user }. Used at app startup to confirm a token saved in
-   * localStorage from a previous visit is still live before trusting it, so a
-   * stale/expired session doesn't render the authenticated layout for a beat
-   * and then bounce (App.jsx). Throws (401) exactly like any other call when
-   * the session is gone; _request's own 401 handling already clears it.
-   */
+
   async getMe() {
     return this._request('/auth/me');
   }
@@ -125,25 +99,7 @@ class LocalApiClient {
     return data;
   }
 
-  /**
-   * searchPatients({ name, age, phone }) -> GET /patients/search
-   *
-   * The duplicate check (design doc SS10.3, backend plan SSB.1). The endpoint
-   * has existed on both this backend and the central one since B.1 and NO UI
-   * called it, so the same person registered twice became two patient records
-   * with two separate screening histories and nothing pointing between them.
-   *
-   * Returns candidates already ranked by the server, each with `matchedOn`
-   * saying WHICH field matched -- name, phone or age. That distinction is the
-   * point: two people can share a name, but a matching phone number is much
-   * stronger evidence of the same person, and the worker deciding needs to
-   * see which it was rather than a bare similarity score.
-   *
-   * Needs a name or a phone; the server rejects a search on age alone, which
-   * would return most of the register. Returns [] rather than throwing when
-   * there is nothing to search on, so a caller can call it on every keystroke
-   * without guarding.
-   */
+
   async searchPatients({ name, age, phone } = {}) {
     const hasName = typeof name === 'string' && name.trim().length >= 3;
     const hasPhone = typeof phone === 'string' && phone.replace(/\D/g, '').length >= 4;
@@ -183,7 +139,7 @@ class LocalApiClient {
         localStorage.setItem('netra_latest_patient', JSON.stringify(newPatient));
         const existing = JSON.parse(localStorage.getItem('netra_registered_patients') || '[]');
         localStorage.setItem('netra_registered_patients', JSON.stringify([newPatient, ...existing]));
-      } catch (e) {}
+      } catch (e) { }
       return newPatient;
     }
     const data = await this._request('/patients', {
@@ -197,12 +153,7 @@ class LocalApiClient {
     return data;
   }
 
-  /**
-   * submitCapture(patientId, imageFile, cameraDeviceId) -> POST /captures, which
-   * saves the image and runs the local quality gate. Mock mode returns null
-   * (CaptureScreen then uses its scenario fixtures). Live mode rejects on
-   * failure — including 503 quality_gate_failed, where the image WAS saved.
-   */
+
   async submitCapture(patientId, imageFile, cameraDeviceId = 'unknown') {
     if (this.useMock) return null;
     const formData = new FormData();
@@ -236,19 +187,7 @@ class LocalApiClient {
     });
   }
 
-  /**
-   * saveCaptureMetadata(captureId, metadata) — MOCK MODE ONLY. Adds the capture
-   * to the client-side demo queue (mockData.mockQueueItems) that the Local
-   * Queue Table and result modal are built around. There is no backend
-   * equivalent: in live mode the queue comes from GET /captures and this does
-   * nothing.
-   */
-  /**
-   * recheckQuality(captureId) -> POST /captures/:captureId/quality-check.
-   * Re-runs the gate on an image that was SAVED but not checked (after a 503
-   * quality_gate_failed), without asking for the photograph again. Same body as
-   * POST /captures. Live only: mock mode has no gate to re-run.
-   */
+
   async recheckQuality(captureId) {
     if (this.useMock) return null;
     const data = await this._request(`/captures/${encodeURIComponent(captureId)}/quality-check`, { method: 'POST' }, CAPTURE_TIMEOUT_MS);
@@ -258,13 +197,6 @@ class LocalApiClient {
     return data;
   }
 
-  /**
-   * markBestEffort(captureId) -> POST /captures/:captureId/best-effort.
-   * Design doc §10.2: after repeated failed retakes, queue the capture anyway
-   * with an explicit "technician override, ungradable" flag, rather than an
-   * infinite retry loop or the case silently never being recorded. Only valid
-   * on a capture the gate marked 'retake'; live only.
-   */
   async markBestEffort(captureId) {
     if (this.useMock) return null;
     const data = await this._request(`/captures/${encodeURIComponent(captureId)}/best-effort`, { method: 'POST' }, CAPTURE_TIMEOUT_MS);
@@ -287,7 +219,7 @@ class LocalApiClient {
           resolvedName = latest.name;
           resolvedAge = latest.age;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const newQueueItem = {
@@ -307,16 +239,11 @@ class LocalApiClient {
       const stored = JSON.parse(localStorage.getItem('netra_phc_queue') || '[]');
       localStorage.setItem('netra_phc_queue', JSON.stringify([newQueueItem, ...stored]));
       localStorage.setItem('netra_last_capture', JSON.stringify(newQueueItem));
-    } catch (e) {}
+    } catch (e) { }
     return { success: true, captureId, ...metadata };
   }
 
-  /**
-   * getQueue() — the contract's queue is GET /captures. Real rows report their
-   * lifecycle status only (captured / quality_passed / synced …); the local
-   * backend never holds a grade, so a real row's "view result" stays disabled
-   * rather than showing a fabricated one.
-   */
+
   async getQueue() {
     if (this.useMock) {
       await delay(200);
@@ -327,7 +254,7 @@ class LocalApiClient {
           const additions = stored.filter(q => !existingIds.has(q.captureId));
           return [...additions, ...mockData.mockQueueItems];
         }
-      } catch (e) {}
+      } catch (e) { }
       return [...mockData.mockQueueItems];
     }
     const data = await this._request('/captures');
@@ -347,17 +274,6 @@ class LocalApiClient {
     return data;
   }
 
-  /**
-   * getPeerDevices() -> GET /peer/devices
-   *
-   * The phones paired with this PC (docs/peer-sync-protocol.md). A pairing key
-   * reads every patient record on this machine, so the list of who holds one
-   * is operational safety information, not a diagnostic curiosity.
-   *
-   * Returns [{ deviceId, name, createdAt, lastSeenAt, revokedAt }]. A revoked
-   * device stays in the list with revokedAt set -- the record of a phone that
-   * once had access does not get deleted.
-   */
   async getPeerDevices() {
     if (this.useMock) {
       await delay(200);
@@ -370,17 +286,6 @@ class LocalApiClient {
     return data;
   }
 
-  /**
-   * revokePeerDevice(deviceId) -> POST /peer/devices/:id/revoke
-   *
-   * Cuts a phone off from this PC. Admin-only on the backend
-   * (requireTechnician.admin), which is the authority -- the UI hiding the
-   * button is a convenience, not the control.
-   *
-   * Resolves on the backend's 204. Mock mode REFUSES rather than pretending:
-   * revoking is a security action, and a demo that reports success without a
-   * backend would teach an operator that a phone is cut off when it is not.
-   */
   async revokePeerDevice(deviceId) {
     if (this.useMock) {
       throw new ApiError('mock_mode',

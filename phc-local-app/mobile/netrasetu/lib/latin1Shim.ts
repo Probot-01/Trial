@@ -1,10 +1,4 @@
-/**
- * Expo's TextDecoder only knows UTF-8, and fast-png (the quality gate's PNG
- * decoder) does `new TextDecoder('latin1')` while its module loads, which throws
- * "Unknown encoding latin1" and kills the app before the first screen. This
- * wraps the global decoder so latin1 / iso-8859-1 / ascii work. It must be the
- * first import of App.tsx. Where the platform already supports latin1 it does nothing.
- */
+
 const LATIN1 = /^(latin1|iso-8859-1|l1|ascii|us-ascii|windows-1252)$/i;
 
 function supportsLatin1(): boolean {

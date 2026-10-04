@@ -1,46 +1,4 @@
-"""
-recoverHeldOutSplit.py — the recovered-held-out-split methodology for v2
-evaluation (v2 training-run task, item 7).
 
-No prior script in this repo already implements this under that name, despite
-the v2 task description referring to "the same recovered-split methodology
-the diagnostic audit established" -- I could not locate that audit in this
-repo (searched docs/, diagnostics/, and central-system/backend/ml-pipeline/
-for "recovered split" / "contaminated" / "held-out" language and found
-nothing implementing it). What follows is built fresh, from the one thing
-that IS real and recoverable: branchA_v1.pt's own saved split arrays. If an
-earlier audit exists outside this checkout, treat this as a from-scratch
-reconstruction, not a reuse of it -- and diff the two before trusting either
-alone.
-
-── WHY "RECOVERED" AND NOT "RE-SPLIT" ──────────────────────────────────────
-models/evaluation_branchA_v1.txt (the current, published v1 numbers) was
-generated from SUPPLIED predictions -- its own header says so: "Predictions
-from: supplied predictions (no inference run)". That is a real risk: a
-prediction file handed over separately from the split it claims to score is
-one rename away from being scored against the wrong images, and nothing
-would error.
-
-The one artifact that IS trustworthy by construction is
-models/Model1/branchA_v1_{test,val}_{ids,labels}.npy -- these were written
-BY the training run itself, at split time, before any model existed to leak
-information into them. If v2 re-splits combined APTOS+IDRiD+EyePACS data
-fresh and at random, there is nothing stopping a previously-held-out v1 test
-image from landing in v2's TRAINING set -- which would silently invalidate
-any comparison against v1's numbers on that image, and nobody would notice
-because nothing errors.
-
-So "recovered" means: v2 must exclude these exact IDs from its training set
-regardless of where a fresh shuffle would put them, and evaluate on these
-exact IDs (extended with an equivalent EyePACS-side held-out set, chosen the
-same way -- fixed at split time, before any v2 model exists) so v1-vs-v2 is
-an apples-to-apples comparison on provably-unseen images, not two different
-tests that happen to share a name.
-
-Usage:
-    python recoverHeldOutSplit.py                  # summary + sanity checks
-    from recoverHeldOutSplit import load_recovered_split
-"""
 import os
 from collections import Counter
 from pathlib import Path

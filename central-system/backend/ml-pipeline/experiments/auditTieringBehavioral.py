@@ -1,40 +1,4 @@
-"""
-auditTieringBehavioral.py — behavioral audit of the live confidence-routing
-decision, for 5 synthetic cases (see docs audit request).
 
-UPDATED after the camera/site-probation and quality-forced overrides were
-wired into gradingOrchestrator.js's processCase(). Re-run after that change,
-not just spot-checked, per the follow-up request that added those overrides.
-
-There is still no single exported "decideTier(...)" function in this codebase
-(see the original audit, item 1) -- the real decision is split across:
-  - branchAInfer.py:200-228  assign_tier(probs, calib)      [REAL, imported]
-  - gradingOrchestrator.js:357-362  assignTier(confidence, branchAgreement)
-                                     [REAL, invoked via node subprocess below]
-  - gradingOrchestrator.js:isCaptureUngradable  [REAL, invoked via node
-                                     subprocess below -- pure and synchronous,
-                                     so no reason to re-implement it either]
-  - gradingOrchestrator.js:hasClearedCameraSiteProbation  [REAL function, but
-                                     queries the live Postgres case history --
-                                     this audit supplies its boolean RESULT
-                                     directly per scenario rather than standing
-                                     up a database, same as it already treats
-                                     conformal_tier/branchAgreement as given
-                                     inputs rather than re-deriving them from a
-                                     live pipeline]
-  - gradingOrchestrator.js:669-692  the inline if/else chain in processCase()
-                                     that actually decides the stored tier
-                                     [reproduced verbatim below, cited by line,
-                                     because it is not factored into a callable
-                                     function -- that fact IS the finding]
-
-conformal tiers below come from the real assign_tier() against the real
-calibration_v1.json. assignTier() and isCaptureUngradable() are invoked for
-real via `node -e` to avoid re-implementing either. The 669-692 chain, and the
-one-line `cameraProbationOverride = mismatch && !cleared` combinator ahead of
-it, are reproduced verbatim (comment-for-comment) since neither is
-independently callable.
-"""
 import json
 import os
 import subprocess

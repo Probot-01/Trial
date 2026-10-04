@@ -1,26 +1,4 @@
-"""
-checkSegBackendParity.py -- backend plan §S.3: does serving M2/M3/M4 from the
-MATLAB session change anything DOWNSTREAM, not just the tensors?
 
-    python diagnostics/checkSegBackendParity.py [--per-grade 4]
-
-Tensor parity (training/parityCheck.m, 2e-6..4e-5) is necessary but not
-sufficient: a difference invisible at the pixel level can still flip whether a
-borderline blob passes the 0.5 threshold or the 10 px area floor, which changes
-a lesion count, which can change the rule-engine grade. So this runs the WHOLE
-segInfer.py pipeline twice per image -- SEG_INFERENCE_BACKEND=python and
-=matlab -- on real IDRiD test images stratified by grade, and compares:
-
-  - optic disc and fovea positions (pixels, original image space)
-  - vessel pixel count
-  - red / bright lesion totals and per-quadrant counts
-  - the rule-engine grade those counts produce (ruleEngineGrade.m)
-  - wall-clock latency per backend (plan §S.4: re-measured with more than one
-    network resident in the session)
-
-Needs the persistent MATLAB session running (manageMatlabSession.ps1 start).
-Writes diagnostics/out/seg_backend_parity.csv and seg_backend_parity.txt.
-"""
 
 import argparse
 import csv

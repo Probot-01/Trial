@@ -3,16 +3,7 @@ import { USE_MOCK_DATA } from '../../config';
 
 const BANNER_H = 32;
 
-/**
- * DemoDataBanner — rendered once at the app root. In mock mode (VITE_DATA_MODE
- * =mock) it pins a permanent warning across the top of every page, above every
- * overlay, with no way to dismiss it: anyone looking at the screen must be able
- * to tell that nothing on it is a real result. Renders nothing in live mode.
- *
- * It sits over the page rather than in the flow, so it also covers full-screen
- * fixed layers (the login journey). The body and the sticky header are pushed
- * down by its height so ordinary pages lose nothing underneath it.
- */
+
 export const DemoDataBanner = () => {
   useEffect(() => {
     if (!USE_MOCK_DATA) return undefined;

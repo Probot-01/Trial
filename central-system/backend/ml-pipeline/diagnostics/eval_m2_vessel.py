@@ -1,53 +1,4 @@
-"""
-eval_m2_vessel.py
-=================
-Diagnostic evaluation of M2 (vessel segmentation), PyTorch, and a controlled
-test of WHY it degrades off-domain.
 
-    python eval_m2_vessel.py [--json OUT.json] [--skip-sweep]
-
--- WHAT THIS IS FOR -------------------------------------------------------
-M2 scores Dice 0.82 on CHASE_DB1 and 0.62 on DRIVE. Reporting both is not an
-explanation, and "domain shift" is a label, not a cause. Three causes would
-each produce that gap and imply completely different fixes:
-
-  (a) resolution   DRIVE images are 565x584, CHASE 999x960. After the
-                   aspect-pad to 512, DRIVE vessels are ~half the pixel width
-                   the model was trained on.      fix: scale augmentation
-  (b) threshold    0.5 may simply be miscalibrated off-domain.
-                   fix: per-domain threshold, no retraining
-  (c) appearance   colour, illumination, camera.  fix: photometric aug
-
-So this does not stop at the two numbers. It runs a CONTROLLED experiment:
-the CHASE images are downscaled to DRIVE's pixel dimensions and re-scored.
-Same eyes, same expert tracings, same everything except scale. If Dice falls
-to DRIVE-like values, (a) is the cause and the others are not needed to
-explain it. That is a test that can come out either way, which is the point.
-
-Two further breakdowns separate (b) from the rest:
-  - a threshold sweep on each domain, giving the best achievable Dice and the
-    threshold that achieves it. If 0.5 is near-optimal on DRIVE, the model is
-    not merely miscalibrated -- the signal is absent, not misplaced.
-  - recall stratified by VESSEL CALIBRE, from the ground truth's own distance
-    transform. The resolution hypothesis makes a specific, falsifiable
-    prediction here: the loss should be concentrated in the thinnest vessels
-    and near-absent in the thickest. A uniform loss across calibres would
-    refute it.
-
--- PREPROCESSING ----------------------------------------------------------
-segInfer._aspect_pad and segInfer.vessels' exact chain (green channel,
-aspect-preserving resize + centre zero-pad to 512, (x/255-0.5)/0.5). Imported,
-because segInfer records that M2's interpolation had to be verified per model
-(INTER_LINEAR: 100.000% exact vs published CHASE masks; INTER_AREA: 99.756%).
-
--- FOV MASKING ------------------------------------------------------------
-DRIVE ships an FOV mask and CHASE does not. Outside the FOV is a free true
-negative and it is ~32% of a DRIVE frame, so specificity is inflated by it.
-DRIVE is therefore scored inside its FOV. For the domain comparison to be
-fair, the CHASE numbers are NOT silently compared against FOV-masked DRIVE
-ones without saying so -- Dice is unaffected by true negatives, which is
-precisely why Dice is the metric the comparison rests on.
-"""
 
 import argparse
 import json
@@ -75,14 +26,7 @@ def read_gray(path):
 
 
 def predict_prob(model, bgr, resize_to=None, green_match=None, fov=None):
-    """Vessel probability in ORIGINAL space, via segInfer's exact chain.
 
-    resize_to (w, h) downscales the PHOTOGRAPH before it enters the chain --
-    the controlled variable. The probability is then brought back to the
-    original size so it can be scored against the unmodified ground truth: the
-    experiment must change the model's input scale WITHOUT changing what it is
-    graded against, or it would measure two things at once.
-    """
     import cv2
     import torch
 
@@ -128,14 +72,7 @@ def rates(tp, fp, tn, fn):
 
 
 def calibre_recall(prob, gt, fov, thresh=0.5, bins=(1, 2, 3, 4, 6, 99)):
-    """Recall split by vessel half-width, from the GT's distance transform.
-
-    cv2.distanceTransform on the ground truth gives, at each vessel pixel, its
-    distance to the nearest background pixel -- i.e. the local half-width in
-    pixels. Binning recall by it answers directly whether the misses are the
-    thin vessels, which is what the resolution hypothesis predicts and what a
-    global recall number cannot show.
-    """
+    
     import cv2
     dt = cv2.distanceTransform(gt.astype(np.uint8), cv2.DIST_L2, 3)
     pred = prob > thresh

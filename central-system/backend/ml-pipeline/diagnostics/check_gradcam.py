@@ -1,18 +1,4 @@
-"""
-check_gradcam.py  -  DIAGNOSTIC ONLY (throwaway, not production)
 
-Grad-CAM sanity check on models/branchA_v1.pt.
-Picks 5 real IDRiD images from branchA's own validation split (one per DR grade
-where possible), computes a Grad-CAM heatmap for the predicted class, and saves
-each heatmap overlaid on the preprocessed fundus image as a PNG in
-diagnostics/out/. Also prints a quick numeric check that the heat is NOT stuck in
-the image corners and is NOT uniform noise.
-
-Grad-CAM is implemented inline (~30 lines) - no pytorch-grad-cam dependency
-(not installed in this env, and disk is tight).
-
-Run:  python diagnostics/check_gradcam.py
-"""
 import sys
 from pathlib import Path
 

@@ -1,17 +1,4 @@
--- =============================================================================
--- PHC local application SQLite schema  (Task 0.2)
--- Applied automatically by db/localDb.js on require, and by
--- scripts/setupLocalDb.js.
---
--- This DB lives on the PHC machine and must work with zero connectivity
--- (design doc §10, "Offline capability"). Every timestamp column is TEXT
--- holding an ISO 8601 UTC string, e.g. '2026-09-06T09:05:00.000Z' -- never an
--- epoch number, never a locale-formatted string (api-contracts.md, "Global
--- date rule"), so values round-trip to JSON unchanged.
---
--- IDs are TEXT in the format {PHC_CODE}-{base36 timestamp}-{4 random alnum},
--- e.g. 'PHC001-lz3k9f-a2x9' (api-contracts.md, "Global ID rule").
--- =============================================================================
+
 
 CREATE TABLE IF NOT EXISTS patients (
   patient_id     TEXT PRIMARY KEY,
@@ -32,13 +19,9 @@ CREATE TABLE IF NOT EXISTS captures (
   quality_reason   TEXT,          -- NULL on pass; else one of the six enum strings
   retake_count     INTEGER NOT NULL DEFAULT 0,
   captured_at      TEXT NOT NULL,
-  -- The gate's six sub-scores, as a JSON string. Previously computed, logged,
-  -- and thrown away. Task 2.8's adaptive enhancement runs centrally and needs
-  -- them to decide WHICH fault to correct, so they have to survive the trip.
+
   quality_scores   TEXT,
-  -- Which engine ran the gate: {"engine","fallback","detail"} as a JSON string
-  -- (engine provenance -- matlab, or js-fallback only with
-  -- QUALITY_GATE_ALLOW_FALLBACK=1). Sent to central as qualityGateEngine.
+
   quality_engine   TEXT
 );
 

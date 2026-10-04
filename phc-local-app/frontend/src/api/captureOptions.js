@@ -1,18 +1,9 @@
-// The choices a technician is offered, with the EXACT values the Local API
-// accepts (docs/api-contracts.md). Live code depends on this module, not on the
-// mock fixtures. A value here that is not in the contract would be rejected by
-// the backend, or -- worse -- silently dropped on the way.
 
-/** cameraDeviceId: a key in cameraPresets.json, or 'unknown'. */
 export const CAMERA_DEVICES = [
   { id: 'forus_3nethra_v2', label: 'Forus 3Nethra v2' },
   { id: 'remidio_fop', label: 'Remidio FOP' },
   { id: 'generic_fundus', label: 'Generic Fundus Camera' },
-  // The quality gate's own camera presets (cameraPresets.json) already have a
-  // 'mobile_lens' entry -- the mobile app has always used it for phone +
-  // fundus-lens-attachment captures. This desktop dropdown never exposed it:
-  // a technician who imports an image captured that way (e.g. via gallery
-  // transfer) had no honest option and had to pick 'Generic' or 'Unknown'.
+
   { id: 'mobile_lens', label: 'Fundus Lens (Phone Attachment)' },
   { id: 'unknown', label: 'Unknown / Other' },
 ];

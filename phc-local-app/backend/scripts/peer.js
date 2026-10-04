@@ -1,18 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * Pair phones with this PC and move data by hand when there is no network
- * (docs/peer-sync-protocol.md).
- *
- *   npm run peer -- pair "<phone name>"          print a QR code to scan in the app (Menu -> Pair with PHC PC)
- *   npm run peer -- devices                     list paired phones
- *   npm run peer -- revoke <deviceId>
- *   npm run peer -- import <bundle file>        apply a bundle exported on a phone
- *   npm run peer -- export <deviceId> <file>    write a bundle for a phone (import it in the app)
- *
- * Runs against the local database directly, so it works with the server down.
- */
+
 const path = require('path');
 const fs = require('fs');
 const os = require('os');

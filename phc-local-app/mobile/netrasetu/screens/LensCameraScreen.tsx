@@ -1,15 +1,4 @@
-/**
- * Fundus-lens capture -- the new feature: the phone, with a fundus lens
- * attached over its main camera, takes the retinal photo itself.
- *
- * Built for how clip-on fundus lenses are used: the phone's light is the
- * illumination source (torch on by default), the retina is found through the
- * pupil at a fixed working distance (zoom control), and focus is re-triggered
- * by tapping the preview. A circular guide marks where the optic disc and
- * macula should sit. The photo then goes through the SAME quality gate and
- * questionnaire as any other capture, tagged camera 'mobile_lens' so central's
- * camera-family checks and the unvalidated-camera Tier A floor apply to it.
- */
+
 import React, { useRef, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
